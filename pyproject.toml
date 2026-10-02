@@ -46,7 +46,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     # ruff 0.16 默认规则集扩大，会把历史代码硬门槛打爆；先锁 0.15.x
-    "ruff>=0.14.6,<0.16",
+    "ruff>=0.14.6,<0.17",
     "tox>=4.32.0",
     "pytest>=9.0.1",
     "pytest-asyncio>=1.3.0",
