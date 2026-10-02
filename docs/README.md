@@ -1,6 +1,6 @@
 # TG-SignPulse 文档
 
-> v2.3.0 · Telegram 多账号自动化、任务编排、关键词监听和 AI 验证处理控制台。
+> 本二改版增加聊天中心、账号工作台、机器人中心和内置 TeleBox。部署前先读 [根目录 README](../README.md)；上游公开 GHCR 镜像不包含本仓库改动。
 
 ## 产品简介
 
@@ -25,11 +25,12 @@ TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、
 | Telegram | Pyrogram / Kurigram、Session File / String 双模式 |
 | AI | OpenAI SDK（兼容接口）、识图 / OCR / 计算题 |
 | 数据库 | **默认 SQLite**；可选 `APP_DATABASE_URL` 使用 PostgreSQL |
-| 部署 | Docker Multi-stage、GitHub Actions、GHCR |
+| 部署 | 当前仓库的 Docker 多阶段源码构建（Node 22 + Node 24 + Python 3.11） |
 
 ## 核心能力
 
 - **多账号管理**：支持短信登录、二维码登录、2FA 密码、状态检测、重新登录
+- **聊天中心与 TeleBox**：管理账号所有会话；每账号独立 TeleBox 会话、状态、日志及插件
 - **任务编排**：支持固定时间、时间段随机执行、监听触发三种执行模式
 - **AI 动作**：支持识图选项、OCR 文本提取、计算题作答、AI 推断后点按钮
 - **关键词监听**：支持包含、完全匹配、正则；支持继续执行后续动作
@@ -49,7 +50,7 @@ TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、
 
 | 文档 | 说明 |
 |------|------|
-| [Docker 部署](deploy/docker.md) | Docker、Compose、GHCR 镜像、升级与持久化 |
+| [Docker 部署](deploy/docker.md) | 当前仓库的源码构建、Compose、升级与持久化 |
 
 ### 使用指南
 

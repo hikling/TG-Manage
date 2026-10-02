@@ -15,3 +15,24 @@
 - Keep the task in progress until the live checks above are completed; do not claim live TeleBox activation verified.
 
 Rollback: independent feature branch; retain user data. Never rewrite upstream history or modify deployed servers.
+
+## Documentation refresh (2026-10-03)
+
+- [x] Audit current README, `.env.example`, Compose, Dockerfile, Python settings, frontend Vite proxy and TeleBox runtime requirements.
+- [x] Replace upstream image based quick start with this branch's source build instructions in `README.md`, `README_EN.md`, `docs/guide/quick-start.md`, and `docs/deploy/docker.md`.
+- [x] Document implemented modules, legacy plugin migration, Node 22/24 + Python requirements, private `.env`, local/Docker setup, data/backup, checks and validation limits in `README.md`.
+- [x] Align `docs/index.md` and `docs/README.md`; check local Markdown links, fenced code blocks, secret absence, and `git diff --check`.
+
+The user requested that changes, setup and required environment all be visible in Markdown. Do not put the supplied personal Telegram API credentials in committed documentation; use placeholders only.
+
+### Documentation changes and verification
+
+| File | Change |
+| --- | --- |
+| `README.md` | Authoritative Chinese guide: update inventory, system requirements, source build, first login, local dev, env variables, storage, upgrade, checks and limits. |
+| `README_EN.md` | English summary and source build; removed old upstream GHCR `docker run` instructions. |
+| `docs/guide/quick-start.md` | Private-repo clone, `.env`, Compose build, Telegram account and TeleBox first run. |
+| `docs/deploy/docker.md` | Current three-stage Docker build, 2 GiB Compose limit, `/data`, troubleshooting and source upgrade. |
+| `docs/index.md`, `docs/README.md` | Point documentation readers to this fork and the new installation guide. |
+
+Static validation: all six modified Markdown files have balanced code fences and valid local links; the supplied API ID/Hash values are absent; `git diff --check` passes. This environment has Python 3.12 and Node 24, but no Docker CLI, so `docker compose config/build/up` were not run. This docs-only update did not rerun application tests or contact Telegram.

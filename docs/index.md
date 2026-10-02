@@ -6,7 +6,7 @@ description: Telegram 多账号自动化管理面板 — 签到、消息编排�
 hero:
   name: TG-SignPulse
   text: Telegram 多账号自动化管理面板
-  tagline: 签到 · 消息编排 · 关键词监听 · AI 验证 · Docker 一键部署
+  tagline: 聊天中心 · 多账号工作台 · 任务编排 · 内置 TeleBox · 源码构建
   image:
     src: /logo.svg
     alt: TG-SignPulse
@@ -22,7 +22,7 @@ hero:
       link: /deploy/docker
     - theme: alt
       text: GitHub
-      link: https://github.com/Silentely/TG-SignPulse
+      link: https://github.com/hikling/TG-SignPulse-Private
 
 features:
   - icon: 👥
@@ -38,8 +38,8 @@ features:
     title: 调度与实时流
     details: Cron / 时段调度、Dashboard SSE、任务 WebSocket 日志与失败分类。
   - icon: 🐳
-    title: 容器友好部署
-    details: Docker 开箱即用，健康检查、数据持久化、Nginx SSE 样例齐全。
+    title: 源码构建部署
+    details: 当前二改版需在本仓库运行 docker compose up -d --build，提供健康检查与数据持久化。
   - icon: 🗄️
     title: 存储灵活
     details: 默认 SQLite（WAL）；可选 APP_DATABASE_URL 切换 PostgreSQL，非强制迁移。

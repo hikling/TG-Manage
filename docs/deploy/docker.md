@@ -1,274 +1,88 @@
-# Docker 部署
+# Docker 部署：TG-SignPulse 二改版
 
-## 镜像策略
+> 本文档针对当前仓库的 `Dockerfile` 和 `docker-compose.yml`。不要使用上游公开镜像或旧文档中的 `docker compose pull` 更新本版本。完整改动、首次使用、本地开发及环境变量见 [README](../../README.md)。
 
-| 触发条件 | 镜像 / 行为 | 用途 |
-|----------|--------------|------|
-| `main` 推送 | 测试 + 推送 `…:main` / `…:main-<sha>` | 稳定主干滚动镜像 |
-| `dev` 推送 | 测试 + 推送 `…:dev` / `…:dev-<sha>` | 开发/预发 |
-| Git 标签 `v*` | 测试 + **一次**推送 `…:vX.Y.Z` + `…:latest` | 正式发版（多架构） |
-| 手动 `workflow_dispatch` | 按当前分支走对应标签规则 | 应急补镜像 |
+## 前置环境
 
-> 发版流程：`merge → main`（更新 `main` / `main-<sha>`）→ 打 `vX.Y.Z` 并 push tag（更新 `vX.Y.Z` / `latest`）。
+- Docker Engine 24+、Docker Compose v2，且主机能访问 npm/PyPI、Telegram；受限网络需为 Telegram 配置代理。
+- Compose 默认限制容器使用 2 GiB 内存、2 CPU；构建阶段还需额外磁盘及内存。每运行一个 TeleBox 账号会再启动 Node 进程，应随账号数调高资源。
+- 使用自己的 Telegram `TG_API_ID` 和 `TG_API_HASH`；至少一个可完成验证码/扫码验证的账号。
 
-### Actions 运行记录清理
+Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编译/安装 TeleBox 原生依赖、Python 3.11 运行 FastAPI。生产镜像包含 Node 24 与 TeleBox 源码、插件和依赖。项目默认持久化目录为容器 `/data`。
 
-`Docker Image` 工作流在每次运行结束时（无论测试/构建成功与否）会清理**本工作流**的历史记录：
-
-- 至少保留最近 **3** 次已完成运行
-- 删除 **3 天前**的其余已完成运行
-- 无定时任务，仅随本工作流触发
-
-## 快速部署
-
-### docker run
+## 部署步骤
 
 ```bash
-docker run -d \
-  --name tg-signpulse \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -v $(pwd)/data:/data \
-  -e TZ=Asia/Shanghai \
-  -e APP_SECRET_KEY=$(openssl rand -base64 32) \
-  -e ADMIN_PASSWORD=your_strong_password \
-  ghcr.io/silentely/tg-signpulse:latest
+# 从本私有仓库获取源码（已有源码则省略）
+git clone https://github.com/hikling/TG-SignPulse-Private.git
+cd TG-SignPulse-Private
+cp .env.example .env
 ```
 
-### Docker Compose（推荐）
+在 `.env` 中填写自己的值：
 
-```yaml
-services:
-  app:
-    image: ghcr.io/silentely/tg-signpulse:latest
-    container_name: tg-signpulse
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-    environment:
-      PORT: 8080
-      TZ: Asia/Shanghai
-      APP_DATA_DIR: /data
-      APP_SECRET_KEY: replace-with-a-long-random-string
-      ADMIN_PASSWORD: replace-with-a-strong-password
-      APP_SCHEDULER_LOCK: "1"
-      # APP_DATABASE_URL: postgresql+psycopg2://...
-      # APP_MONITOR_SHARD: "0/2"
-    mem_limit: 768m
-    cpus: 1.0
-    init: true
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /app/__pycache__
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    stop_grace_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+```dotenv
+TG_API_ID=your_api_id
+TG_API_HASH=your_api_hash
+APP_SECRET_KEY=replace_with_a_long_random_secret
+ADMIN_PASSWORD=replace_with_a_strong_password
 ```
 
-启动：
-
-```bash
-docker compose up -d
-```
-
-### 上线后快速自检
-
-```bash
-curl -sS http://127.0.0.1:8080/readyz
-# 期望: {"status":"ready","scheduler_lock_held":true,"legacy_tasks_removed":true,"legacy_tasks_writable":false,...}
-
-curl -sS -H "Authorization: Bearer <token>" http://127.0.0.1:8080/api/ops/runtime-status
-# 旧 /api/tasks 已移除；ORM 残留盘点: python tools/check_legacy_tasks.py --json
-```
-
-更多边界说明见 [运维手册 - 上线检查清单](../reference/ops.md#上线检查清单dev--生产)。
-
-### 本地源码构建
-
-仓库根目录已提供 `docker-compose.yml`，默认本地构建：
+`APP_SECRET_KEY` 可通过 `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` 生成；保持密钥稳定，特别是在恢复 Bot Token、备份或迁移数据时。`.env` 与 `data/` 都不能提交到 Git。私有 GitHub 仓库的克隆需要相应访问权限。
 
 ```bash
 docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 app
+curl -f http://127.0.0.1:8080/healthz
+curl -f http://127.0.0.1:8080/readyz
 ```
 
-## 端口与健康检查
+登录页面在 `http://服务器IP:8080`。容器内服务由 `PORT=8080` 驱动；只想改宿主机端口时修改映射左侧，例如 `127.0.0.1:18080:8080`。需要域名和 TLS 时使用 [Nginx 示例](nginx.md)。
 
-| 端点 | 说明 |
-|------|------|
-| `:8080` | 容器默认监听端口 |
-| `GET /healthz` | 快速健康检查 |
-| `GET /readyz` | 服务就绪检查（启动完成后返回 200） |
+## Compose 约定
 
-Docker 内置健康检查已配置，间隔 30s，超时 10s。
+| 配置 | 当前值与含义 |
+| --- | --- |
+| `build: .` | 每次 `--build` 从当前源码构建，不使用上游公开镜像。 |
+| `./data:/data` | 数据库、session、任务数据、TeleBox 的每账号配置和插件都依赖此卷。 |
+| `PORT=8080`, `TZ=Asia/Shanghai` | 容器端口与调度时区。 |
+| `mem_limit: 2g`, `cpus: 2.0` | 单容器默认资源上限；多账号运行时评估增长。 |
+| `read_only: true`, `tmpfs`, `cap_drop: ALL` | 根文件系统只读，临时目录可写，移除 Linux capabilities。 |
+| `healthcheck` | `/readyz` 返回服务就绪状态后标记健康。 |
+| `restart: unless-stopped` | 异常退出/重启主机后拉起服务。 |
 
-## 数据持久化
+默认从 `.env` 注入 `TG_API_ID`、`TG_API_HASH`、`APP_SECRET_KEY` 和 `ADMIN_PASSWORD`。程序可能在首次启动生成 `data/.admin_bootstrap_password` 和 `.app_secret_key`；部署时建议显式固定密钥与密码。
 
-**必须挂载 `/data`**，否则所有数据在容器重建后丢失。
+## 首次登录与 TeleBox
 
-`/data` 目录包含：
+1. 以 `admin` 和 `ADMIN_PASSWORD` 登录面板，修改密码并可启用 TOTP。
+2. 在账号管理中完成 Telegram 手机验证码/二维码授权。
+3. 先在聊天中心用测试会话检查消息读写，再在 TeleBox 页启动该账号的**独立**会话。状态如果要求 Telegram 两步验证密码，在界面填写。
+4. 按账号查看 TeleBox 进程状态、日志和插件。其数据在 `data/telebox/`，另有 `data/sessions/` 中的面板会话，不要直接替换或合并。
 
-```text
-/data
-├── db.sqlite                    # 主数据库
-├── .app_secret_key              # JWT 密钥
-├── .admin_bootstrap_password    # 初始密码
-├── .global_settings.json        # 全局设置
-├── .openai_config.json          # AI 配置
-├── .telegram_api.json           # Telegram API 配置
-├── logs/                        # 执行日志
-├── sessions/                    # Telegram 会话
-└── .signer/                     # 签到引擎数据
-```
-
-> ⚠️ 如果 `/data` 不可写，程序会降级到 `/tmp/tg-signpulse`（非持久化），仅适合临时测试。
-
-## 权限处理
-
-容器入口脚本会自动：
-
-1. 检测 `/data` 挂载目录的属主 UID/GID
-2. 以该 UID/GID 身份运行应用
-3. 修复 `/data` 下文件的权限（确保可写）
-
-如果不需要自动修复权限：
+## 升级、备份和恢复
 
 ```bash
-APP_AUTO_FIX_DATA_PERMS=0
-```
+# 更新之前，先停止并备份整个 ./data 与自己的 .env
+docker compose stop
+# 使用你自己的备份工具保存 data/ 和 .env；不要将其上传公开仓库
 
-默认容器用户：UID=10001, GID=10001。
-
-## 反向代理
-
-生产环境若需 TLS 终止、SSE / WebSocket 正确转发，请使用完整样例：
-
-- 文档：[Nginx 反向代理](./nginx.md)
-- 配置文件：`docker/nginx.conf.example`
-
-### 最小 Nginx（仅 HTTP 反代）
-
-```nginx
-server {
-    listen 80;
-    server_name panel.example.com;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-### Caddy
-
-```
-panel.example.com {
-    reverse_proxy 127.0.0.1:8080
-}
-```
-
-> 💡 使用反向代理时，建议将容器端口绑定到本地：`-p 127.0.0.1:8080:8080`  
-> SSE 路径 `/api/events/` 必须关闭 `proxy_buffering`，详见 [nginx.md](./nginx.md)。
-
-## CI/CD 缓存
-
-镜像构建建议分层缓存：
-
-- 前端：先复制 `frontend/package*.json` 并运行 `npm install`，再复制源码构建。
-- 后端：优先缓存 Python wheel / pip 下载目录，依赖文件变化时再失效。
-- Docker Buildx：启用 registry cache 或 GitHub Actions cache，减少多平台构建耗时。
-
-预发流程建议：
-
-1. 每次主分支构建推送 `test-<short-sha>`。
-2. 预发环境显式部署该 sha 标签并验证。
-3. 验证通过后再移动或发布 `staging` 标签，避免预发环境隐式漂移。
-
-## 升级
-
-### GHCR 镜像升级
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-### 本地构建升级
-
-```bash
-git pull
+# 从本私有仓库更新源码后重新构建
 docker compose up -d --build
 ```
 
-> 💡 升级前建议备份 `data/` 目录。面板 WebDAV 完整备份见 [WebDAV 备份与恢复](/guide/backup-webdav)。
+`docker compose down` 删除容器和网络，但不会删除绑定挂载的 `./data`；切勿误删 `data/`。恢复时保持相同的 `APP_SECRET_KEY` 并还原数据目录，然后重建容器。若 Telegram session 失效，需要在面板重新授权账号。
 
-## 安全加固
+## 排查
 
-当前 `docker-compose.yml` 已包含以下安全措施：
+| 现象 | 检查项 |
+| --- | --- |
+| 构建失败 | Docker 可用磁盘/内存、npm/PyPI 网络，以及 TeleBox 原生模块在 Node 24 构建阶段的错误。 |
+| `/readyz` 未就绪 | `docker compose ps`、`docker compose logs --tail=200 app`、`./data` 是否可写。 |
+| 无法登录 Telegram | API ID/Hash、验证码/2FA、服务器访问 Telegram 的网络与代理。 |
+| TeleBox 提示未安装依赖 | 必须从本仓库 `docker compose up -d --build`，不要换成上游旧镜像。 |
+| TeleBox 内存不足 | 提高宿主机可用内存及 Compose `mem_limit`，减少同时运行的账号数。 |
+| 旧自定义插件任务失败 | 旧 Python 插件体系已移除；备份后手工改用现有任务动作或 TeleBox 插件。 |
 
-| 措施 | 说明 |
-|------|------|
-| `read_only: true` | 容器文件系统只读 |
-| `cap_drop: ALL` | 移除所有 Linux capabilities |
-| `no-new-privileges` | 禁止提权 |
-| `init: true` | 正确处理僵尸进程 |
-| `tmpfs` | 临时文件写入内存 |
-
-额外建议：
-
-- 生产环境固定 `APP_SECRET_KEY`
-- 明确设置 `ADMIN_PASSWORD`
-- 启用 HTTPS（通过反向代理）
-- 收紧 `APP_CORS_ALLOW_ORIGINS`
-- 不要在公网长期运行 `test-*` 镜像
-
-## 多平台支持
-
-Docker 镜像支持：
-
-- `linux/amd64`
-- `linux/arm64`（跳过 tgcrypto 编译）
-
-arm64 平台建议使用 `TG_SESSION_MODE=string` 以获得更好的兼容性。
-
-## 常见问题
-
-### 容器启动后无法写入数据
-
-```bash
-# 进入容器检查
-docker exec -it tg-signpulse sh
-id
-ls -ld /data
-touch /data/.probe && rm /data/.probe
-```
-
-如果权限不对，可以在宿主机上修复：
-
-```bash
-sudo chown -R 10001:10001 ./data
-```
-
-### 数据库锁定
-
-SQLite 已配置 WAL 模式和 30 秒超时。如果仍然出现锁定：
-
-1. 确认没有多个容器实例挂载同一个 `/data`
-2. 检查磁盘空间是否充足
-3. 考虑增大 `TG_GLOBAL_CONCURRENCY`（默认自动：CPU 核心数，上限 5；也可在面板「系统设置」覆盖）
+真实 Telegram 授权、Bot API、TPM 安装和完整 Docker 构建尚需在目标环境逐项验证，不应把离线测试当作上线验收。

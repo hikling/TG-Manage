@@ -1,146 +1,51 @@
-# 快速开始
+# 快速开始：TG-SignPulse + 内置 TeleBox
 
-本指南帮助你在 5 分钟内完成部署、登录、添加账号并创建第一个自动化任务。
+> 此文档适用于本二改仓库。**不要使用**上游 `ghcr.io/silentely/tg-signpulse` 镜像；它不含聊天中心和 TeleBox 面板。完整改动、环境变量、本地开发与验证说明见仓库根目录 [README](../../README.md)。
 
-## 1. 准备环境
+## 环境
 
-| 需求 | 说明 |
-|------|------|
-| Docker 24+ | 含 Docker Compose |
-| Telegram 账号 | 至少一个，需要能接收验证码 |
-| 服务器/本机 | 能访问 Telegram（或配置代理） |
-| OpenAI API Key | 可选，仅 AI 动作需要 |
+- Docker Engine 24+ 和 Docker Compose v2；能构建/下载 Node 与 Python 依赖。
+- 宿主机至少能运行当前 Compose 配置的 2 GiB 容器；多账号 TeleBox 每个账号另有 Node 进程。
+- 可连接 Telegram、能接收验证码/使用手机扫码的 Telegram 账号，以及你自己的 API ID/Hash。
+- Windows/macOS 建议 Docker Desktop；本地源码开发所需 Python 3.10–3.13、Node 22.23.1 和另一个 Node 24，详见 README。
 
-## 2. 选择镜像
-
-| 环境 | 镜像 |
-|------|------|
-| 生产 | `ghcr.io/silentely/tg-signpulse:latest` 或 `ghcr.io/silentely/tg-signpulse:v2.3.0` |
-| 稳定主干 | `ghcr.io/silentely/tg-signpulse:main` 或 `…:main-<sha>` |
-| 预发/开发 | `ghcr.io/silentely/tg-signpulse:dev` |
-
-## 3. 最小启动
-
-### 方式一：docker run
+## 1. 从本仓库获取源码
 
 ```bash
-docker run -d \
-  --name tg-signpulse \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -v $(pwd)/data:/data \
-  -e TZ=Asia/Shanghai \
-  -e APP_SECRET_KEY=$(openssl rand -base64 32) \
-  -e ADMIN_PASSWORD=your_strong_password \
-  ghcr.io/silentely/tg-signpulse:latest
+git clone https://github.com/hikling/TG-SignPulse-Private.git
+cd TG-SignPulse-Private
+cp .env.example .env
 ```
 
-### 方式二：Docker Compose
+该仓库是私有仓库，克隆时需要 GitHub 授权；已持有源码的用户直接在源码根目录开始。
 
-创建 `docker-compose.yml`：
+## 2. 配置本地 `.env`
 
-```yaml
-services:
-  app:
-    image: ghcr.io/silentely/tg-signpulse:latest
-    container_name: tg-signpulse
-    restart: unless-stopped
-    # 镜像默认监听 8080（PORT 环境变量）；如需改端口，同步设置 PORT 与映射。
-    # 注意：容器端口用 PORT，面板进程端口用 APP_PORT（本地直接运行时），两者是不同变量。
-    ports:
-      - "8080:8080"
-    volumes:
-      - ./data:/data
-    environment:
-      - TZ=Asia/Shanghai
-      - APP_SECRET_KEY=replace-with-a-long-random-string
-      - ADMIN_PASSWORD=replace-with-a-strong-password
+```dotenv
+TG_API_ID=your_api_id
+TG_API_HASH=your_api_hash
+APP_SECRET_KEY=replace_with_a_long_random_secret
+ADMIN_PASSWORD=replace_with_a_strong_password
 ```
 
-启动：
+`APP_SECRET_KEY` 可通过 `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` 生成。不要把真实值写入 Markdown、截图或 Git。若服务器连接 Telegram 需要代理，先看 [README 环境变量](../../README.md#环境变量) 和面板代理设置。
+
+## 3. 构建、启动、检查
 
 ```bash
-docker compose up -d
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 app
+curl -f http://127.0.0.1:8080/readyz
 ```
 
-### 关键环境变量
+浏览器访问 `http://服务器IP:8080`，首次用户名 `admin`，密码为 `ADMIN_PASSWORD`。未设置管理员密码时查看 `data/.admin_bootstrap_password`。公网部署请配置 HTTPS 反向代理。
 
-| 变量 | 必须 | 说明 |
-|------|------|------|
-| `APP_SECRET_KEY` | ✅ 强烈建议 | JWT 密钥，不设置则自动生成 |
-| `ADMIN_PASSWORD` | ✅ 强烈建议 | 管理员密码，不设置则随机生成到 `data/.admin_bootstrap_password` |
-| `TZ` | 建议 | 时区，影响任务调度时间 |
+## 4. 登录账号并试用
 
-## 4. 打开面板
+1. “账号管理”：使用手机验证码或二维码登录自己的 Telegram 测试账号；启用两步验证的账号还需密码。
+2. “聊天中心”：选择账号，查看私聊、群组、频道及机器人会话；先用测试会话尝试发送、编辑、归档等操作。
+3. “任务编排”：检查原有签到任务并创建新任务。已移除的 Python 自定义插件动作不会自动迁移。
+4. “TeleBox”：选择已登录账号启动独立会话，等待状态变为运行中；如提示 `password_required`，在面板输入 Telegram 两步验证密码。每账号独立运行，插件管理与日志都在此页。
 
-浏览器访问：`http://服务器IP:8080`
-
-首次登录：
-
-- 用户名：`admin`
-- 密码：你设置的 `ADMIN_PASSWORD`
-- 如果未设置，查看 `data/.admin_bootstrap_password` 文件
-
-> 💡 登录后建议立即修改密码，并可选开启 TOTP 两步验证。
-
-## 5. 添加 Telegram 账号
-
-进入「账号管理」页面，选择登录方式：
-
-| 方式 | 适用场景 |
-|------|----------|
-| 短信验证码 | 通用，需要能接收短信 |
-| 二维码扫码 | 手机端 Telegram 扫码确认 |
-
-流程：
-
-1. 输入账号名称（自定义标识）
-2. 选择登录方式并完成验证
-3. 如果账号开启了 Telegram 2FA，补充密码
-4. 登录成功后账号出现在列表中
-
-> ⚠️ 如果网络受限，先在「系统设置 → 全局代理」中配置代理。
-
-## 6. 创建第一个任务
-
-推荐先做一个最简单的签到任务：
-
-1. 在账号任务页点击「添加任务」
-2. 输入任务名称（如：`每日签到`）
-3. 选择目标聊天（搜索机器人或群组）
-4. 添加动作序列：
-   - 第 1 步：`发送文本` → `/start`
-   - 第 2 步：`点击按钮` → `签到`
-5. 设置执行时间（HH:MM 或 HH:MM-HH:MM 时间段格式，如 `08:00`；cron 表达式仅作为 API 级高级用法支持）
-6. 保存任务
-
-### 手动测试
-
-保存后点击「立即执行」按钮手动执行一次，观察实时日志确认是否成功。
-
-## 7. 验证结果
-
-从三个位置确认运行结果：
-
-| 位置 | 查看内容 |
-|------|----------|
-| 任务列表 | 最近执行状态和时间 |
-| 任务历史 | 每次执行的流程日志和机器人回复 |
-| Docker 日志 | `docker logs -f tg-signpulse` |
-
-健康检查：
-
-```bash
-curl http://127.0.0.1:8080/healthz   # 应返回 {"status":"ok"}
-curl http://127.0.0.1:8080/readyz    # 应返回 {"status":"ready"}
-```
-
-## 8. 下一步
-
-| 需求 | 文档 |
-|------|------|
-| 完整部署说明 | [Docker 部署](../deploy/docker.md) |
-| 配置 AI 动作 | [AI 动作](ai.md) |
-| 监听消息触发 | [关键词监听](keyword-monitor.md) |
-| 多账号共用任务 | [任务编排](tasks.md) |
-| 所有配置项 | [配置参考](../reference/configuration.md) |
+完整目录与升级/备份说明见 [README](../../README.md#数据升级与备份) 和 [Docker 部署](../deploy/docker.md)。真实 Telegram 授权、Bot API 和 TPM 远程安装需要在你自己的环境中检验。
