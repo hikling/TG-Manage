@@ -1,0 +1,48 @@
+services:
+  app:
+    build: .
+    image: tg-signpulse-telebox:local
+    container_name: tg-signpulse
+    ports:
+      - "8080:8080"
+    # TeleBox 单实例 Node 堆上限 512 MiB；多账号需进一步调高。
+    mem_limit: 2g
+    cpus: 2.0
+    volumes:
+      - ./data:/data
+    environment:
+      - PORT=8080
+      - APP_DATA_DIR=/data
+      - TZ=Asia/Shanghai
+      - TG_API_ID=${TG_API_ID:-}
+      - TG_API_HASH=${TG_API_HASH:-}
+      - APP_SECRET_KEY=${APP_SECRET_KEY:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - LOG_LEVEL=INFO
+      - APP_LEGACY_TASKS_READONLY=1
+      - APP_SCHEDULER_LOCK=1
+      # - APP_SECRET_KEY=replace-me
+      # - ADMIN_PASSWORD=replace-me
+      # - ENABLE_API_DOCS=false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/__pycache__
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped

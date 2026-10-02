@@ -1,0 +1,104 @@
+[90m[2026-08-30 00:47:22.712][0m [32m[INFO ][0m [90m[pluginManager.ts:66][0m [PREFIXES] . 。 $ (可使用环境变量 TB_PREFIX 覆盖, 多个前缀用空格分隔)
+[90m[2026-08-30 00:47:22.730][0m [32m[INFO ][0m [90m[pluginManager.ts:281][0m [LISTENER_HANDLE_EDITED] 不忽略监听编辑的消息的插件: 未设置 (可使用环境变量 TB_LISTENER_HANDLE_EDITED 设置, 多个插件用空格分隔)
+[90m[2026-08-30 00:47:22.788][0m [32m[INFO ][0m [90m[pluginBase.ts:21][0m [CMD_IGNORE_EDITED] 命令监听忽略编辑的消息: true (可使用环境变量 TB_CMD_IGNORE_EDITED 覆盖)
+[90m[2026-08-30 00:47:22.789][0m [32m[INFO ][0m [90m[index.ts:35][0m [PROXY] 未检测到代理环境变量，使用直连
+[90m[2026-08-30 00:47:22.807][0m [32m[INFO ][0m [Running teleproto version 1.228.5]
+[90m[2026-08-30 00:47:22.814][0m [32m[INFO ][0m [90m[loginManager.ts:88][0m Connecting to Telegram...
+[90m[2026-08-30 00:47:22.825][0m [32m[INFO ][0m [Using LAYER 228 for initial connect]
+[90m[2026-08-30 00:47:22.943][0m [32m[INFO ][0m [90m[loginManager.ts:94][0m ✅ Existing session detected. Logged in successfully.
+[90m[2026-08-30 00:47:23.407][0m [32m[INFO ][0m [90m[autodelcmd.ts:652][0m [autodelcmd] 插件启动，开始初始化...
+[90m[2026-08-30 00:47:24.337][0m [32m[INFO ][0m [90m[npm_install.ts:35][0m Package "cheerio" is already installed.
+[90m[2026-08-30 00:47:24.341][0m [32m[INFO ][0m [90m[npm_install.ts:35][0m Package "p-limit" is already installed.
+[90m[2026-08-30 00:47:26.919][0m [32m[INFO ][0m [90m[pathHelpers.ts:97][0m [assets] merged dir uai → agent
+[90m[2026-08-30 00:47:27.611][0m [32m[INFO ][0m [90m[im.ts:273][0m [image_monitor] Plugin initialized
+[90m[2026-08-30 00:47:27.613][0m [32m[INFO ][0m [90m[sum.ts:691][0m [sum] 启动加载，共 0 个任务
+[90m[2026-08-30 00:47:27.613][0m [32m[INFO ][0m [90m[sum.ts:703][0m [sum] 任务加载完成
+[90m[2026-08-30 00:47:27.614][0m [32m[INFO ][0m [90m[sum.ts:710][0m [sum] 插件初始化完成
+[90m[2026-08-30 00:47:27.807][0m [32m[INFO ][0m [90m[autochangename.ts:136][0m [AutoChangeName] 数据库初始化成功
+[90m[2026-08-30 00:47:27.811][0m [32m[INFO ][0m [90m[shift.ts:101][0m [SHIFT] 使用 lowdb 数据库
+[90m[2026-08-30 00:47:27.811][0m [32m[INFO ][0m [90m[pmcaptcha.ts:36][0m [PMCaptcha] [2026-08-29T16:47:27.811Z] [INFO] Config DB ready | Data DB: /root/telebox-classic/assets/pmcaptcha/pmcaptcha_data.json
+[90m[2026-08-30 00:47:27.846][0m [32m[INFO ][0m [90m[autodelcmd.ts:228][0m [autodelcmd] 没有未完成的删除任务
+[90m[2026-08-30 00:47:27.847][0m [32m[INFO ][0m [90m[autodelcmd.ts:655][0m [autodelcmd] 插件启动初始化成功
+[90m[2026-08-30 00:47:27.868][0m [32m[INFO ][0m [90m[eat.ts:56][0m 配置加载成功，当前分支: main, 资源基础URL: https://github.com/TeleBoxOrg/TeleBox-Plugins/raw/main
+[90m[2026-08-30 00:47:27.891][0m [32m[INFO ][0m [90m[lu_bs.ts:119][0m [lu_bs] 贴纸包加载成功
+[90m[2026-08-30 00:47:27.905][0m [32m[INFO ][0m [90m[music.ts:1431][0m [music] 初始化 Music Plugin...
+[90m[2026-08-30 00:47:29.395][0m [32m[INFO ][0m [90m[fbi.ts:126][0m [fbi] cache loaded: 289 groups
+[90m[2026-08-30 00:47:29.556][0m [32m[INFO ][0m [90m[music.ts:148][0m [music] yt-dlp found: yt-dlp
+[90m[2026-08-30 00:47:29.556][0m [32m[INFO ][0m [90m[music.ts:1441][0m [music] 正在检查yt-dlp更新...
+[90m[2026-08-30 00:47:30.766][0m [32m[INFO ][0m [90m[music.ts:1449][0m [music] 无法自动更新yt-dlp，请手动更新: yt-dlp -U
+[90m[2026-08-30 00:47:31.611][0m [32m[INFO ][0m [90m[music.ts:159][0m [Music] FFmpeg 已就绪
+[90m[2026-08-30 00:47:31.618][0m [32m[INFO ][0m [90m[zpr.ts:76][0m [zpr] 配置初始化成功
+[90m[2026-08-30 00:47:31.620][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: panel
+[90m[2026-08-30 00:47:31.621][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: prefix
+[90m[2026-08-30 00:47:31.622][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: status
+[90m[2026-08-30 00:47:31.622][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: alias
+[90m[2026-08-30 00:47:31.622][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: sudo
+[90m[2026-08-30 00:47:31.623][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: env
+[90m[2026-08-30 00:47:31.623][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: tpm
+[90m[2026-08-30 00:47:31.624][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: ai
+[90m[2026-08-30 00:47:31.625][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: aitc
+[90m[2026-08-30 00:47:31.625][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: uai
+[90m[2026-08-30 00:47:31.626][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: sum
+[90m[2026-08-30 00:47:31.627][0m [32m[INFO ][0m [90m[pathHelpers.ts:97][0m [assets] merged dir uai → agent
+[90m[2026-08-30 00:47:31.627][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: agent
+[90m[2026-08-30 00:47:31.628][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: acron
+[90m[2026-08-30 00:47:31.628][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: ai
+[90m[2026-08-30 00:47:31.628][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: autochangename
+[90m[2026-08-30 00:47:31.629][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: banana
+[90m[2026-08-30 00:47:31.629][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: checkapi
+[90m[2026-08-30 00:47:31.629][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: checkin
+[90m[2026-08-30 00:47:31.629][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: codex_image
+[90m[2026-08-30 00:47:31.630][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: cy
+[90m[2026-08-30 00:47:31.630][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: deepwiki
+[90m[2026-08-30 00:47:31.630][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: dme
+[90m[2026-08-30 00:47:31.630][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: eat
+[90m[2026-08-30 00:47:31.630][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: eatgif
+[90m[2026-08-30 00:47:31.631][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: fadian
+[90m[2026-08-30 00:47:31.631][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: fbi
+[90m[2026-08-30 00:47:31.631][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: gif
+[90m[2026-08-30 00:47:31.631][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: git_PR
+[90m[2026-08-30 00:47:31.632][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: goodnight
+[90m[2026-08-30 00:47:31.632][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: im
+[90m[2026-08-30 00:47:31.632][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: lottery
+[90m[2026-08-30 00:47:31.632][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: music
+[90m[2026-08-30 00:47:31.633][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: music_hub
+[90m[2026-08-30 00:47:31.633][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: nezha
+[90m[2026-08-30 00:47:31.633][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: nodeseek
+[90m[2026-08-30 00:47:31.633][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: pangu
+[90m[2026-08-30 00:47:31.633][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: parsehub
+[90m[2026-08-30 00:47:31.634][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: pic_to_sticker
+[90m[2026-08-30 00:47:31.634][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: pmcaptcha
+[90m[2026-08-30 00:47:31.634][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: say
+[90m[2026-08-30 00:47:31.634][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: search
+[90m[2026-08-30 00:47:31.634][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: sendat
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: shift
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: speedlink
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: speedtest
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: ssh
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: sub
+[90m[2026-08-30 00:47:31.635][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: sum
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: t
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: teletype
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: tmp_admin
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: tts
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: uai
+[90m[2026-08-30 00:47:31.636][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: whois
+[90m[2026-08-30 00:47:31.637][0m [32m[INFO ][0m [90m[settingsRegistry.ts:26][0m [panel] settings provider registered: zpr
+[90m[2026-08-30 00:47:31.668][0m [32m[INFO ][0m [90m[pluginManager.ts:434][0m [RELOAD] Event handlers registered after reload
+[90m[2026-08-30 03:10:22.746][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=1107570 for channel 4256933488 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 05:35:20.529][0m [33m[WARN ][0m [Telegram is having internal issues PersistentTimestampOutdatedError]
+[90m[2026-08-30 08:26:36.949][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=151369 for channel 3530625722 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 10:26:36.950][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=310155 for channel 2401624244 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 12:56:20.286][0m [33m[WARN ][0m [Telegram is having internal issues PersistentTimestampOutdatedError]
+[90m[2026-08-30 13:23:51.041][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=7189148 for channel 1317474393 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 13:24:28.270][0m [33m[WARN ][0m [Telegram is having internal issues PersistentTimestampOutdatedError]
+[90m[2026-08-30 15:59:03.492][0m [33m[WARN ][0m [Telegram is having internal issues PersistentTimestampOutdatedError]
+[90m[2026-08-30 16:03:12.372][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=401861 for channel 3097690375 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 16:52:44.412][0m [33m[WARN ][0m [Telegram is having internal issues PersistentTimestampOutdatedError]
+[90m[2026-08-30 19:53:30.799][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=7483168 for channel 1814986730 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 21:41:22.416][0m [33m[WARN ][0m [Telegram is having internal issues ServerError]
+[90m[2026-08-30 21:46:38.840][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=585170 for channel 3579270814 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 22:00:40.623][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=315017 for channel 2070536308 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-30 22:20:58.848][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=1256297 for channel 1349472891 — 0 PTS failures within 30min window. Cooldown: 6h (repeat #1) [layout=updateManager]
+[90m[2026-08-31 02:47:40.845][0m [32m[INFO ][0m [90m[channelGapBreaker.ts:95][0m [CircuitBreaker] Cleared pts=1116973 for channel 4256933488 — 0 PTS failures within 30min window. Cooldown: 12h (repeat #2) [layout=updateManager]
+[90m[2026-08-31 03:45:25.885][0m [32m[INFO ][0m [90m[index.ts:49][0m [SHUTDOWN] Received SIGINT, shutting down gracefully...

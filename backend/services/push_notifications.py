@@ -1,0 +1,600 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import datetime
+from typing import Any, Dict, Optional
+from urllib.parse import quote
+
+import httpx
+
+from backend.utils.time import utc_now_iso_z_seconds
+
+logger = logging.getLogger("backend.push_notifications")
+
+# Telegram Bot API 单条消息上限；留余量避免 parse_mode=HTML 时超限报错
+_TG_MSG_LIMIT = 3900
+
+# 推送通道共享 HTTP 客户端：签到成败/关键词命中通知是热点路径，
+# 每条通知新建 AsyncClient 会重复 TCP+TLS 握手；进程内复用同一连接池。
+_PUSH_HTTP_TIMEOUT = httpx.Timeout(10.0, connect=5.0)
+_PUSH_HTTP_LIMITS = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+_shared_http_client: Optional[httpx.AsyncClient] = None
+_shared_http_client_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _get_shared_http_client() -> httpx.AsyncClient:
+    """获取共享客户端；按事件循环缓存，换 loop（如测试隔离）时自动重建。"""
+    global _shared_http_client, _shared_http_client_loop
+    loop = asyncio.get_running_loop()
+    client = _shared_http_client
+    if (
+        client is None
+        or getattr(client, "is_closed", True)
+        or _shared_http_client_loop is not loop
+    ):
+        client = httpx.AsyncClient(timeout=_PUSH_HTTP_TIMEOUT, limits=_PUSH_HTTP_LIMITS)
+        _shared_http_client = client
+        _shared_http_client_loop = loop
+    return client
+
+
+async def close_shared_http_client() -> None:
+    """进程关闭时释放共享连接池（backend.main.on_shutdown 调用）。"""
+    global _shared_http_client, _shared_http_client_loop
+    client = _shared_http_client
+    _shared_http_client = None
+    _shared_http_client_loop = None
+    if client is not None and not getattr(client, "is_closed", True):
+        try:
+            await client.aclose()
+        except Exception:
+            logger.debug("关闭推送共享 HTTP 客户端失败", exc_info=True)
+
+
+def _html_escape(value: Any) -> str:
+    """转义 HTML 特殊字符，供 parse_mode=HTML 通知文本使用。"""
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _safe_msg_truncate(text: str, parse_mode: Optional[str] = None) -> str:
+    """截断到 Telegram 消息上限，HTML 模式下保持标签闭合。
+
+    parse_mode=HTML 时若截断点落在标签内部或存在未闭合标签，
+    Telegram 会返回 400；这里用标签栈找到最后一个平衡位置回退，
+    保证输出不包含未闭合标签。
+    """
+    if len(text) <= _TG_MSG_LIMIT:
+        return text
+    if parse_mode != "HTML":
+        return text[:_TG_MSG_LIMIT]
+
+    head = text[:_TG_MSG_LIMIT]
+    stack: list[str] = []
+    safe_pos = 0  # 最后一次标签栈为空（或自闭合）后的位置
+    i = 0
+    while True:
+        lt = head.find("<", i)
+        if lt == -1:
+            break
+        gt = head.find(">", lt)
+        if gt == -1:
+            break  # 到头部末尾仍未见闭合，视为残缺，回退
+        tag = head[lt : gt + 1]
+        if tag.startswith("</"):
+            name = tag[2:-1].strip().split(" ")[0]
+            if stack and stack[-1] == name:
+                stack.pop()
+                if not stack:
+                    safe_pos = gt + 1
+        elif tag.endswith("/>"):
+            safe_pos = gt + 1
+        else:
+            name = tag[1:-1].strip().split(" ")[0]
+            stack.append(name)
+        i = gt + 1
+
+    if not stack:
+        return head
+    if safe_pos == 0:
+        # 没有任何平衡点（头部即为残缺标签），退回纯截断并剥离残缺标签
+        import re as _re
+
+        return _re.sub(r"<[^>]*$", "", head)
+    return head[:safe_pos]
+
+
+def build_html_notification(
+    *,
+    title: str,
+    fields: list[tuple[str, str]],
+    footer: str = "",
+) -> str:
+    """构建 Telegram HTML 格式通知文本。
+
+    - 标题加粗，字段标签加粗、值用等宽 code，整体逐行累积。
+    - 字段值先按原始文本截断再转义，避免截断点切开 HTML 实体
+      （如 &amp; 被切成 &am）导致 parse_mode=HTML 解析失败。
+    - 返回的文本配合 parse_mode="HTML" 发送，长度不超过 _TG_MSG_LIMIT。
+    """
+    lines = [f"<b>{_html_escape(title)}</b>"]
+    for label, value in fields:
+        if not value:
+            continue
+        lines.append(
+            f"<b>{_html_escape(label)}</b>: <code>{_html_escape(str(value)[:2000])}</code>"
+        )
+    if footer:
+        lines.append(_html_escape(str(footer)[:2000]))
+
+    text = ""
+    truncated = False
+    for line in lines:
+        if len(text) + len(line) + 1 > _TG_MSG_LIMIT:
+            truncated = True
+            break
+        text = f"{text}\n{line}" if text else line
+    if truncated:
+        # 丢弃后续行时必须显式标记，否则用户会把残缺内容当作完整内容
+        # （尤其「建议」与日志尾巴被静默吃掉时，通知会失去排障价值）
+        marker = "…（内容过长已截断，详情见面板日志）"
+        while text and len(text) + len(marker) + 1 > _TG_MSG_LIMIT:
+            head, sep, _ = text.rpartition("\n")
+            if not sep:
+                # 单行即占满预算：直接退回纯标记，避免空转
+                text = ""
+                break
+            text = head
+        text = f"{text}\n{marker}" if text else marker
+    return text
+
+
+def _as_int_or_none(value: Any) -> Optional[int]:
+    try:
+        if value is None or str(value).strip() == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bot_config(settings: Dict[str, Any]) -> tuple[str, str, Optional[int]]:
+    """统一读取 Bot 通知凭据：token / chat_id 去空白，话题 ID 容错解析。
+
+    供关键词推送、登录通知、任务成败通知等共用，避免各处重复魔法键读取。
+    """
+    token = (settings.get("telegram_bot_token") or "").strip()
+    chat_id = (settings.get("telegram_bot_chat_id") or "").strip()
+    thread_id = _as_int_or_none(settings.get("telegram_bot_message_thread_id"))
+    return token, chat_id, thread_id
+
+
+def is_in_quiet_hours(
+    settings: Dict[str, Any], now: Optional[datetime] = None
+) -> bool:
+    """判断当前是否处于通知静默时段（支持跨午夜，兼容 HH:MM 与 HH:MM:SS）。"""
+    if not settings.get("telegram_bot_quiet_hours_enabled"):
+        return False
+    from backend.utils.time_window import parse_hhmm, resolve_tz
+
+    start_t = parse_hhmm(settings.get("telegram_bot_quiet_hours_start") or "23:00")
+    end_t = parse_hhmm(settings.get("telegram_bot_quiet_hours_end") or "07:00")
+    if start_t is None or end_t is None:
+        return False
+    start_m = start_t.hour * 60 + start_t.minute
+    end_m = end_t.hour * 60 + end_t.minute
+    if start_m == end_m:
+        return False
+
+    tz_name = str(settings.get("timezone") or "UTC")
+    tz = resolve_tz(tz_name)
+    current = now or datetime.now(tz)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=tz)
+    else:
+        current = current.astimezone(tz)
+    minutes = current.hour * 60 + current.minute
+    if start_m < end_m:
+        return start_m <= minutes < end_m
+    return minutes >= start_m or minutes < end_m
+
+
+async def send_telegram_bot_message(
+    *,
+    bot_token: str,
+    chat_id: str,
+    text: str,
+    message_thread_id: Optional[int] = None,
+    parse_mode: Optional[str] = None,
+) -> None:
+    payload: Dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": _safe_msg_truncate(text, parse_mode),
+        "disable_web_page_preview": False,
+    }
+    if parse_mode:
+        payload["parse_mode"] = parse_mode
+    if message_thread_id is not None:
+        payload["message_thread_id"] = message_thread_id
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    # 网络层抖动（连接/DNS/超时）与 5xx 瞬时故障重试一次，提升通知到达率；
+    # 4xx 属于请求本身问题（参数/权限），重试无意义，直接抛出
+    last_exc: Optional[Exception] = None
+    for attempt in (1, 2):
+        try:
+            client = _get_shared_http_client()
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+            return
+        except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500:
+                raise
+            last_exc = exc
+            if attempt == 1:
+                logger.warning("Telegram 通知发送失败，准备重试: %s", exc)
+                await asyncio.sleep(1.0)
+    assert last_exc is not None
+    raise last_exc
+
+
+async def _http_post_retry_once(
+    *,
+    url: str,
+    channel: str,
+    json_body: Optional[dict] = None,
+    timeout: float = 10.0,
+    method: str = "POST",
+) -> httpx.Response:
+    """HTTP 推送统一重试封装：瞬时故障（连接/DNS/超时）与 5xx 重试一次，4xx 直抛。
+
+    与 send_telegram_bot_message 同一重试语义，供 bark / 自定义推送等
+    非 Telegram 通道复用，保证各通道抖动下的到达率一致。
+    """
+    last_exc: Optional[Exception] = None
+    for attempt in (1, 2):
+        try:
+            client = _get_shared_http_client()
+            if method == "GET":
+                response = await client.get(url, timeout=timeout)
+            else:
+                response = await client.post(url, json=json_body, timeout=timeout)
+            response.raise_for_status()
+            return response
+        except (httpx.RequestError, httpx.HTTPStatusError) as exc:
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500:
+                raise
+            last_exc = exc
+            if attempt == 1:
+                logger.warning("%s 通知发送失败，准备重试: %s", channel, exc)
+                await asyncio.sleep(1.0)
+    assert last_exc is not None
+    raise last_exc
+
+
+async def send_keyword_push(settings: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    # 与失败/成功/账号失效/登录/备份通知一致：静默时段内跳过关键词命中推送，
+    # 避免高频命中通道在夜间打扰；跳过时留 debug 日志便于排障
+    if is_in_quiet_hours(settings):
+        logger.debug("关键词命中推送处于静默时段，跳过推送")
+        return
+    channel = (settings.get("keyword_monitor_push_channel") or "telegram").strip()
+    title = str(payload.get("title") or "TG-SignPulse 关键词命中")
+    body = str(payload.get("body") or "")
+    url = str(payload.get("url") or "")
+    # 多通道标题统一带状态 emoji，避免各通道展示不一致
+    if not title.startswith("🔔"):
+        title = f"🔔 {title}"
+
+    if channel in ("server_chan", "server酱"):
+        sendkey = (
+            settings.get("keyword_monitor_server_chan_send_key")
+            or settings.get("server_chan_send_key")
+            or ""
+        ).strip()
+        if not sendkey:
+            logger.warning("Server酱 sendkey 未配置")
+            return
+        from tg_signer.notification.server_chan import sc_send
+
+        await sc_send(sendkey, title, desp=body)
+        return
+
+    if channel == "telegram":
+        bot_token, chat_id, thread_id = _bot_config(settings)
+        if not bot_token or not chat_id:
+            logger.warning("关键词监听 Telegram 通知未配置")
+            return
+        fields: list[tuple[str, str]] = [
+            ("时间 (UTC)", utc_now_iso_z_seconds()),
+            ("账号", payload.get("account_name") or ""),
+            ("任务", payload.get("task_name") or ""),
+            ("关键词", payload.get("keyword") or ""),
+            ("会话", payload.get("chat_title") or ""),
+        ]
+        sender = payload.get("sender")
+        if sender:
+            fields.append(("发送者", str(sender)))
+        # Telegram 用结构化字段承载 账号/任务/关键词/会话，footer 只放命中原文，
+        # 避免与 body（含 任务/会话/关键词 行的完整文本）重复展示
+        footer = str(payload.get("text") or body or "")
+        text = build_html_notification(
+            title=title,
+            fields=fields,
+            footer=footer,
+        )
+        if url:
+            text += f"\n\n🔗 链接: {_html_escape(url)}"
+        await send_telegram_bot_message(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=text,
+            message_thread_id=thread_id,
+            parse_mode="HTML",
+        )
+        return
+
+    if channel == "bark":
+        bark_url = (settings.get("keyword_monitor_bark_url") or "").strip()
+        if not bark_url:
+            logger.warning("关键词监听 Bark 地址未配置")
+            return
+        data = {"title": title, "body": body}
+        if url:
+            data["url"] = url
+        await _http_post_retry_once(url=bark_url, channel="Bark", json_body=data)
+        return
+
+    custom_url = (settings.get("keyword_monitor_custom_url") or "").strip()
+    if not custom_url:
+        logger.warning("关键词监听自定义推送地址未配置")
+        return
+
+    request_payload = dict(payload)
+    request_payload["title"] = title
+    request_payload["body"] = body
+    request_payload["url"] = url
+
+    if any(token in custom_url for token in ("{title}", "{body}", "{url}")):
+        final_url = (
+            custom_url.replace("{title}", quote(title))
+            .replace("{body}", quote(body))
+            .replace("{url}", quote(url))
+        )
+        await _http_post_retry_once(url=final_url, channel="自定义推送", method="GET")
+        return
+
+    await _http_post_retry_once(url=custom_url, channel="自定义推送", json_body=request_payload)
+
+
+async def send_login_notification(
+    settings: Dict[str, Any],
+    *,
+    username: str,
+    ip_address: str,
+) -> None:
+    if not settings.get("telegram_bot_notify_enabled"):
+        return
+    if not settings.get("telegram_bot_login_notify_enabled"):
+        return
+    if is_in_quiet_hours(settings):
+        return
+
+    bot_token, chat_id, thread_id = _bot_config(settings)
+    if not bot_token or not chat_id:
+        logger.warning("Telegram 登录通知未配置")
+        return
+
+    text = build_html_notification(
+        title="🔐 TG-SignPulse 登录成功通知",
+        fields=[
+            ("时间 (UTC)", utc_now_iso_z_seconds()),
+            ("用户", username or ""),
+            ("IP", ip_address or "未知"),
+        ],
+    )
+    await send_telegram_bot_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        text=text,
+        message_thread_id=thread_id,
+        parse_mode="HTML",
+    )
+
+
+async def send_task_success_notification(
+    settings: Dict[str, Any],
+    *,
+    account_name: str,
+    task_name: str,
+    message: str = "",
+) -> None:
+    """任务成功时的 Bot 通知。"""
+    if not settings.get("telegram_bot_notify_enabled"):
+        return
+    if not settings.get("telegram_bot_task_success_enabled"):
+        return
+    if is_in_quiet_hours(settings):
+        return
+
+    bot_token, chat_id, thread_id = _bot_config(settings)
+    if not bot_token or not chat_id:
+        return
+
+    fields = [
+        ("时间 (UTC)", utc_now_iso_z_seconds()),
+        ("账号", account_name),
+        ("任务", task_name),
+        ("摘要", str(message)[:500] or "已完成"),
+    ]
+    text = build_html_notification(
+        title=f"✅ {account_name} · {task_name} 执行成功",
+        fields=fields,
+    )
+    await send_telegram_bot_message(
+        bot_token=bot_token,
+        chat_id=chat_id,
+        text=text,
+        message_thread_id=thread_id,
+        parse_mode="HTML",
+    )
+
+
+async def send_auto_backup_failure_notification(
+    settings: Dict[str, Any],
+    *,
+    error: str,
+    detail: str = "",
+) -> None:
+    """自动备份失败时的 Bot 通知（打包失败或 WebDAV 上传失败）。
+
+    仅依赖通知总开关 + 已配置 Token/Chat；不绑定任务失败开关
+    （备份是运维事件，与签到任务失败相互独立）。静默时段仍跳过。
+    """
+    if not settings.get("telegram_bot_notify_enabled"):
+        return
+    if is_in_quiet_hours(settings):
+        return
+
+    bot_token, chat_id, thread_id = _bot_config(settings)
+    if not bot_token or not chat_id:
+        return
+
+    fields = [
+        ("时间 (UTC)", utc_now_iso_z_seconds()),
+        ("原因", str(error)[:800]),
+    ]
+    if detail:
+        fields.append(("详情", str(detail)[:500]))
+    text = build_html_notification(
+        title="🗄️ TG-SignPulse 自动备份失败",
+        fields=fields,
+    )
+    try:
+        await send_telegram_bot_message(
+            bot_token=bot_token,
+            chat_id=chat_id,
+            text=text,
+            message_thread_id=thread_id,
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.warning("自动备份失败通知发送失败: %s", exc)
+
+
+async def send_wecom_message(webhook_url: str, title: str, text: str) -> None:
+    """发送企业微信群机器人 Webhook 通知。"""
+    if not webhook_url or not webhook_url.strip():
+        return
+    content = f"### {title}\n{text}"
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {"content": content[:4000]}
+    }
+    await _http_post_retry_once(url=webhook_url.strip(), channel="WeCom", json_body=payload)
+
+
+async def send_feishu_message(webhook_url: str, title: str, text: str) -> None:
+    """发送飞书自定义机器人 Webhook 通知（支持富文本卡片）。"""
+    if not webhook_url or not webhook_url.strip():
+        return
+    payload = {
+        "msg_type": "interactive",
+        "card": {
+            "header": {
+                "title": {"tag": "plain_text", "content": title[:100]}
+            },
+            "elements": [
+                {
+                    "tag": "div",
+                    "text": {"tag": "lark_md", "content": text[:3000]}
+                }
+            ]
+        }
+    }
+    await _http_post_retry_once(url=webhook_url.strip(), channel="Feishu", json_body=payload)
+
+
+async def send_dingtalk_message(webhook_url: str, title: str, text: str) -> None:
+    """发送钉钉群机器人 Webhook 通知。"""
+    if not webhook_url or not webhook_url.strip():
+        return
+    content = f"### {title}\n\n{text}"
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {
+            "title": title[:100],
+            "text": content[:4000],
+        }
+    }
+    await _http_post_retry_once(url=webhook_url.strip(), channel="DingTalk", json_body=payload)
+
+
+async def send_discord_message(webhook_url: str, title: str, text: str) -> None:
+    """发送 Discord Webhook 通知。"""
+    if not webhook_url or not webhook_url.strip():
+        return
+    payload = {
+        "username": "TG-SignPulse",
+        "embeds": [
+            {
+                "title": title[:256],
+                "description": text[:4000],
+                "color": 3447003,
+            }
+        ]
+    }
+    await _http_post_retry_once(url=webhook_url.strip(), channel="Discord", json_body=payload)
+
+
+async def dispatch_matrix_notification(
+    settings: Dict[str, Any],
+    *,
+    title: str,
+    fields: list[tuple[str, str]],
+    footer: str = "",
+) -> None:
+    """统一向外部 Webhook 矩阵（企业微信、飞书、钉钉、Discord）分发通知。"""
+    if is_in_quiet_hours(settings):
+        return
+
+    md_lines = []
+    for label, val in fields:
+        if val:
+            md_lines.append(f"**{label}**: `{val}`")
+    if footer:
+        md_lines.append(f"\n{footer}")
+    body_text = "\n".join(md_lines)
+
+    wecom_url = (settings.get("wecom_webhook_url") or "").strip()
+    if wecom_url:
+        try:
+            await send_wecom_message(wecom_url, title, body_text)
+        except Exception as exc:
+            logger.warning("企业微信通知发送失败: %s", exc)
+
+    feishu_url = (settings.get("feishu_webhook_url") or "").strip()
+    if feishu_url:
+        try:
+            await send_feishu_message(feishu_url, title, body_text)
+        except Exception as exc:
+            logger.warning("飞书通知发送失败: %s", exc)
+
+    dingtalk_url = (settings.get("dingtalk_webhook_url") or "").strip()
+    if dingtalk_url:
+        try:
+            await send_dingtalk_message(dingtalk_url, title, body_text)
+        except Exception as exc:
+            logger.warning("钉钉通知发送失败: %s", exc)
+
+    discord_url = (settings.get("discord_webhook_url") or "").strip()
+    if discord_url:
+        try:
+            await send_discord_message(discord_url, title, body_text)
+        except Exception as exc:
+            logger.warning("Discord 通知发送失败: %s", exc)

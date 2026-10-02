@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+.venv*/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.pre-commit-config.yaml
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Tests
+tests/
+test_*.py
+.pytest_cache/
+.tox/
+.coverage
+htmlcov/
+
+# Frontend development files
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local
+frontend/.eslintcache
+
+
+# Logs
+logs/
+*.log
+*.pid
+
+# Data
+.signer/
+sessions/
+data/
+*.session
+*.session-journal
+.local-data/
+.local-login-data/
+.tg_signpulse_data_dir
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Docker
+docker/*
+!docker/entrypoint.sh
+docker-compose*.yml
+Dockerfile.*
+
+# Never send local credentials or account runtime data to the builder.
+.env
+.env.*
+!.env.example
+.trellis/
+telebox/node_modules/

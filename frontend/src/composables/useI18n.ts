@@ -1,0 +1,34 @@
+import { computed } from 'vue'
+import { useI18n as vueUseI18n } from 'vue-i18n'
+import { storageSet } from '../lib/safe-storage'
+
+/**
+ * 项目级 i18n 包装器，保持与 vue-i18n 的桥接兼容。
+ * 所有翻译已迁移至 vue-i18n（locales/zh-CN.json、locales/en-US.json），
+ * 此 composable 仅提供旧版 API 兼容接口，避免大规模修改已有组件。
+ */
+export function useI18n() {
+  const { locale, t: vueT } = vueUseI18n()
+
+  // 兼容旧版 locale 值：vue-i18n 使用 'zh-CN'/'en-US'，旧代码使用 'zh'/'en'
+  const legacyLocale = computed({
+    get: () => locale.value === 'zh-CN' ? 'zh' : 'en',
+    set: (val: string) => {
+      locale.value = val === 'en' ? 'en-US' : 'zh-CN'
+      storageSet('tg-signer-locale', val)
+    },
+  })
+
+  const toggleLanguage = () => {
+    const newLocale = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
+    locale.value = newLocale
+    storageSet('tg-signer-locale', newLocale === 'zh-CN' ? 'zh' : 'en')
+  }
+
+  // 包装 vue-i18n 的 t 函数，支持嵌套 key 与命名插值
+  function t(key: string, named?: Record<string, unknown>): string {
+    return named ? String(vueT(key, named)) : String(vueT(key))
+  }
+
+  return { locale: legacyLocale, toggleLanguage, t }
+}

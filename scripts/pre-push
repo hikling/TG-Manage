@@ -1,0 +1,118 @@
+#!/bin/bash
+# pre-push 钩子：推送前自动执行代码质量检查
+# 安装方式：bash scripts/install-hooks
+# 跳过方式：SKIP_PUSH_HOOK=1 git push 或 git push --no-verify
+
+set -euo pipefail
+
+# 跳过机制
+if [ "${SKIP_PUSH_HOOK:-0}" = "1" ]; then
+    echo "⏭️  SKIP_PUSH_HOOK=1, 跳过推送检查"
+    exit 0
+fi
+
+# 获取项目根目录（兼容 symlink）
+HOOK_PATH="$(cd "$(dirname "$0")" && pwd)"
+# 如果在 .git/hooks 下，向上两级到项目根
+case "$HOOK_PATH" in
+    */.git/hooks) ROOT="$(cd "$HOOK_PATH/../.." && pwd)" ;;
+    */scripts)    ROOT="$(cd "$HOOK_PATH/.." && pwd)" ;;
+    *)            ROOT="$(cd "$(dirname "$0")/.." && pwd)" ;;
+esac
+cd "$ROOT"
+
+FAILED=0
+
+echo "🔍 推送前代码质量检查..."
+echo ""
+
+# ── 1. Ruff 代码检查 ──
+echo "📦 [1/3] Ruff 代码检查..."
+# ruff 解析链：PATH → 项目 venv → uvx（版本对齐 pyproject 锁定的 <0.16）
+RUFF=""
+if command -v ruff &>/dev/null; then
+    RUFF="ruff"
+elif [ -x ".venv/bin/ruff" ]; then
+    RUFF=".venv/bin/ruff"
+elif command -v uvx &>/dev/null; then
+    RUFF="uvx ruff@0.15"
+fi
+if [ -n "$RUFF" ]; then
+    if $RUFF check backend/ tg_signer/ tests/; then
+        echo "   ✅ Ruff 检查通过"
+    else
+        echo "   ❌ Ruff 检查失败，请修复后再推送"
+        FAILED=1
+    fi
+else
+    echo "   ❌ 未找到可用 ruff（PATH/.venv/uvx 均无），禁止带病推送"
+    FAILED=1
+fi
+echo ""
+
+# ── 2. 前端类型检查（仅 frontend/ 有变更时） ──
+if git diff --name-only HEAD@{1}..HEAD 2>/dev/null | grep -q "^frontend/" || \
+   git diff --cached --name-only | grep -q "^frontend/" || \
+   [ -n "$(git status --porcelain frontend/ 2>/dev/null)" ]; then
+    echo "🎨 [2/3] 前端类型检查..."
+    if command -v npx &>/dev/null && [ -f "frontend/package.json" ]; then
+        if (cd frontend && npx vue-tsc --noEmit 2>&1); then
+            echo "   ✅ 前端类型检查通过"
+        else
+            echo "   ❌ 前端类型检查失败，请修复后再推送"
+            FAILED=1
+        fi
+    else
+        echo "   ⚠️  npx 未安装或 frontend/ 不存在，跳过"
+    fi
+else
+    echo "🎨 [2/3] 前端类型检查 — 无前端变更，跳过"
+fi
+echo ""
+
+# ── 3. 后端测试（仅后端/引擎变更时，快速并行模式） ──
+echo "🧪 [3/3] 后端测试..."
+# 检测是否有后端相关文件变更
+BACKEND_CHANGED=0
+if git diff --name-only HEAD@{1}..HEAD 2>/dev/null | grep -qE "^(backend/|tg_signer/|tests/|pyproject\.toml)" || \
+   git diff --cached --name-only | grep -qE "^(backend/|tg_signer/|tests/|pyproject\.toml)" || \
+   [ -n "$(git status --porcelain backend/ tg_signer/ tests/ 2>/dev/null)" ]; then
+    BACKEND_CHANGED=1
+fi
+
+if [ "$BACKEND_CHANGED" -eq 0 ]; then
+    echo "   ⏭️  无后端变更，跳过测试"
+else
+    # python 解析链：项目 venv 优先（依赖齐全），PATH 兜底
+    PYTHON=""
+    if [ -x ".venv/bin/python" ]; then
+        PYTHON=".venv/bin/python"
+    elif command -v python &>/dev/null; then
+        PYTHON="python"
+    fi
+    if [ -n "$PYTHON" ] && [ -f "pyproject.toml" ]; then
+        # -n auto: 并行执行  --no-cov: 跳过覆盖率报告（pre-push 不需要）
+        # --lf: 优先跑上次失败的用例，快速失败  -x: 首个失败即停
+        if $PYTHON -m pytest tests/ -n auto -x -q --tb=short --no-header --no-cov --lf 2>&1; then
+            echo "   ✅ 测试通过"
+        else
+            echo "   ❌ 测试失败，请修复后再推送"
+            FAILED=1
+        fi
+    else
+        echo "   ❌ 未找到可用 python（.venv/PATH 均无），禁止带病推送"
+        FAILED=1
+    fi
+fi
+echo ""
+
+# ── 结果 ──
+if [ "$FAILED" -eq 0 ]; then
+    echo "✅ 所有检查通过，允许推送"
+    exit 0
+else
+    echo "❌ 检查未通过，推送已阻止"
+    echo "   修复问题后重新 git push"
+    echo "   紧急情况可用：git push --no-verify"
+    exit 1
+fi

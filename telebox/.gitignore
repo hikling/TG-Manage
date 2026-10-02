@@ -1,0 +1,55 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+config.json
+assets/*
+!assets/.gitkeep
+plugins/*
+!plugins/.gitkeep
+temp/*
+!temp/.gitkeep
+node_modules/*
+!node_modules/.gitkeep
+package-lock.json
+my_session/*
+.env
+.env.*
+/pmcaptcha_userdata
+
+# Build outputs
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+
+# TypeScript / runtime caches
+.plugin-cache/
+*.tsbuildinfo
+.cache/
+.turbo/
+
+# Logs / process leftovers
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pid
+*.pid.lock
+
+# Mis-emitted source artifacts
+src/**/*.js
+src/**/*.js.map
+
+# Nested dual-edition layout (switch runtime peers under runtime home)
+/telebox-classic/
+/telebox-next/
+/telebox-mtcute/
+/telebox_mtcute/
+/TeleBox_M/
+/telebox-teleproto/

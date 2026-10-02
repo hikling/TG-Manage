@@ -1,0 +1,123 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-signer"
+dynamic = ["version"]
+description = "Automated Telegram tasks (check-ins, sending messages, keyboard clicks, AI replies, etc.); monitoring, forwarding, and auto-replying to private, group, and channel messages."
+authors = [
+    { name = "Amchii", email = "finethankuandyou@gmail.com" }
+]
+license = "BSD-3-Clause"
+readme = "README.md"
+requires-python = ">=3.10,<3.14"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3 :: Only"
+]
+dependencies = [
+    "kurigram<=2.2.7",
+    "click",
+    # 生产钉死 v1，避免无 lockfile 时 pip 拉到 v2 导致运行差异
+    # 业务已具备 pydantic_compat，后续升级可再放宽到 <3
+    "pydantic>=1.10.26,<2",
+    "openai",
+    "croniter",
+    "json_repair",
+    "typing-extensions",
+    "httpx[socks]",
+    "fastapi>=0.109.2",
+    "uvicorn[standard]",
+    "sqlalchemy",
+    "apscheduler",
+    "pyjwt>=2.8.0",
+    "python-multipart",
+    "pyotp",
+    "passlib[bcrypt]",
+    "bcrypt",
+    "qrcode[pil]",
+    "cryptography",
+    "filelock",
+    "aiofiles",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # ruff 0.16 默认规则集扩大，会把历史代码硬门槛打爆；先锁 0.15.x
+    "ruff>=0.14.6,<0.16",
+    "tox>=4.32.0",
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.1.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-timeout>=2.2.0",
+]
+speedup = [
+    "tgcrypto"
+]
+
+[project.urls]
+Homepage = "https://github.com/amchii/tg-signer"
+Repository = "https://github.com/amchii/tg-signer"
+
+[project.scripts]
+tg-signer = "tg_signer.__main__:signer"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = { attr = "tg_signer.__version__" }
+
+[tool.setuptools.packages.find]
+exclude = ["tests*"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# 显式 select，避免 ruff 大版本默认规则突变导致 CI 硬门槛失效
+select = [
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "W",  # pycodestyle
+    "C4", # flake8-comprehensions
+]
+ignore = [
+    "E501", # line too long, handled by black
+    "B008", # do not perform function calls in argument defaults
+    "C901", # too complex
+    "W191", # indentation contains tabs
+    "B019", # Use of `functools.lru_cache` or `functools.cache` on methods can lead to memory leaks
+    "B904"  # raise without from inside except
+]
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov=tg_signer --cov=backend --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml:coverage.xml"
+
+[tool.coverage.run]
+source = ["tg_signer", "backend"]
+branch = true
+omit = [
+    "tg_signer/__main__.py",
+    "tests/*",
+    "backend/cli/*",
+]
+
+[tool.coverage.report]
+fail_under = 40
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "pass",
+]

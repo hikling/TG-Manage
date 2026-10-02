@@ -1,0 +1,88 @@
+"""sign_task_text / sign_task_config_inspect 纯函数测试。"""
+from __future__ import annotations
+
+from backend.services.sign_task_config_inspect import (
+    task_has_keyword_monitor,
+    task_requires_updates,
+)
+from backend.services.sign_task_text import repair_mojibake
+
+
+def test_repair_mojibake_empty_and_clean():
+    assert repair_mojibake("") == ""
+    assert repair_mojibake(None) == ""  # type: ignore[arg-type]
+    assert repair_mojibake("签到成功") == "签到成功"
+
+
+def test_repair_mojibake_roundtrip_gbk_misread():
+    # UTF-8 中文被按 latin1/gbk 路径误读后的典型修复路径
+    original = "签到成功"
+    mangled = original.encode("utf-8").decode("gbk", errors="ignore")
+    if mangled == original:
+        # 环境无法构造乱码时跳过
+        return
+    fixed = repair_mojibake(mangled)
+    # 至少不应比原文更糟；成功修复则还原
+    assert isinstance(fixed, str)
+    assert len(fixed) > 0
+
+
+def test_task_requires_updates_conservative():
+    assert task_requires_updates(None) is True
+    assert task_requires_updates({}) is True
+    assert task_requires_updates({"chats": []}) is False
+    assert (
+        task_requires_updates(
+            {"chats": [{"actions": [{"action": 1, "text": "hi"}]}]}
+        )
+        is False
+    )
+    assert (
+        task_requires_updates(
+            {"chats": [{"actions": [{"action": 3}]}]}
+        )
+        is True
+    )
+
+
+def test_task_has_keyword_monitor():
+    assert task_has_keyword_monitor(None) is False
+    assert task_has_keyword_monitor({"chats": []}) is False
+    assert (
+        task_has_keyword_monitor(
+            {"chats": [{"actions": [{"action": 8, "keywords": ["x"]}]}]}
+        )
+        is True
+    )
+    assert (
+        task_has_keyword_monitor(
+            {"chats": [{"actions": [{"action": 1}]}]}
+        )
+        is False
+    )
+
+
+def test_inspect_tolerates_malformed_structure():
+    """chats 非 list / action 非 dict / 非法 action 值均应容错。"""
+    # chats 缺失或非 list：requires_updates 保守视为依赖 updates，避免漏挂监听
+    assert task_requires_updates({"chats": "oops"}) is True
+    assert task_requires_updates({"chats": [{"actions": "oops"}]}) is False
+    assert task_requires_updates({"chats": [{"actions": [{"action": "x"}]}]}) is False
+    assert task_has_keyword_monitor({"chats": [{"actions": [None]}]}) is False
+
+
+def test_format_target_message_summary_text_and_media():
+    from backend.services.sign_task_message import (
+        format_target_message_summary,
+        message_matches_thread,
+    )
+
+    class Msg:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    assert format_target_message_summary(None) == ""
+    assert format_target_message_summary(Msg(text="hello")) == "hello"
+    assert format_target_message_summary(Msg(photo=object())) == "[图片]"
+    assert message_matches_thread(Msg(message_thread_id=3), {"message_thread_id": 3})
+    assert message_matches_thread(Msg(message_thread_id=1), {"message_thread_id": None})

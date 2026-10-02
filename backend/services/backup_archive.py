@@ -1,0 +1,199 @@
+"""数据目录备份打包与自动备份清理。"""
+
+from __future__ import annotations
+
+import logging
+import tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable, Optional, Sequence, Tuple
+
+logger = logging.getLogger("backend.backup_archive")
+
+DEFAULT_BACKUP_PATHS: Tuple[str, ...] = (
+    "db.sqlite",
+    "db.sqlite-wal",
+    "db.sqlite-shm",
+    "sessions",
+    ".signer",
+    ".global_settings.json",
+    ".openai_config.json",
+    ".telegram_api.json",
+)
+
+
+def _safe_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def create_backup_tarball(
+    data_dir: Path,
+    dest: Path,
+    paths: Sequence[str] = DEFAULT_BACKUP_PATHS,
+) -> Path:
+    """将 data_dir 下推荐路径打包为 tar.gz。
+
+    仅添加 data_dir 内真实存在的路径；拒绝指向目录外的符号链接逃逸。
+    若无任何可打包内容则抛出 ValueError。
+    """
+    data_dir = data_dir.resolve()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    added = 0
+    with tarfile.open(dest, "w:gz") as tar:
+        for rel in paths:
+            # 拒绝绝对路径与父目录穿越
+            rel_p = Path(rel) if rel else None
+            if not rel or not rel_p or rel_p.is_absolute() or rel.startswith(("/", chr(92))) or ":" in rel or chr(0) in rel or ".." in rel_p.parts:
+                logger.warning("跳过非法备份路径: %s", rel)
+                continue
+            src = (data_dir / rel).resolve()
+            try:
+                src.relative_to(data_dir)
+            except ValueError:
+                logger.warning("跳过 data_dir 外路径: %s", rel)
+                continue
+            if not src.exists():
+                continue
+            tar.add(src, arcname=rel)
+            added += 1
+    if added == 0:
+        try:
+            dest.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.debug("清理空备份文件失败: %s (%s)", dest, exc)
+        raise ValueError("没有可备份的文件")
+    return dest
+
+
+def prune_backups(backup_dir: Path, keep: int) -> int:
+    """保留最近 keep 份 auto-*.tar.gz，删除更旧文件。返回删除数量。"""
+    try:
+        keep = max(0, int(keep))
+    except (TypeError, ValueError):
+        keep = 3
+    if not backup_dir.exists():
+        return 0
+    files = sorted(
+        backup_dir.glob("auto-*.tar.gz"),
+        key=_safe_mtime,
+        reverse=True,
+    )
+    removed = 0
+    for f in files[keep:]:
+        try:
+            f.unlink(missing_ok=True)
+            removed += 1
+        except OSError as exc:
+            logger.warning("删除旧备份失败 %s: %s", f, exc)
+    return removed
+
+
+def run_auto_backup(
+    data_dir: Path,
+    *,
+    keep: int = 3,
+    paths: Optional[Iterable[str]] = None,
+    webdav_settings: Optional[dict] = None,
+) -> dict:
+    """执行一次自动备份；WebDAV 上传成功后删除本地副本以节省磁盘。"""
+    backup_dir = data_dir / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    # 备份文件名用 UTC，与历史记录/命中导出的时间口径一致，避免跨时区部署错位
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    dest = backup_dir / f"auto-{ts}.tar.gz"
+    path_tuple = tuple(paths) if paths is not None else DEFAULT_BACKUP_PATHS
+    try:
+        create_backup_tarball(data_dir, dest, path_tuple)
+    except ValueError as exc:
+        logger.warning("自动备份跳过: %s", exc)
+        return {
+            "success": False,
+            "path": "",
+            "size_bytes": 0,
+            "pruned": 0,
+            "remote_pruned": 0,
+            "remote_prune": None,
+            "local_removed": False,
+            "error": str(exc),
+            "webdav": None,
+        }
+    try:
+        size = dest.stat().st_size if dest.exists() else 0
+    except OSError:
+        size = 0
+    webdav_result = None
+    remote_prune = None
+    local_removed = False
+    path_out = str(dest)
+    wd = webdav_settings or {}
+    if (wd.get("webdav_url") or "").strip():
+        try:
+            from backend.services.webdav_client import upload_file_to_webdav
+
+            webdav_result = upload_file_to_webdav(
+                base_url=str(wd.get("webdav_url") or ""),
+                username=str(wd.get("webdav_username") or ""),
+                password=str(wd.get("webdav_password") or ""),
+                remote_dir=str(wd.get("webdav_remote_dir") or "tg-signpulse-backups"),
+                local_path=dest,
+            )
+        except Exception as exc:
+            logger.warning("自动备份 WebDAV 上传失败: %s", exc)
+            webdav_result = {"success": False, "error": str(exc)}
+
+        # 远端已有副本则删本地，失败则保留便于补传
+        if webdav_result and webdav_result.get("success"):
+            try:
+                dest.unlink(missing_ok=True)
+                local_removed = True
+                path_out = str(webdav_result.get("remote_url") or "")
+            except OSError as exc:
+                logger.warning("删除本地自动备份失败 %s: %s", dest, exc)
+
+            # 远端按 keep 轮转清理旧包
+            try:
+                from backend.services.webdav_client import prune_webdav_backups
+
+                remote_prune = prune_webdav_backups(
+                    base_url=str(wd.get("webdav_url") or ""),
+                    username=str(wd.get("webdav_username") or ""),
+                    password=str(wd.get("webdav_password") or ""),
+                    remote_dir=str(
+                        wd.get("webdav_remote_dir") or "tg-signpulse-backups"
+                    ),
+                    keep=keep,
+                )
+            except Exception as exc:
+                logger.warning("远端备份清理失败: %s", exc)
+                remote_prune = {"success": False, "removed": 0, "error": str(exc)}
+
+    removed = prune_backups(backup_dir, keep)
+    return {
+        "success": True,
+        "path": path_out,
+        "size_bytes": size,
+        "pruned": removed,
+        "remote_pruned": (remote_prune or {}).get("removed", 0),
+        "remote_prune": remote_prune,
+        "local_removed": local_removed,
+        "webdav": webdav_result,
+    }
+
+
+def should_run_auto_backup(settings: Optional[dict]) -> bool:
+    if not isinstance(settings, dict):
+        return False
+    return bool(settings.get("auto_backup_enabled"))
+
+
+def auto_backup_interval_hours(settings: Optional[dict]) -> int:
+    if not isinstance(settings, dict):
+        return 24
+    raw = settings.get("auto_backup_interval_hours")
+    try:
+        return max(1, min(int(raw if raw is not None else 24), 168))
+    except (TypeError, ValueError):
+        return 24
