@@ -23,7 +23,7 @@
     "vue-router": "^5.0.6"
   },
   "devDependencies": {
-    "@pinia/testing": "^1.0.3",
+    "@pinia/testing": "^2.0.1",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
