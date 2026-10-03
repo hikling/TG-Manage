@@ -103,7 +103,7 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
     </section>
     <div v-if="selected" class="panel-columns">
       <section class="panel-card panel-stack">
-        <h3>TeleBox 插件</h3>
+        <h3>拓展插件 · TeleBox</h3>
         <p class="panel-muted">内置命令保留，已安装的 TPM 插件属于当前账号。</p>
         <form class="panel-row" @submit.prevent="plugin('install')">
           <input v-model="pluginName" class="panel-input flex-1" placeholder="TeleBox TPM 插件名" pattern="[A-Za-z0-9_-]+" required />

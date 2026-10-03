@@ -2,12 +2,13 @@
 
 ## 总览
 
-TG-SignPulse 由四个核心层组成：
+TG-SignPulse 二改版由五个核心部分组成：
 
 1. Vue 3 前端面板
 2. FastAPI 后端 API
 3. 调度与任务服务
 4. `tg_signer` Telegram 执行引擎
+5. 内置 TeleBox 源码与按账号隔离的 Node 运行时
 
 ## 前端
 
@@ -16,14 +17,15 @@ TG-SignPulse 由四个核心层组成：
 - 登录与鉴权
 - 账号管理
 - 任务创建与编辑
-- AI 配置
+- 聊天中心、账号工作台、群聊和机器人管理
+- TeleBox 插件清单与运行状态
 - 全局设置
 - 运行日志展示
 
 开发模式默认运行在：
 
 ```text
-http://127.0.0.1:3000
+http://localhost:5173
 ```
 
 ## 后端 API
@@ -33,6 +35,9 @@ http://127.0.0.1:3000
 - `/api/auth` — 认证与登录
 - `/api/user` — 用户管理
 - `/api/accounts` — 账号管理
+- `/api/communications` — 账号会话、消息和群聊
+- `/api/bots` — Bot Token 和资料/命令管理
+- `/api/telebox` — 按账号管理 TeleBox 进程及插件
 - `/api/sign-tasks` — 签到任务配置（**主路径**，文件存储）
 - `/api/batch/sign-tasks` — 签到任务批量操作（enable/disable/delete/run）
 - `/api/ops` — 运维：调度预览、备份状态/导出、内存统计
@@ -50,6 +55,7 @@ http://127.0.0.1:3000
 - 任务增删改查
 - 调度同步
 - 关键词监听生命周期管理
+- TeleBox 独立进程生命周期、插件操作与日志
 
 ## 调度层
 
@@ -86,7 +92,7 @@ http://127.0.0.1:3000
 - 触发通知、转发或继续动作
 - 在任务变化后重建监听器
 - 按 (账号, 会话) 持久化已处理消息水位（`seen.json`），避免重连补投重复命中
-- 命中后的 continue 动作（发文本/骰子/点键盘/AI/Bot 命令等）在 `continue_actions` 模块执行
+- 命中后的标准 continue 动作在 `continue_actions` 模块执行；历史 AI 动作须检查并迁移
 
 分片与 allowlist 见环境变量 `APP_MONITOR_SHARD`、`APP_MONITOR_ACCOUNT_ALLOWLIST`。
 
@@ -98,7 +104,7 @@ http://127.0.0.1:3000
 - 发送骰子
 - 点击按钮
 - 等待消息变化
-- 调用 AI 识图 / OCR / 计算
+- 对旧任务中的 AI 动作保留历史解析路径；新任务界面不再提供全局 AI 模型配置
 - 处理 FloodWait、重试和部分异常恢复
 
 ## 数据流
@@ -130,15 +136,16 @@ Telegram Update
 - `db.sqlite`：面板数据库
 - `sessions/`：Telegram 会话
 - `.signer/`：任务配置与运行相关数据
+- `telebox/`：每账号隔离的 TeleBox 插件和运行数据
 
-AI、全局设置和 Telegram API 配置则单独保存在数据目录根部的 JSON 文件中。
+全局设置保存在数据目录中；账号专属 Telegram API ID/Hash 加密保存在 `sessions/accounts.json`，加密根密钥是 `data/.app_secret_key`。旧版 AI 与共享 Telegram API 配置文件若存在，仅作为历史数据保留，不再由面板读写。
 
 ## 设计特点
 
 - 前后端可一体容器化部署
 - 任务与账号关系支持从单账号扩展到多账号共享
 - 监听任务与定时任务共用动作模型
-- AI 提示词支持逐动作覆盖
+- TeleBox 插件按账号隔离运行，不共用面板的任务配置
 - 数据目录与运行目录分离，便于迁移与备份
 
 ## 扩展约束
@@ -152,4 +159,3 @@ AI、全局设置和 Telegram API 配置则单独保存在数据目录根部的 
 - **任务队列**：完整队列化（Celery/RQ 等）尚未内置；当前以进程内 APScheduler + 文件锁 + 监听分片为过渡方案。
 - 数据库锁定的排查步骤见 [运维手册 - 场景 2：数据库锁定](ops.md#场景-2数据库锁定)。
 - 反向代理可以扩展入口流量，但不等同于后端多副本扩展。
-

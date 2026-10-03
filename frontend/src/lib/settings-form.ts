@@ -22,13 +22,6 @@ export type SettingsFormState = {
   botChatId: string
   botThreadId: string
   timezone: string
-  execTimeout: string | number
-  accountCooldown: string | number
-  flowRetry: string | number
-  historyMaxAge: string | number
-  aiVisionTimeout: string | number
-  aiVisionRetry: string | number
-  aiVisionReasoningEffort: string
   autoBackupEnabled: boolean
   autoBackupInterval: number
   autoBackupKeep: number
@@ -38,10 +31,7 @@ export type SettingsFormState = {
   webdavRemoteDir: string
 }
 
-export type TgFormState = { api_id: string; api_hash: string }
-export type AiFormState = { base_url: string; model: string; api_key: string }
-
-export type SettingsSection = 'general' | 'bot' | 'advanced' | 'tg' | 'ai'
+export type SettingsSection = 'general' | 'bot' | 'advanced'
 
 export function emptyToNull(v: string | number | '' | null | undefined): number | null {
   if (v === '' || v === null || v === undefined) return null
@@ -99,19 +89,6 @@ export function buildBotPayload(s: SettingsFormState) {
   }
 }
 
-/** AI 区块内的运行时参数（任务超时/冷却/视觉等），由「保存 AI 配置」一并提交 */
-export function buildAiRuntimePayload(s: SettingsFormState) {
-  return {
-    sign_task_execution_timeout: clampNumber(s.execTimeout, 30, 3600),
-    sign_task_account_cooldown: clampNumber(s.accountCooldown, 0, 600),
-    sign_task_flow_retry_attempts: clampNumber(s.flowRetry, 1, 10),
-    sign_task_history_max_age_days: clampNumber(s.historyMaxAge, 1, 90),
-    ai_vision_timeout: clampNumber(s.aiVisionTimeout, 3, 120),
-    ai_vision_retry_attempts: clampNumber(s.aiVisionRetry, 1, 8),
-    ai_vision_reasoning_effort: s.aiVisionReasoningEffort || null,
-  }
-}
-
 /** 数据管理区块：自动备份 + WebDAV，由「保存备份设置」提交 */
 export function buildBackupPayload(s: SettingsFormState) {
   return {
@@ -126,20 +103,15 @@ export function buildBackupPayload(s: SettingsFormState) {
   }
 }
 
-/** 兼容：运行时参数 + 备份/WebDAV 全量 advanced 字段（saveAll / WebDAV 操作） */
+/** 数据管理区与全量保存使用相同的备份/WebDAV 字段。 */
 export function buildAdvancedPayload(s: SettingsFormState) {
-  return {
-    ...buildAiRuntimePayload(s),
-    ...buildBackupPayload(s),
-  }
+  return buildBackupPayload(s)
 }
 
 /** 分段快照：仅比较该区块相关字段 */
 export function snapSection(
   section: SettingsSection,
   s: SettingsFormState,
-  tg: TgFormState,
-  ai: AiFormState,
 ): string {
   switch (section) {
     case 'general':
@@ -167,7 +139,7 @@ export function snapSection(
         botThreadId: s.botThreadId,
       })
     case 'advanced':
-      // 仅备份/WebDAV（数据管理区）；AI 运行时参数归入 ai 段
+      // 仅备份/WebDAV（数据管理区）
       return JSON.stringify({
         autoBackupEnabled: s.autoBackupEnabled,
         autoBackupInterval: s.autoBackupInterval,
@@ -177,38 +149,16 @@ export function snapSection(
         webdavPassword: s.webdavPassword ? '***set***' : '',
         webdavRemoteDir: s.webdavRemoteDir,
       })
-    case 'tg':
-      return JSON.stringify({
-        api_id: tg.api_id ? '***set***' : '',
-        api_hash: tg.api_hash ? '***set***' : '',
-      })
-    case 'ai':
-      return JSON.stringify({
-        base_url: ai.base_url,
-        model: ai.model,
-        api_key: ai.api_key ? '***set***' : '',
-        execTimeout: s.execTimeout,
-        accountCooldown: s.accountCooldown,
-        flowRetry: s.flowRetry,
-        historyMaxAge: s.historyMaxAge,
-        aiVisionTimeout: s.aiVisionTimeout,
-        aiVisionRetry: s.aiVisionRetry,
-        aiVisionReasoningEffort: s.aiVisionReasoningEffort,
-      })
   }
 }
 
 export function snapAllSections(
   s: SettingsFormState,
-  tg: TgFormState,
-  ai: AiFormState,
 ): Record<SettingsSection, string> {
   return {
-    general: snapSection('general', s, tg, ai),
-    bot: snapSection('bot', s, tg, ai),
-    advanced: snapSection('advanced', s, tg, ai),
-    tg: snapSection('tg', s, tg, ai),
-    ai: snapSection('ai', s, tg, ai),
+    general: snapSection('general', s),
+    bot: snapSection('bot', s),
+    advanced: snapSection('advanced', s),
   }
 }
 
@@ -255,13 +205,6 @@ export function applyGlobalSettingsToForm(
     telegram_bot_chat_id?: string | null
     telegram_bot_message_thread_id?: number | null
     timezone?: string
-    sign_task_execution_timeout?: number | null
-    sign_task_account_cooldown?: number | null
-    sign_task_flow_retry_attempts?: number | null
-    sign_task_history_max_age_days?: number | null
-    ai_vision_timeout?: number | null
-    ai_vision_retry_attempts?: number | null
-    ai_vision_reasoning_effort?: string | null
     auto_backup_enabled?: boolean
     auto_backup_interval_hours?: number | null
     auto_backup_keep?: number | null
@@ -291,13 +234,6 @@ export function applyGlobalSettingsToForm(
     ? String(res.telegram_bot_message_thread_id)
     : ''
   s.timezone = res.timezone || 'Asia/Hong_Kong'
-  s.execTimeout = res.sign_task_execution_timeout ?? ''
-  s.accountCooldown = res.sign_task_account_cooldown ?? ''
-  s.flowRetry = res.sign_task_flow_retry_attempts ?? ''
-  s.historyMaxAge = res.sign_task_history_max_age_days ?? ''
-  s.aiVisionTimeout = res.ai_vision_timeout ?? ''
-  s.aiVisionRetry = res.ai_vision_retry_attempts ?? ''
-  s.aiVisionReasoningEffort = res.ai_vision_reasoning_effort || ''
   s.autoBackupEnabled = res.auto_backup_enabled || false
   s.autoBackupInterval = res.auto_backup_interval_hours || 24
   s.autoBackupKeep = res.auto_backup_keep || 3

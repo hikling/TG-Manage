@@ -13,6 +13,15 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 - Remove legacy Python plugin system, marketplace, debug/storage/editor UI, custom-plugin action and associated build/scripts/tests/docs. Existing legacy actions must fail visibly and never silently run a substitute.
 - Supplied Telegram credentials belong only in an ignored private backend environment file; no secrets in frontend, git, API output or logs.
 
+## 2026-10-03 revised requirements
+
+- Remove all remaining original TG-SignPulse plugin UI, API, runtime references and plugin-specific task actions; TeleBox is the only plugin system. Historical task data remains readable for migration, with a clear error if it attempts an old action.
+- Simplify server installation to a single copyable command. Generate and persist `APP_SECRET_KEY` automatically. On a fresh instance, the administrator sets their own password in a guarded web setup flow; no printed bootstrap password.
+- Collect Telegram `API_ID` and `API_HASH` for each account at login and store them securely per account. All later client, monitor, task and TeleBox operations use that account's pair. Do not expose hashes in list/detail API responses.
+- Remove AI model configuration and the global Telegram API settings feature from panel and API. Migrate/deprecate old global settings without deleting unrelated task data.
+- Replace any old extension/plugin section with TeleBox installed/built-in plugin inventory and controls per account.
+- Target the user's protected `main` branch through a feature branch and pull request, leaving the merge to the user. Keep Markdown updated with changes, setup, requirements, checks and limitations.
+
 ## Acceptance
 - Existing account/task workflows continue working; new pages have actual authenticated APIs and actionable errors.
 - No legacy plugin route or menu remains; only TeleBox plugin management exists.

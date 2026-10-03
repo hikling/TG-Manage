@@ -20,6 +20,7 @@ from backend.utils.proxy import build_proxy_dict
 from backend.utils.tg_session import (
     delete_account_session_string,
     delete_session_string_file,
+    get_account_api_credentials,
     get_account_profile,
     get_account_session_string,
     get_account_status,
@@ -72,6 +73,16 @@ class TelegramAccountsMixin:
 
     @staticmethod
     def _account_status_payload(account_name: str) -> Dict[str, Any]:
+        try:
+            get_account_api_credentials(account_name)
+        except ValueError:
+            return {
+                "status": "invalid",
+                "status_message": "缺少此账号的 Telegram API 凭据，请重新登录",
+                "status_code": "API_CREDENTIALS_MISSING",
+                "status_checked_at": None,
+                "needs_relogin": True,
+            }
         status = get_account_status(account_name)
         return {
             "status": status.get("status") or "connected",

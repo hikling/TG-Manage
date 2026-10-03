@@ -4,14 +4,13 @@
 
 ## 产品简介
 
-TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、点击按钮、识图答题、监听关键词、推送通知」这些动作组合成可重复执行的自动化流程。它同时提供 Web 面板、后端 API、调度器和执行引擎，适合长期稳定挂机。
+TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、点击按钮、监听关键词、推送通知」这些动作组合成可重复执行的自动化流程。它同时提供 Web 面板、后端 API、调度器和执行引擎，适合长期稳定挂机。
 
 ## 适用场景
 
 - 自动签到、每日打卡、积分领取
 - 机器人交互流程编排
 - 群组或频道关键词监听与自动响应
-- AI 识图、OCR、计算题、按钮验证
 - 多账号共享同一套任务模板
 - Docker / VPS 持续部署
 
@@ -23,7 +22,6 @@ TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、
 | 后端 | FastAPI、Uvicorn、SQLAlchemy、SQLite (WAL)、APScheduler |
 | 认证 | JWT (HS256)、TOTP 2FA、bcrypt、Rate Limiting |
 | Telegram | Pyrogram / Kurigram、Session File / String 双模式 |
-| AI | OpenAI SDK（兼容接口）、识图 / OCR / 计算题 |
 | 数据库 | **默认 SQLite**；可选 `APP_DATABASE_URL` 使用 PostgreSQL |
 | 部署 | 当前仓库的 Docker 多阶段源码构建（Node 22 + Node 24 + Python 3.11） |
 
@@ -32,7 +30,6 @@ TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、
 - **多账号管理**：支持短信登录、二维码登录、2FA 密码、状态检测、重新登录
 - **聊天中心与 TeleBox**：管理账号所有会话；每账号独立 TeleBox 会话、状态、日志及插件
 - **任务编排**：支持固定时间、时间段随机执行、监听触发三种执行模式
-- **AI 动作**：支持识图选项、OCR 文本提取、计算题作答、AI 推断后点按钮
 - **关键词监听**：支持包含、完全匹配、正则；支持继续执行后续动作
 - **推送通知**：支持 Telegram Bot、转发、Bark、自定义 URL
 - **多账号共享任务**：一套任务可绑定多个账号执行
@@ -58,7 +55,6 @@ TG-SignPulse 用来集中管理多个 Telegram 账号，并把「发送消息、
 |------|------|
 | [账号管理](guide/accounts.md) | 短信登录、二维码登录、2FA、代理、会话模式 |
 | [任务编排](guide/tasks.md) | 任务模型、动作类型、执行模式、多账号共享 |
-| [AI 动作](guide/ai.md) | OpenAI 配置、默认模型、自定义提示词 |
 | [关键词监听](guide/keyword-monitor.md) | 监听模式、推送通道、后续动作、模板变量 |
 | [WebDAV 备份与恢复](guide/backup-webdav.md) | 完整备份、自动备份、远端下载、换机恢复 |
 
@@ -113,11 +109,9 @@ TG-SignPulse/
 ```text
 /data
 ├── db.sqlite                    # 主数据库
-├── .app_secret_key              # JWT 密钥
-├── .admin_bootstrap_password    # 初始管理员密码
+├── .app_secret_key              # JWT、账号凭据加密密钥
+├── .admin_setup_token           # 首次设置码，使用后删除
 ├── .global_settings.json        # 全局设置
-├── .openai_config.json          # AI 配置
-├── .telegram_api.json           # Telegram API 配置
 ├── logs/                        # 任务执行日志
 ├── sessions/                    # Telegram 会话文件
 │   ├── accounts.json            # 账号元数据
@@ -143,7 +137,6 @@ Browser (Vue 3 SPA)
         ├── SQLite (WAL mode)
         └── tg_signer Engine
               ├── Pyrogram/Kurigram Client
-              ├── OpenAI API (AI 动作)
               └── Telegram API
 ```
 
@@ -163,5 +156,5 @@ Browser (Vue 3 SPA)
 4. [任务编排](guide/tasks.md)
 5. [WebDAV 备份与恢复](guide/backup-webdav.md)
 6. [配置参考](reference/configuration.md)
-7. [AI 动作](guide/ai.md)
+7. [旧 AI 功能迁移](guide/ai.md)
 8. [关键词监听](guide/keyword-monitor.md)

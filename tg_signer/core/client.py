@@ -342,22 +342,7 @@ class Client(BaseClient):
 
 
 def get_api_config():
-    api_id_env = os.environ.get("TG_API_ID")
-    api_hash_env = os.environ.get("TG_API_HASH")
-
-    api_id = 611335
-    if api_id_env:
-        try:
-            api_id = int(api_id_env)
-        except (TypeError, ValueError):
-            pass
-
-    if isinstance(api_hash_env, str) and api_hash_env.strip():
-        api_hash = api_hash_env.strip()
-    else:
-        api_hash = "d524b414d21f4d37f08684c1df41ac9c"
-
-    return api_id, api_hash
+    raise ValueError("Telegram API 凭据按账号保存，请通过账号登录页面设置")
 
 
 def get_proxy(proxy: str = None):
@@ -409,9 +394,8 @@ def get_client(
 ) -> Client:
     proxy = proxy or get_proxy()
     if not api_id or not api_hash:
-        _api_id, _api_hash = get_api_config()
-        api_id = api_id or _api_id
-        api_hash = api_hash or _api_hash
+        from backend.utils.tg_session import get_account_api_credentials
+        api_id, api_hash = get_account_api_credentials(name)
 
     # Use separate cache keys for in-memory vs file-mode clients to prevent
     # database lock conflicts when keyword monitor (file mode) and manual

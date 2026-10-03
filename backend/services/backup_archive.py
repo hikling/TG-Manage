@@ -16,6 +16,8 @@ DEFAULT_BACKUP_PATHS: Tuple[str, ...] = (
     "db.sqlite-shm",
     "sessions",
     ".signer",
+    ".app_secret_key",
+    "telebox",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",

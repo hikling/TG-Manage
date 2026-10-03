@@ -139,7 +139,7 @@ const navigation = [
   { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心' },
   { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心' },
   { id: 'proxies', name: 'proxies', icon: Network, labelKey: '代理管理' },
-  { id: 'telebox', name: 'telebox', icon: Package, labelKey: 'TeleBox' },
+  { id: 'telebox', name: 'telebox', icon: Package, labelKey: '拓展插件' },
   { id: 'tasks', name: 'tasks', icon: Zap, labelKey: 'nav.tasks' },
   { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs' },
   { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings' },

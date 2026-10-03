@@ -1,14 +1,8 @@
 # 常见问题
 
-## 首次登录密码在哪里
+## 首次登录如何设置密码
 
-如果你没有设置 `ADMIN_PASSWORD`，系统会自动生成一个随机密码，并写到：
-
-```text
-data/.admin_bootstrap_password
-```
-
-用户名默认是 `admin`。
+运行 `bash scripts/install.sh`，复制输出的一次性设置码，在网页首次登录页设置自己的管理员密码（至少 12 位）。已有管理员继续使用原账号。设置码在 `data/.admin_setup_token`，完成后失效。
 
 ## 为什么任务开启了却没有执行
 
@@ -46,7 +40,7 @@ data/.admin_bootstrap_password
 | 含登录会话 | ❌ | ✅ |
 | 含数据库 | ❌ | ✅（SQLite） |
 | 面板可导入 | ✅ | ❌（需手动解压恢复） |
-| AI 密钥 | 导出脱敏，导入不覆盖已有密钥 | 随配置文件原样打包 |
+| 应用密钥与账号凭据 | JSON 不含账号凭据 | 备份整个 `data/` 才能保留密钥与会话 |
 
 - 只想搬任务流程 → 用 **JSON**  
 - 换服务器整机恢复 → 用 **完整备份**（可上传 WebDAV），停止服务后解压到 data 目录再启动（见 [WebDAV 备份与恢复](guide/backup-webdav.md)、[运维手册](reference/ops.md)）
@@ -68,26 +62,9 @@ data/.admin_bootstrap_password
 
 通常是因为没有挂载 `/data`，或者 `/data` 不可写导致程序降级到了 `/tmp/tg-signpulse`。
 
-## 为什么 AI 动作没有反应
+## AI 动作与全局 Telegram API 设置去哪了
 
-优先检查：
-
-- 是否已经配置 `.openai_config.json`
-- API Key / Base URL / Model 是否正确
-- 该动作是否需要自定义 `ai_prompt`
-- 流程日志里是“没有答案”还是“有答案但没有匹配到按钮”
-
-## 当前默认 AI 模型是什么
-
-默认模型是：
-
-```text
-gpt-5-nano
-```
-
-## 现在能不能自定义 AI 提示词
-
-可以。任务编辑器和监听任务的后续动作编辑器都支持 `AI 提示词（可选）`。留空使用默认提示词，填写后只对当前动作生效。
+这两个设置入口已移除。Telegram API ID/Hash 在每次账号登录时输入；旧 AI 任务应按 [迁移说明](guide/ai.md) 人工检查。
 
 ## 测试镜像和正式镜像有什么区别
 

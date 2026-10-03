@@ -20,6 +20,8 @@ const loginMethod = ref<'code' | 'qr'>('code')
 
 const form = ref({
   account_name: '',
+  api_id: '',
+  api_hash: '',
   remark: '',
   phone_number: '',
   phone_code: '',
@@ -77,7 +79,7 @@ const reset = async () => {
       devLog.warn('cancelQrLogin failed:', getLocalizedErrorMessage(e, t))
     }
   }
-  form.value = { account_name: props.initialAccountName || '', remark: '', phone_number: '', phone_code: '', password: '', proxy: '' }
+  form.value = { account_name: props.initialAccountName || '', api_id: '', api_hash: '', remark: '', phone_number: '', phone_code: '', password: '', proxy: '' }
   phoneCodeHash.value = ''
   error.value = ''
   codeSent.value = false
@@ -102,11 +104,15 @@ watch(() => props.isOpen, (val) => {
 watch(loginMethod, () => {
   if (!props.isOpen) return
   const accountName = form.value.account_name
+  const apiId = form.value.api_id
+  const apiHash = form.value.api_hash
   const remark = form.value.remark
   const password = form.value.password
   const proxy = form.value.proxy
   reset()
   form.value.account_name = accountName
+  form.value.api_id = apiId
+  form.value.api_hash = apiHash
   form.value.remark = remark
   form.value.password = password
   form.value.proxy = proxy
@@ -192,6 +198,10 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
 }
 
 const handleGetQr = async () => {
+  if (!form.value.api_id || !form.value.api_hash) {
+    error.value = '请填写此账号的 Telegram API ID 和 API Hash'
+    return
+  }
   if (!form.value.account_name) {
     error.value = t('addAccount.nameRequired')
     return
@@ -204,6 +214,8 @@ const handleGetQr = async () => {
   try {
     const res = await startQrLogin(token, {
       account_name: form.value.account_name,
+      api_id: Number(form.value.api_id),
+      api_hash: form.value.api_hash.trim(),
       proxy: form.value.proxy || undefined
     })
     loginId.value = res.login_id
@@ -222,6 +234,10 @@ const handleGetQr = async () => {
 // ============ Code Login Logic ============
 
 const handleSendCode = async () => {
+  if (!form.value.api_id || !form.value.api_hash) {
+    error.value = '请填写此账号的 Telegram API ID 和 API Hash'
+    return
+  }
   if (!form.value.account_name || !form.value.phone_number) {
     error.value = t('addAccount.namePhoneRequired')
     return
@@ -234,6 +250,8 @@ const handleSendCode = async () => {
   try {
     const res = await startAccountLogin(token, {
       account_name: form.value.account_name,
+      api_id: Number(form.value.api_id),
+      api_hash: form.value.api_hash.trim(),
       phone_number: form.value.phone_number,
       proxy: form.value.proxy || undefined
     })
@@ -354,6 +372,16 @@ onUnmounted(() => {
       </div>
 
       <!-- Common Fields -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="space-y-1.5">
+          <label class="ui-label" for="account-api-id">Telegram API ID <span class="text-rose-500">*</span></label>
+          <input id="account-api-id" v-model="form.api_id" type="number" min="1" inputmode="numeric" autocomplete="off" class="ui-input" required>
+        </div>
+        <div class="space-y-1.5">
+          <label class="ui-label" for="account-api-hash">Telegram API Hash <span class="text-rose-500">*</span></label>
+          <input id="account-api-hash" v-model="form.api_hash" type="password" autocomplete="off" class="ui-input" required>
+        </div>
+      </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="add-account-name">{{ t('addAccount.accountName') }} <span class="text-rose-500">*</span></label>
         <input 

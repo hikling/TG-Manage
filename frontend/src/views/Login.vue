@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Github, Globe, Moon, Sun, Eye, EyeOff } from 'lucide-vue-next'
 import { login } from '../lib/api'
+import { getSetupStatus, completeInitialSetup } from '../lib/api/auth'
 import { useAuthStore } from '../stores/auth'
 import { useI18n } from '../composables/useI18n'
 import { useTheme } from '../composables/useTheme'
@@ -21,6 +22,31 @@ const showPassword = ref(false)
 const errorMsg = ref('')
 const loading = ref(false)
 const totpInput = ref<HTMLInputElement | null>(null)
+const setupRequired = ref(false)
+const setupToken = ref('')
+const setupPassword = ref('')
+const setupConfirm = ref('')
+
+onMounted(async () => {
+  try { setupRequired.value = (await getSetupStatus()).setup_required }
+  catch { /* Normal login remains available if the status check is temporarily unavailable. */ }
+})
+
+const handleSetup = async () => {
+  if (setupPassword.value !== setupConfirm.value) {
+    errorMsg.value = '两次输入的密码不一致'
+    return
+  }
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const result = await completeInitialSetup({ setup_token: setupToken.value.trim(), password: setupPassword.value })
+    authStore.setToken(result.access_token)
+    await router.push('/dashboard')
+  } catch (e: unknown) {
+    errorMsg.value = getLocalizedErrorMessage(e, t)
+  } finally { loading.value = false }
+}
 
 const mapLoginError = (detail: string): string => {
   const code = detail.trim()
@@ -90,7 +116,19 @@ const openGithub = () => {
         <p class="text-xs text-gray-500 mt-2 leading-relaxed">{{ t('login.subtitle') }}</p>
       </div>
 
-      <form class="space-y-4" @submit.prevent="handleLogin">
+      <form v-if="setupRequired" class="space-y-4" @submit.prevent="handleSetup">
+        <h2 class="text-lg font-medium">首次设置管理员</h2>
+        <p class="text-sm text-gray-500">在服务器运行 <code>docker compose exec -T app cat /data/.admin_setup_token</code> 获取一次性设置码。密码由你在此设置，设置码使用后失效。</p>
+        <label class="block text-sm" for="setup-token">一次性设置码</label>
+        <input id="setup-token" v-model="setupToken" class="ui-input" required autocomplete="off" />
+        <label class="block text-sm" for="setup-password">管理员密码（至少 12 位）</label>
+        <input id="setup-password" v-model="setupPassword" class="ui-input" type="password" minlength="12" required autocomplete="new-password" />
+        <label class="block text-sm" for="setup-confirm">确认密码</label>
+        <input id="setup-confirm" v-model="setupConfirm" class="ui-input" type="password" minlength="12" required autocomplete="new-password" />
+        <p v-if="errorMsg" role="alert" class="text-rose-600 text-sm">{{ errorMsg }}</p>
+        <button class="ui-btn-primary w-full" :disabled="loading || !setupToken || !setupPassword || !setupConfirm">{{ loading ? '设置中…' : '创建管理员' }}</button>
+      </form>
+      <form v-else class="space-y-4" @submit.prevent="handleLogin">
         <div>
           <label class="block text-xs text-gray-500 mb-1.5" for="login-username">{{ t('login.username') }}</label>
           <input

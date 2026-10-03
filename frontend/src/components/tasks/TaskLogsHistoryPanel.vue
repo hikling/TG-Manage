@@ -39,7 +39,6 @@ const realtimeLineKey = (i: number, line: string) => `${i}|${line.slice(0, 64)}`
 const historyItemKey = (log: SignTaskHistoryItem) =>
   `${log.account_name || '-'}|${log.time || log.created_at || ''}|${log.success ? 1 : 0}`
 
-/** 从失败日志或响应中尝试提取插件名称及输入文本，便于一键跳转回放 */
 </script>
 
 <template>

@@ -9,3 +9,5 @@
 - 签到配置不是 ORM 任务表：`backend/services/sign_tasks.py` 是门面，CRUD/运行/历史分散在 `sign_task_*` 模块，底层任务配置为文件。
 
 新增 API 要在 `backend/api/routes/__init__.py` 注册，确认 `backend/main.py` 的 `/api` 前缀。避免把 Telegram 连接、文件读写或调度状态直接塞进路由函数；也不要恢复已移除的 Python 插件目录与频道管理专页。
+
+完整备份路径同时定义在 `backend/services/backup_archive.py::DEFAULT_BACKUP_PATHS`（自动备份）和 `backend/api/routes/ops.py::BACKUP_ARCHIVE_PATHS`（手动/WebDAV）；账号加密依赖 `.app_secret_key`，TeleBox 每账号数据在 `telebox/`。新增持久数据时要同步检查这两套归档路径及状态页路径，验证恢复所需文件一并备份。

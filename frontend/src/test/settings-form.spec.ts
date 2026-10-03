@@ -6,14 +6,11 @@ import {
   buildGeneralPayload,
   buildBotPayload,
   buildAdvancedPayload,
-  buildAiRuntimePayload,
   buildBackupPayload,
   snapAllSections,
   isAnySectionDirty,
   dirtySectionLabels,
   type SettingsFormState,
-  type TgFormState,
-  type AiFormState,
 } from '../lib/settings-form'
 
 const baseSettings = (): SettingsFormState => ({
@@ -35,13 +32,6 @@ const baseSettings = (): SettingsFormState => ({
   botChatId: '',
   botThreadId: '',
   timezone: 'Asia/Hong_Kong',
-  execTimeout: '',
-  accountCooldown: '',
-  flowRetry: '',
-  historyMaxAge: '',
-  aiVisionTimeout: '',
-  aiVisionRetry: '',
-  aiVisionReasoningEffort: '',
   autoBackupEnabled: false,
   autoBackupInterval: 24,
   autoBackupKeep: 3,
@@ -98,17 +88,6 @@ describe('settings-form', () => {
     expect(p.device_keepalive_interval_days).toBe(170)
   })
 
-  it('buildAiRuntimePayload clamps out-of-range numbers', () => {
-    const s = baseSettings()
-    s.execTimeout = 20 // 低于下限 30
-    s.aiVisionRetry = 99 // 高于上限 8
-
-    const p = buildAiRuntimePayload(s)
-
-    expect(p.sign_task_execution_timeout).toBe(30)
-    expect(p.ai_vision_retry_attempts).toBe(8)
-  })
-
   it('buildBotPayload parses thread id', () => {
     const s = baseSettings()
     s.botThreadId = '42'
@@ -128,42 +107,15 @@ describe('settings-form', () => {
     expect(p2.telegram_bot_token).toBe('123:ABC')
   })
 
-  it('buildAdvancedPayload nulls empty numbers', () => {
+  it('buildAdvancedPayload only contains data management fields', () => {
     const p = buildAdvancedPayload(baseSettings())
-    expect(p.sign_task_execution_timeout).toBeNull()
     expect(p.auto_backup_keep).toBe(3)
-  })
-
-  it('buildAiRuntimePayload only includes runtime fields', () => {
-    const s = baseSettings()
-    s.execTimeout = 120
-    s.aiVisionTimeout = 20
-    s.aiVisionReasoningEffort = 'none'
-    s.autoBackupEnabled = true
-    const p = buildAiRuntimePayload(s) as Record<string, unknown>
-    expect(p.sign_task_execution_timeout).toBe(120)
-    expect(p.ai_vision_timeout).toBe(20)
-    expect(p.ai_vision_reasoning_effort).toBe('none')
-    expect('auto_backup_enabled' in p).toBe(false)
-    expect('webdav_url' in p).toBe(false)
-  })
-
-  it('buildAiRuntimePayload nulls empty reasoning effort', () => {
-    const p = buildAiRuntimePayload(baseSettings())
-    expect(p.ai_vision_reasoning_effort).toBeNull()
-  })
-
-  it('applyGlobalSettingsToForm maps reasoning effort', () => {
-    const s = baseSettings()
-    applyGlobalSettingsToForm(s, { ai_vision_reasoning_effort: 'high' })
-    expect(s.aiVisionReasoningEffort).toBe('high')
-    applyGlobalSettingsToForm(s, { ai_vision_reasoning_effort: null })
-    expect(s.aiVisionReasoningEffort).toBe('')
+    expect('ai_vision_timeout' in p).toBe(false)
+    expect('sign_task_execution_timeout' in p).toBe(false)
   })
 
   it('buildBackupPayload only includes backup/webdav fields', () => {
     const s = baseSettings()
-    s.execTimeout = 120
     s.webdavUrl = 'https://dav.example'
     s.webdavPassword = 'secret'
     const p = buildBackupPayload(s) as Record<string, unknown>
@@ -175,12 +127,10 @@ describe('settings-form', () => {
 
   it('section dirty is independent', () => {
     const s = baseSettings()
-    const tg: TgFormState = { api_id: '', api_hash: '' }
-    const ai: AiFormState = { base_url: '', model: '', api_key: '' }
-    const baseline = snapAllSections(s, tg, ai)
+    const baseline = snapAllSections(s)
 
     const s2 = { ...s, botEnabled: true }
-    const cur = snapAllSections(s2, tg, ai)
+    const cur = snapAllSections(s2)
     expect(isAnySectionDirty(baseline, cur)).toBe(true)
     // 仅 bot 脏：general 快照应相同
     expect(cur.general).toBe(baseline.general)
@@ -190,39 +140,25 @@ describe('settings-form', () => {
       general: 'G',
       bot: 'B',
       advanced: 'A',
-      tg: 'T',
-      ai: 'I',
     })
     expect(labels).toEqual(['B'])
   })
 
-  it('ai runtime fields dirty ai section; backup fields dirty advanced', () => {
+  it('backup fields dirty advanced section', () => {
     const s = baseSettings()
-    const tg: TgFormState = { api_id: '', api_hash: '' }
-    const ai: AiFormState = { base_url: '', model: '', api_key: '' }
-    const baseline = snapAllSections(s, tg, ai)
-
-    const sRuntime = { ...s, execTimeout: 90 }
-    const curRuntime = snapAllSections(sRuntime, tg, ai)
-    expect(curRuntime.ai).not.toBe(baseline.ai)
-    expect(curRuntime.advanced).toBe(baseline.advanced)
+    const baseline = snapAllSections(s)
 
     const sBackup = { ...s, autoBackupEnabled: true }
-    const curBackup = snapAllSections(sBackup, tg, ai)
+    const curBackup = snapAllSections(sBackup)
     expect(curBackup.advanced).not.toBe(baseline.advanced)
-    expect(curBackup.ai).toBe(baseline.ai)
   })
 
-  it('secret fields mask in snapshot (bot token / ai key)', () => {
+  it('secret fields mask in snapshot (bot token)', () => {
     const s = baseSettings()
     s.botToken = '123:ABC'
-    const tg: TgFormState = { api_id: '1', api_hash: 'h' }
-    const ai: AiFormState = { base_url: 'u', model: 'm', api_key: 'sk' }
-    const snap = snapAllSections(s, tg, ai)
+    const snap = snapAllSections(s)
     expect(snap.bot).toContain('***set***')
     expect(snap.bot).not.toContain('123:ABC')
-    expect(snap.ai).toContain('***set***')
-    expect(snap.ai).not.toContain('sk')
   })
   it('buildBotPayload ignores invalid thread id', () => {
     const s = baseSettings()

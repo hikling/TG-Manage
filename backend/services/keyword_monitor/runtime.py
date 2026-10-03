@@ -823,9 +823,7 @@ class KeywordMonitorService:
     async def restart_from_tasks(self) -> None:
         async with self._lock:
             from backend.services.config import get_config_service
-            from backend.services.telegram.credentials import (
-                resolve_telegram_api_credentials,
-            )
+            from backend.utils.tg_session import get_account_api_credentials
             from tg_signer.core import (
                 _CLIENT_INSTANCES,
                 close_client_by_name,
@@ -859,22 +857,16 @@ class KeywordMonitorService:
 
             session_dir = settings.resolve_session_dir()
             global_settings = get_config_service().get_global_settings()
-            tg_config = get_config_service().get_telegram_config()
-            try:
-                api_id, api_hash = resolve_telegram_api_credentials(
-                    tg_config,
-                    env_api_id=os.getenv("TG_API_ID"),
-                    env_api_hash=os.getenv("TG_API_HASH"),
-                )
-            except ValueError:
-                # 监控启动不强制校验凭据，缺失时由后续客户端创建报错
-                api_id = None
-                api_hash = None
-
             accounts = sorted({rule.account_name for rule in rules})
             started_accounts: set[str] = set()
             for account_name in accounts:
                 account_rules = [rule for rule in rules if rule.account_name == account_name]
+                try:
+                    api_id, api_hash = get_account_api_credentials(account_name)
+                except ValueError as exc:
+                    for rule in account_rules:
+                        self._append_rule_log(rule, str(exc), active=False)
+                    continue
                 chat_ids = sorted({rule.chat_id for rule in account_rules})
                 proxy_value = resolve_effective_proxy(
                     account_name,

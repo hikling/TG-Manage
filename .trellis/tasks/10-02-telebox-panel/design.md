@@ -21,5 +21,12 @@ TeleBox vendored under `telebox/`, original TypeScript and upstream metadata ret
 ## Migration
 No destructive deletion of user data. Legacy plugin actions are rejected with a clear migration message. Built-in standard task actions remain.
 
+## 2026-10-03 onboarding and credential amendment
+
+- Compose mounts `./data` at `/data` and invokes the repository build through `scripts/install.sh`. No shared Telegram API, application secret, or initial password is required in `.env`. `get_default_secret_key()` creates a mode 0600 `data/.app_secret_key` once; startup prepares a mode 0600 `data/.admin_setup_token` only if the user table is empty. `/auth/setup-status` reports only whether setup is needed; `/auth/setup` verifies the server-side token with a constant-time comparison under a file lock, hashes the chosen password, creates `admin`, consumes the token and returns a JWT. Existing users are unaffected.
+- Phone and QR login start requests require `api_id` and `api_hash`. The pair remains in the pending login session and is persisted only after Telegram authorization succeeds. The account store encrypts the pair using a Fernet key derived from the persisted application secret; `accounts.json` and the key file remain mode 0600 across container restarts. List/detail APIs expose no credential fields.
+- `get_client` and explicit sign task/chat/keyword paths resolve the logged-in account's encrypted pair. TeleBox uses `_build_account_client`, so its worker receives the same account-specific pair via IPC without putting it in process args. Existing accounts without a pair are marked `API_CREDENTIALS_MISSING` in the list and must reauthenticate. Renaming moves the encrypted entry; deleting an account removes it.
+- Global Telegram API and AI model configuration routes and cards are removed. Config JSON export/import no longer carries or reactivates those retired settings. Existing task records and data files are left in place for manual migration; the new task action picker no longer offers AI actions. “拓展插件” routes to the installed TeleBox plugin inventory per account.
+
 ## Ownership
 Frontend agent owns frontend except legacy plugin files/removal (coordinates removal agent). Communications agent owns new backend services/routes and tests. TeleBox agent owns telebox/, TeleBox backend/tests and Docker build. Removal agent owns removal of old plugin backend/engine/frontend imports/scripts/docs/tests. Root wires shared router/lifespan, private config, integration checks and packaging.

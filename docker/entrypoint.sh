@@ -44,6 +44,14 @@ if [ "$(id -u)" -eq 0 ]; then
         chmod -R g+rwX "${p}" 2>/dev/null || true
       fi
     done
+    # Per-account API credentials and the root encryption key stay private
+    # even after the recursive compatibility permission repair above.
+    for p in /data/.app_secret_key /data/.admin_setup_token /data/sessions/accounts.json; do
+      if [ -f "${p}" ]; then
+        chown "${TARGET_UID}:${TARGET_GID}" "${p}" 2>/dev/null || true
+        chmod 600 "${p}" 2>/dev/null || true
+      fi
+    done
   fi
 
   # If mounted volume is root-owned, keep root to preserve writability.

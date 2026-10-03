@@ -5,7 +5,6 @@ import asyncio
 import base64
 import contextlib
 import logging
-import os
 import secrets
 import time
 from typing import Any, Dict, Optional
@@ -153,37 +152,11 @@ class TelegramQrLoginMixin:
     def _resolve_api_credentials(
         self, data: Optional[Dict[str, Any]] = None, *, strict: bool = False
     ) -> tuple:
-        """解析 api_id/api_hash：会话缓存优先，配置/环境变量兜底。
-
-        - data 非空时优先复用其中缓存的 api_id/api_hash，并回写解析结果
-        - strict=True（start_qr_login）解析失败原样抛出；
-          strict=False 返回 (None, None) 由调用方决定降级
-        """
-        if data is not None:
-            api_id = data.get("api_id")
-            api_hash = data.get("api_hash")
-            if api_id and api_hash:
-                return api_id, api_hash
-
-        from backend.services.config import get_config_service
-        from backend.services.telegram.credentials import (
-            resolve_telegram_api_credentials,
-        )
-
-        try:
-            api_id, api_hash = resolve_telegram_api_credentials(
-                get_config_service().get_telegram_config(),
-                env_api_id=os.getenv("TG_API_ID"),
-                env_api_hash=os.getenv("TG_API_HASH"),
-            )
-        except Exception:
-            if strict:
-                raise
-            return None, None
-        if data is not None:
-            data["api_id"] = api_id
-            data["api_hash"] = api_hash
-        return api_id, api_hash
+        if data and data.get("api_id") and data.get("api_hash"):
+            return data["api_id"], data["api_hash"]
+        if strict:
+            raise ValueError("请在账号登录时填写 Telegram API ID 和 API Hash")
+        return None, None
 
 
     async def _import_login_token(
@@ -336,6 +309,8 @@ class TelegramQrLoginMixin:
     ) -> Dict[str, Any]:
         """QR 登录成功收尾：清理会话并返回成功响应（状态日志由调用方记录）。"""
         account_name = data.get("account_name")
+        from backend.utils.tg_session import set_account_api_credentials
+        set_account_api_credentials(account_name, data["api_id"], data["api_hash"])
         await self._cleanup_qr_login(login_id, preserve_session=True)
 
         account = None
@@ -499,7 +474,8 @@ class TelegramQrLoginMixin:
 
 
     async def start_qr_login(
-        self, account_name: str, proxy: Optional[str] = None
+        self, account_name: str, proxy: Optional[str] = None,
+        api_id: int = None, api_hash: str = None,
     ) -> Dict[str, Any]:
 
         account_name = self._normalize_account_name(account_name)
@@ -536,8 +512,11 @@ class TelegramQrLoginMixin:
         from backend.services.config import get_config_service
 
         config_service = get_config_service()
+        from backend.services.telegram.credentials import (
+            validate_telegram_api_credentials,
+        )
         try:
-            api_id, api_hash = self._resolve_api_credentials(strict=True)
+            api_id, api_hash = validate_telegram_api_credentials(api_id, api_hash)
         except ValueError:
             _release_account_lock()
             raise ValueError("Telegram API ID / API Hash 未配置或无效") from None

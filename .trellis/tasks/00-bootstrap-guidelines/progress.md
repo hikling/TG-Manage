@@ -1,6 +1,6 @@
 # Trellis bootstrap 进度与搭建记录
 
-日期：2026-10-03（北京时间）  
+日期：2026-10-03（北京时间）
 仓库：TG-SignPulse，分支 `feat/telebox-management-panel`
 
 ## 当前状态

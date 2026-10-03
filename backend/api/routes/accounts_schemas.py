@@ -13,6 +13,8 @@ class LoginStartRequest(BaseModel):
 
     account_name: str
     phone_number: str
+    api_id: int
+    api_hash: str
     proxy: Optional[str] = None
 
 
@@ -50,6 +52,8 @@ class QrLoginStartRequest(BaseModel):
     """扫码登录请求"""
 
     account_name: str
+    api_id: int
+    api_hash: str
     proxy: Optional[str] = None
 
 
@@ -261,5 +265,4 @@ class ClearAccountLogsResponse(BaseModel):
     cleared: int
     message: str
     code: Optional[str] = None
-
 

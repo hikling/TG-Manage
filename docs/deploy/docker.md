@@ -6,39 +6,19 @@
 
 - Docker Engine 24+、Docker Compose v2，且主机能访问 npm/PyPI、Telegram；受限网络需为 Telegram 配置代理。
 - Compose 默认限制容器使用 2 GiB 内存、2 CPU；构建阶段还需额外磁盘及内存。每运行一个 TeleBox 账号会再启动 Node 进程，应随账号数调高资源。
-- 使用自己的 Telegram `TG_API_ID` 和 `TG_API_HASH`；至少一个可完成验证码/扫码验证的账号。
+- 登录每个账号时填写自己的 Telegram API ID 和 API Hash；至少一个可完成验证码/扫码验证的账号。
 
 Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编译/安装 TeleBox 原生依赖、Python 3.11 运行 FastAPI。生产镜像包含 Node 24 与 TeleBox 源码、插件和依赖。项目默认持久化目录为容器 `/data`。
 
 ## 部署步骤
 
-```bash
-# 从本私有仓库获取源码（已有源码则省略）
-git clone https://github.com/hikling/TG-SignPulse-Private.git
-cd TG-SignPulse-Private
-cp .env.example .env
-```
-
-在 `.env` 中填写自己的值：
-
-```dotenv
-TG_API_ID=your_api_id
-TG_API_HASH=your_api_hash
-APP_SECRET_KEY=replace_with_a_long_random_secret
-ADMIN_PASSWORD=replace_with_a_strong_password
-```
-
-`APP_SECRET_KEY` 可通过 `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` 生成；保持密钥稳定，特别是在恢复 Bot Token、备份或迁移数据时。`.env` 与 `data/` 都不能提交到 Git。私有 GitHub 仓库的克隆需要相应访问权限。
+安装 Docker Engine 24+、Docker Compose v2 和 Git，确保服务器有私有仓库读取权限及构建网络。当前 PR 合并前执行：
 
 ```bash
-docker compose up -d --build
-docker compose ps
-docker compose logs --tail=100 app
-curl -f http://127.0.0.1:8080/healthz
-curl -f http://127.0.0.1:8080/readyz
+git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-登录页面在 `http://服务器IP:8080`。容器内服务由 `PORT=8080` 驱动；只想改宿主机端口时修改映射左侧，例如 `127.0.0.1:18080:8080`。需要域名和 TLS 时使用 [Nginx 示例](nginx.md)。
+合并后克隆时可省略 `--branch`。脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。无需 `.env` 或统一 Telegram API 凭据；账号登录时分别输入。域名和 TLS 见 [Nginx 示例](nginx.md)。
 
 ## Compose 约定
 
@@ -52,27 +32,27 @@ curl -f http://127.0.0.1:8080/readyz
 | `healthcheck` | `/readyz` 返回服务就绪状态后标记健康。 |
 | `restart: unless-stopped` | 异常退出/重启主机后拉起服务。 |
 
-默认从 `.env` 注入 `TG_API_ID`、`TG_API_HASH`、`APP_SECRET_KEY` 和 `ADMIN_PASSWORD`。程序可能在首次启动生成 `data/.admin_bootstrap_password` 和 `.app_secret_key`；部署时建议显式固定密钥与密码。
+不注入共享 Telegram API、应用密钥或管理员密码。首次启动在 `data/` 生成持久密钥和一次性管理员设置码。备份整个 `data/`，尤其是密钥文件。
 
 ## 首次登录与 TeleBox
 
-1. 以 `admin` 和 `ADMIN_PASSWORD` 登录面板，修改密码并可启用 TOTP。
-2. 在账号管理中完成 Telegram 手机验证码/二维码授权。
+1. 用安装脚本显示的一次性设置码在网页登录页设置 `admin` 密码，可启用 TOTP。
+2. 在账号管理中输入该账号的 API ID/Hash，完成 Telegram 手机验证码/二维码授权。
 3. 先在聊天中心用测试会话检查消息读写，再在 TeleBox 页启动该账号的**独立**会话。状态如果要求 Telegram 两步验证密码，在界面填写。
 4. 按账号查看 TeleBox 进程状态、日志和插件。其数据在 `data/telebox/`，另有 `data/sessions/` 中的面板会话，不要直接替换或合并。
 
 ## 升级、备份和恢复
 
 ```bash
-# 更新之前，先停止并备份整个 ./data 与自己的 .env
+# 更新之前，先停止并备份整个 ./data
 docker compose stop
-# 使用你自己的备份工具保存 data/ 和 .env；不要将其上传公开仓库
+# 使用自己的备份工具保存 data/；不要将其上传公开仓库
 
 # 从本私有仓库更新源码后重新构建
 docker compose up -d --build
 ```
 
-`docker compose down` 删除容器和网络，但不会删除绑定挂载的 `./data`；切勿误删 `data/`。恢复时保持相同的 `APP_SECRET_KEY` 并还原数据目录，然后重建容器。若 Telegram session 失效，需要在面板重新授权账号。
+`docker compose down` 删除容器和网络，但不会删除绑定挂载的 `./data`；切勿误删 `data/`。恢复时还原完整数据目录（含 `.app_secret_key`），然后重建容器。若 Telegram session 失效，需要在面板重新授权账号。
 
 ## 排查
 

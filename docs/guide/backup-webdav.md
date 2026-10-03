@@ -18,7 +18,7 @@
 - **只搬任务流程** → 用配置 JSON  
 - **换机 / 灾难恢复** → 用完整备份（本页）
 
-完整备份**不含** `.admin_bootstrap_password`（避免初始密码随备份传播）。
+完整备份现在包含 `.app_secret_key` 和 `telebox/`；建议另存完整 `data/` 作为独立副本。恢复时若缺失或替换密钥，账号级 API 凭据和 Bot Token 将无法解密。
 
 ---
 
@@ -61,7 +61,7 @@ https://cloud.example.com/remote.php/dav/files/<你的用户名>
 2. 点击 **上传备份到 WebDAV**  
 3. 成功后会提示远端文件名  
 
-服务端会打包数据目录中的关键路径（数据库、会话、`.signer` 任务配置、全局/AI/Telegram API 配置等），再上传到远端目录。
+服务端会打包数据目录中的关键路径（数据库、会话、`.signer` 任务配置、全局设置、TeleBox 账号数据和应用密钥等），再上传到远端目录。历史 AI/共享 Telegram 配置文件若仍在数据目录中，恢复后也不会重新激活。
 
 未配置 WebDAV 时，API 仍可能回退为浏览器下载；**当前面板完整备份流程要求先填 WebDAV URL**。
 

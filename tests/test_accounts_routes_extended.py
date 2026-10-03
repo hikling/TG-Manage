@@ -107,7 +107,7 @@ class TestLoginFlow:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/login/start",
-                json={"account_name": "acc_start_ok", "phone_number": "+8613800000000"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_start_ok", "phone_number": "+8613800000000"},
                 headers=_auth(token),
             )
         assert resp.status_code == 200
@@ -121,7 +121,7 @@ class TestLoginFlow:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/login/start",
-                json={"account_name": "acc_start_v", "phone_number": "bad"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_start_v", "phone_number": "bad"},
                 headers=_auth(token),
             )
         assert resp.status_code == 400
@@ -134,7 +134,7 @@ class TestLoginFlow:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/login/start",
-                json={"account_name": "acc_start_e", "phone_number": "+8613800000000"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_start_e", "phone_number": "+8613800000000"},
                 headers=_auth(token),
             )
         assert resp.status_code == 500
@@ -222,7 +222,7 @@ class TestQrLoginFlow:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/qr/start",
-                json={"account_name": "acc_qr_ok"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_qr_ok"},
                 headers=_auth(token),
             )
         assert resp.status_code == 200
@@ -237,7 +237,7 @@ class TestQrLoginFlow:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/qr/start",
-                json={"account_name": "acc_qr_e"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_qr_e"},
                 headers=_auth(token),
             )
         assert resp.status_code == 500
@@ -805,7 +805,7 @@ class TestErrorBranchesRound2:
         with _patch_svc(svc):
             resp = api_client.post(
                 "/api/accounts/qr/start",
-                json={"account_name": "acc_qr_v"},
+                json={"api_id": 12345, "api_hash": "0" * 32, "account_name": "acc_qr_v"},
                 headers=_auth(token),
             )
         assert resp.status_code == 400

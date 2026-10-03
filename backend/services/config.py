@@ -2,8 +2,8 @@
 配置管理服务
 提供任务配置的导入导出功能
 
-领域实现按配置主题拆分在 config_mixins.py：签到任务/导出导入、AI 配置、
-全局设置、Telegram 凭据；本文件保留共享基础（JSON 读写、路径解析、单例）。
+领域实现按配置主题拆分在 config_mixins.py：签到任务/导出导入与
+全局设置；本文件保留共享基础（JSON 读写、路径解析、单例）。
 """
 
 from __future__ import annotations
@@ -15,11 +15,9 @@ from typing import Any, Optional
 
 from backend.core.config import get_settings
 from backend.services.config_mixins import (
-    AIConfigMixin,
     ConfigExportMixin,
     GlobalSettingsMixin,
     SignTaskConfigMixin,
-    TelegramConfigMixin,
 )
 from backend.utils.atomic_io import read_json_safe, write_json_atomic
 
@@ -27,9 +25,7 @@ from backend.utils.atomic_io import read_json_safe, write_json_atomic
 class ConfigService(
     SignTaskConfigMixin,
     ConfigExportMixin,
-    AIConfigMixin,
     GlobalSettingsMixin,
-    TelegramConfigMixin,
 ):
     """配置管理服务类"""
 

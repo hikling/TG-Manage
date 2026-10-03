@@ -108,6 +108,8 @@ async def start_account_login(
             account_name=request.account_name,
             phone_number=request.phone_number,
             proxy=request.proxy,
+            api_id=request.api_id,
+            api_hash=request.api_hash,
         )
         rate_limiter.reset("accounts.login.start", limit_key)
 
@@ -208,7 +210,8 @@ async def start_qr_login(
             block_seconds=900,
         )
         result = await get_telegram_service().start_qr_login(
-            account_name=request.account_name, proxy=request.proxy
+            account_name=request.account_name, proxy=request.proxy,
+            api_id=request.api_id, api_hash=request.api_hash,
         )
         rate_limiter.reset("accounts.qr.start", limit_key)
 

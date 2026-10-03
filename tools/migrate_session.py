@@ -2,33 +2,16 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 from pathlib import Path
 
 from pyrogram import Client
 
 from backend.core.config import get_settings
-from backend.services.config import get_config_service
 from backend.utils.tg_session import (
+    get_account_api_credentials,
     save_session_string_file,
     set_account_session_string,
 )
-
-
-def _resolve_api_credentials() -> tuple[int | None, str | None]:
-    tg_config = get_config_service().get_telegram_config()
-    api_id = os.getenv("TG_API_ID") or tg_config.get("api_id")
-    api_hash = os.getenv("TG_API_HASH") or tg_config.get("api_hash")
-
-    try:
-        api_id = int(api_id) if api_id is not None else None
-    except (TypeError, ValueError):
-        api_id = None
-
-    if isinstance(api_hash, str):
-        api_hash = api_hash.strip()
-
-    return api_id, api_hash
 
 
 async def _export_session_string(
@@ -55,16 +38,18 @@ async def _export_session_string(
 
 
 async def _run_migration(session_dir: Path, accounts: list[str]) -> int:
-    api_id, api_hash = _resolve_api_credentials()
-    if not api_id or not api_hash:
-        print("Missing Telegram API ID or API Hash. Aborting.")
-        return 2
-
     failures = 0
     for account_name in accounts:
         session_file = session_dir / f"{account_name}.session"
         if not session_file.exists():
             print(f"[SKIP] {account_name}: session file not found")
+            failures += 1
+            continue
+
+        try:
+            api_id, api_hash = get_account_api_credentials(account_name)
+        except ValueError:
+            print(f"[SKIP] {account_name}: account API credentials missing; log in again")
             failures += 1
             continue
 
