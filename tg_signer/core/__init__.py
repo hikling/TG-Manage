@@ -1,16 +1,6 @@
-"""
-tg_signer.core 包
-
-- client: Client 生命周期与工厂（真源）
-- runtime: BaseUserWorker / UserSigner 组合壳（真源）
-- monitor: UserMonitor 消息监控器
-- signer_runner/actions/matchers/config: UserSigner 各关注点 Mixin
-- context: UserSignerWorkerContext 工作上下文
-"""
+"""Shared Telegram client lifecycle for account management."""
 from __future__ import annotations
 
-# 动态回退：其余符号仍可从 runtime 取
-from tg_signer.core import runtime as _runtime
 from tg_signer.core.client import (
     _CLIENT_ASYNC_LOCKS,
     _CLIENT_INSTANCES,
@@ -30,30 +20,9 @@ from tg_signer.core.client import (
     readable_chat,
     readable_message,
 )
-from tg_signer.core.monitor import UserMonitor
-from tg_signer.core.runtime import (
-    BaseUserWorker,
-    UserSigner,
-    UserSignerWorkerContext,
-)
-
-
-def __getattr__(name: str):
-    if hasattr(_runtime, name):
-        return getattr(_runtime, name)
-    raise AttributeError(name)
-
-
-def __dir__():
-    return sorted(set(globals()) | set(dir(_runtime)))
-
 
 __all__ = [
     "Client",
-    "BaseUserWorker",
-    "UserSignerWorkerContext",
-    "UserSigner",
-    "UserMonitor",
     "get_client",
     "close_client_by_name",
     "get_api_config",

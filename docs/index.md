@@ -1,7 +1,7 @@
 ---
 layout: home
 title: TG-SignPulse 文档
-description: Telegram 多账号自动化管理面板 — 签到、消息编排、关键词监听与 AI 验证
+description: Telegram 多账号面板、聊天中心与 TeleBox 插件任务
 
 hero:
   name: TG-SignPulse
@@ -26,21 +26,15 @@ hero:
 
 features:
   - icon: 👥
-    title: 多账号共享任务
-    details: 一套流程绑定多号，统一维护步骤，适合批量签到与多号机器人交互。
-  - icon: 🤖
-    title: AI 验证处理
-    details: 识图选项、OCR、计算题、推断后点按钮；支持逐动作自定义提示词。
-  - icon: 📡
-    title: 关键词监听
-    details: 包含 / 全匹配 / 正则；命中后通知、转发或继续执行动作序列。
-  - icon: 📅
-    title: 调度与实时流
-    details: Cron / 时段调度、Dashboard SSE、任务 WebSocket 日志与失败分类。
+    title: 多账号工作台
+    details: 选择账号和目标对话，立即发送或创建每日定时消息。
+  - icon: 🧩
+    title: TeleBox 插件任务
+    details: 识别账号运行时已加载的命令，按时区每日投递并查看运行日志。
+  - icon: 💬
+    title: 按需开启聊天中心
+    details: 默认仅读取 Telegram 官方验证码；开启后查看普通会话，聊天缓存限制为 5 MB。
   - icon: 🐳
     title: 源码构建部署
-    details: 当前二改版需在本仓库运行 docker compose up -d --build，提供健康检查与数据持久化。
-  - icon: 🗄️
-    title: 存储灵活
-    details: 默认 SQLite（WAL）；可选 APP_DATABASE_URL 切换 PostgreSQL，非强制迁移。
+    details: 本仓库支持 Docker Compose 构建与持久化数据目录。
 ---

@@ -438,11 +438,6 @@ async def on_startup() -> None:
     async def _post_startup() -> None:
         try:
             await sync_jobs()
-            from backend.services.keyword_monitor import get_keyword_monitor_service
-
-            await get_keyword_monitor_service().restart_from_tasks()
-            from backend.services.chatops_bot import get_chatops_worker
-            get_chatops_worker().start()
             # 只有持调度锁的实例恢复 TeleBox，避免多副本争抢独立会话。
             from backend.scheduler.instance_lock import has_scheduler_lock
             if has_scheduler_lock():
@@ -576,15 +571,6 @@ async def on_shutdown() -> None:
         await close_shared_http_client()
     except Exception:
         log.exception("Push HTTP client shutdown failed")
-    try:
-        from backend.services.keyword_monitor import get_keyword_monitor_service
-
-        await get_keyword_monitor_service().stop()
-        from backend.services.chatops_bot import get_chatops_worker
-        get_chatops_worker().stop()
-    except Exception:
-        # 顶层兜底：关闭阶段任何异常不能阻止进程退出
-        log.exception("Keyword monitor shutdown failed")
 
     # 释放调度文件锁，避免异常退出后锁文件残留导致下一进程误判 replica
     try:

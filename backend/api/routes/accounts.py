@@ -48,7 +48,6 @@ from backend.api.routes.accounts_schemas import (
     QrLoginStartResponse,
     QrLoginStatusResponse,
     TerminateDeviceResponse,
-    _extract_last_bot_message,
 )
 from backend.core.auth import get_current_user
 from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
@@ -466,15 +465,15 @@ def _build_history_log_item(
 
     供最近日志与账号日志两个列表端点复用，避免展示字段漂移。
     """
-    task_name = item.get("task_name") or "未知任务"
+    task_name = item.get("task") or "未知任务"
     success = bool(item.get("success", False))
     return {
         "id": idx + 1,
-        "account_name": account_name or item.get("account_name", ""),
+        "account_name": account_name or (item.get("accounts") or [""])[0],
         "task_name": task_name,
         "message": item.get("message") or ("执行成功" if success else "执行失败"),
         "summary": f"任务: {task_name} {'成功' if success else '失败'}",
-        "bot_message": _extract_last_bot_message(item) or None,
+        "bot_message": None,
         "success": success,
         "created_at": item.get("time", ""),
         "failure_category": item.get("failure_category") or None,
@@ -485,12 +484,12 @@ def _build_history_log_item(
 def get_recent_account_logs(
     limit: int = 50, current_user: User = Depends(get_current_user)
 ):
-    from backend.services.sign_tasks import get_sign_task_service
+    from backend.services.telebox_tasks import get_telebox_task_service
     from tg_signer.utils import clamp
 
     limit = clamp(limit, 1, 200)
 
-    history = get_sign_task_service().get_recent_history_logs(limit=limit)
+    history = get_telebox_task_service().history()[-limit:][::-1]
     return [_build_history_log_item(item, idx) for idx, item in enumerate(history)]
 
 
@@ -513,13 +512,11 @@ async def delete_account(
         success = await get_telegram_service().delete_account(account_name)
 
         if success:
-            # 清理签到服务内存中的账号痕迹：冷却时间戳与账号锁，
-            # 避免同名重建账号继承旧冷却、锁实例残留
-            from backend.services.sign_tasks import get_sign_task_service
+            from backend.scheduler import sync_jobs
+            from backend.services.telebox_tasks import get_telebox_task_service
 
-            sign_svc = get_sign_task_service()
-            sign_svc._account_last_run_end.pop(account_name, None)
-            sign_svc._account_locks.pop(account_name, None)
+            get_telebox_task_service().disable_account(account_name)
+            await sync_jobs()
             return DeleteAccountResponse(
                 success=True, message=f"账号 {account_name} 已删除"
             )
@@ -746,14 +743,6 @@ async def update_account(
                 # 调度同步失败不应阻断改名主流程；与 config.py/batch.py 的兜底策略一致
                 logger.warning("账号改名后同步调度任务失败: %s", exc)
 
-        try:
-            from backend.services.keyword_monitor import get_keyword_monitor_service
-
-            await get_keyword_monitor_service().restart_from_tasks()
-        except Exception as exc:
-            # 监控重启失败仅告警，避免静默保持旧账号监控
-            logger.warning("账号更新后重启关键词监控失败: %s", exc)
-
         updated = find_account_by_name(
             service.list_accounts(force_refresh=True),
             target_account_name,
@@ -784,12 +773,12 @@ async def update_account(
 def clear_recent_account_logs(current_user: User = Depends(get_current_user)):
     """清理全部最近任务执行日志"""
     try:
-        from backend.services.sign_tasks import get_sign_task_service
+        from backend.services.telebox_tasks import get_telebox_task_service
 
-        result = get_sign_task_service().clear_all_history_logs()
+        removed = get_telebox_task_service().clear_history()
         return ClearAccountLogsResponse(
             success=True,
-            cleared=result.get("removed_entries", 0),
+            cleared=removed,
             message="All logs cleared",
             code="LOGS_CLEARED",
         )
@@ -806,7 +795,7 @@ def get_account_logs(
     account_name: str, limit: int = 100, current_user: User = Depends(get_current_user)
 ):
     """获取账号的任务执行历史日志"""
-    from backend.services.sign_tasks import get_sign_task_service
+    from backend.services.telebox_tasks import get_telebox_task_service
     from tg_signer.utils import clamp
 
     try:
@@ -816,7 +805,8 @@ def get_account_logs(
 
     limit = clamp(limit, 1, 200)
 
-    history = get_sign_task_service().get_account_history_logs(account_name)
+    history = [item for item in get_telebox_task_service().history()
+               if account_name in item.get("accounts", [])][::-1]
 
     return [
         AccountLogItem(**_build_history_log_item(item, i, account_name=account_name))
@@ -840,12 +830,12 @@ def clear_account_logs(
             detail="ACCOUNT_NOT_FOUND",
         )
     try:
-        from backend.services.sign_tasks import get_sign_task_service
+        from backend.services.telebox_tasks import get_telebox_task_service
 
-        result = get_sign_task_service().clear_account_history_logs(account_name)
+        removed = get_telebox_task_service().clear_history(account_name)
         return ClearAccountLogsResponse(
             success=True,
-            cleared=result.get("removed_entries", 0),
+            cleared=removed,
             message="Logs cleared",
             code="LOGS_CLEARED",
         )
@@ -864,14 +854,15 @@ def export_account_logs(
     """导出账号日志为 txt 文件"""
     from fastapi.responses import Response
 
-    from backend.services.sign_tasks import get_sign_task_service
+    from backend.services.telebox_tasks import get_telebox_task_service
 
     try:
         account_name = validate_storage_name(account_name, field_name="account_name")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    history = get_sign_task_service().get_account_history_logs(account_name)
+    history = [item for item in get_telebox_task_service().history()
+               if account_name in item.get("accounts", [])]
 
     content = f"账号日志: {account_name}\n"
     content += "=" * 40 + "\n\n"
@@ -879,7 +870,7 @@ def export_account_logs(
     for item in history:
         time_str = item.get("time", "").replace("T", " ")[:19]
         status_text = "成功" if item.get("success") else "失败"
-        content += f"[{time_str}] 任务: {item.get('task_name')} | 状态: {status_text}\n"
+        content += f"[{time_str}] 任务: {item.get('task')} | 状态: {status_text}\n"
         if item.get("message"):
             content += f"消息: {item.get('message')}\n"
         content += "-" * 20 + "\n"

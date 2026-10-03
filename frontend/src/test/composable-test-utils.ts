@@ -4,13 +4,8 @@
 import { defineComponent, h, ref } from 'vue'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { vi } from 'vitest'
-import type { AccountUiItem, TaskUiItem } from '../lib/types'
-import type { AccountInfo, SignTask, SignTaskChat } from '../lib/api'
-
-/** 测试用 partial raw：chats 允许只写关键字段 */
-type TaskUiRawOver = Partial<Omit<SignTask, 'chats'>> & {
-  chats?: Array<Partial<SignTaskChat>>
-}
+import type { AccountUiItem } from '../lib/types'
+import type { AccountInfo } from '../lib/api'
 
 export function mockI18nPassthrough() {
   return {
@@ -100,52 +95,6 @@ export function mountComposable<T>(factory: () => T): {
 export async function flushPromises(rounds = 20) {
   for (let i = 0; i < rounds; i++) {
     await Promise.resolve()
-  }
-}
-
-export function makeTaskUi(
-  over: Omit<Partial<TaskUiItem>, 'raw'> & { raw?: TaskUiRawOver } = {},
-): TaskUiItem {
-  const name = over.name || 'task-1'
-  const { chats: overChats, ...rawRest } = over.raw || {}
-  const raw: SignTask = {
-    name,
-    account_name: 'acc1',
-    account_names: ['acc1'],
-    sign_at: '08:00',
-    execution_mode: 'fixed',
-    chats: [],
-    random_seconds: 0,
-    sign_interval: 0,
-    enabled: true,
-    ...rawRest,
-  }
-  // 保证 chats 子项在 partial 覆盖时仍带齐必填字段
-  if (overChats) {
-    raw.chats = overChats.map((c) => ({
-      ...c,
-      chat_id: c.chat_id ?? 0,
-      name: c.name ?? '',
-      actions: c.actions ?? [],
-      action_interval: c.action_interval ?? 0,
-    }))
-  }
-  const { raw: _ignored, ...rest } = over
-  return {
-    id: name,
-    name,
-    scheduleMode: '08:00',
-    targetStr: 'chat',
-    targetCount: 1,
-    lastRunStr: '-',
-    lastRunSuccess: null,
-    modeIcon: {} as TaskUiItem['modeIcon'],
-    isListenMode: false,
-    enabled: true,
-    chatAvatarUrl: '',
-    chatName: '',
-    ...rest,
-    raw,
   }
 }
 

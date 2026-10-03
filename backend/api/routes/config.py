@@ -8,7 +8,6 @@ from typing import Optional
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     HTTPException,
     Response,
@@ -19,41 +18,10 @@ from pydantic import BaseModel, Field
 from backend.core.auth import get_current_user
 from backend.models.user import User
 from backend.services.config import get_config_service
-from backend.utils.names import validate_storage_name
-from backend.utils.storage import is_writable_dir
 
 router = APIRouter()
 
 logger = logging.getLogger("backend.config_api")
-
-
-async def _post_import_sync() -> None:
-    """导入签到任务后后台同步调度与关键词监控，失败仅告警不阻塞 HTTP 响应。"""
-    from backend.services.sync_helpers import sync_jobs_and_restart_monitors
-
-    await sync_jobs_and_restart_monitors(context="导入")
-
-
-def _clear_sign_task_cache() -> None:
-    try:
-        from backend.services.sign_tasks import get_sign_task_service
-
-        get_sign_task_service().invalidate_tasks_cache()
-    except Exception as exc:
-        # Best-effort cache invalidation; import should still succeed.
-        logger.debug("清除签到任务缓存失败: %s", exc)
-
-
-class ImportTaskRequest(BaseModel):
-    config_json: str
-    task_name: Optional[str] = None
-    account_name: Optional[str] = None
-
-
-class ImportTaskResponse(BaseModel):
-    success: bool
-    task_name: str
-    message: str
 
 
 class ImportAllRequest(BaseModel):
@@ -71,98 +39,6 @@ class ImportAllResponse(BaseModel):
     errors: list[str]
     warnings: list[str] = []
     message: str
-
-
-@router.get("/export/sign/{task_name}")
-def export_sign_task(
-    task_name: str,
-    account_name: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        config_json = get_config_service().export_sign_task(
-            task_name, account_name=account_name
-        )
-        if config_json is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="TASK_NOT_FOUND",
-            )
-
-        return Response(
-            content=config_json.encode("utf-8"),
-            media_type="application/json; charset=utf-8",
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("导出任务失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="TASK_EXPORT_FAILED",
-        )
-
-
-@router.post("/import/sign", response_model=ImportTaskResponse)
-def import_sign_task(
-    request: ImportTaskRequest,
-    background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        service = get_config_service()
-        if not is_writable_dir(service.signs_dir):
-            # 绝对路径只进服务端日志，不随响应外泄
-            logger.warning("数据目录不可写: %s", service.signs_dir)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="DATA_DIR_NOT_WRITABLE",
-            )
-
-        if not request.config_json or not request.config_json.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="CONFIG_JSON_EMPTY",
-            )
-
-        success = service.import_sign_task(
-            request.config_json, request.task_name, request.account_name
-        )
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="TASK_CONFIG_INVALID",
-            )
-
-        data = json.loads(request.config_json)
-        # 与服务层同一入口规范化任务名，确保回显的名字与实际落盘一致
-        final_task_name = validate_storage_name(
-            request.task_name or data.get("task_name", "imported_task"),
-            field_name="task_name",
-        )
-
-        _clear_sign_task_cache()
-        # 调度同步和监控重启放到后台执行，避免阻塞 HTTP 响应
-        background_tasks.add_task(_post_import_sync)
-
-        return ImportTaskResponse(
-            success=True,
-            task_name=final_task_name,
-            message=f"Task {final_task_name} imported",
-        )
-    except HTTPException:
-        raise
-    except ValueError as e:
-        # 服务层对非法任务名/账号名抛 ValueError，属于客户端输入错误
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.error("导入任务失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="TASK_IMPORT_FAILED",
-        )
 
 
 @router.get("/export/all")
@@ -189,9 +65,17 @@ async def import_all_configs(
     request: ImportAllRequest, current_user: User = Depends(get_current_user)
 ):
     try:
+        raw = json.loads(request.config_json)
+        if not isinstance(raw, dict):
+            raise ValueError("配置根节点必须是对象")
+        # Historical sign/monitor definitions are data only. Never re-import
+        # them as executable jobs after switching to TeleBox tasks.
+        skipped = sum(len(raw.get(key)) for key in ("signs", "monitors") if isinstance(raw.get(key), dict))
         result = get_config_service().import_all_configs(
-            request.config_json, request.overwrite
+            json.dumps({"settings": raw.get("settings") or {}}), request.overwrite
         )
+        if skipped:
+            result["warnings"].append(f"旧任务/监听配置已跳过：{skipped} 项")
 
         message_parts = []
         if result.get("signs_imported", 0) > 0:
@@ -218,16 +102,7 @@ async def import_all_configs(
 
         from backend.scheduler import sync_jobs
 
-        _clear_sign_task_cache()
         await sync_jobs()
-        try:
-            from backend.services.keyword_monitor import get_keyword_monitor_service
-
-            await get_keyword_monitor_service().restart_from_tasks()
-        except Exception as exc:
-            # 监听重启失败不阻断配置保存，但需留痕：否则用户以为规则已生效
-            logger.warning("关键词监听重启失败: %s", exc, exc_info=True)
-
         return ImportAllResponse(
             signs_imported=int(result.get("signs_imported", 0)),
             signs_skipped=int(result.get("signs_skipped", 0)),
@@ -247,46 +122,13 @@ async def import_all_configs(
         )
 
 
-@router.delete("/sign/{task_name}")
-async def delete_sign_task(
-    task_name: str,
-    account_name: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        success = get_config_service().delete_sign_config(
-            task_name, account_name=account_name
-        )
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="TASK_NOT_FOUND",
-            )
-
-        from backend.scheduler import sync_jobs
-
-        _clear_sign_task_cache()
-        await sync_jobs()
-
-        return {"success": True, "message": f"Task {task_name} deleted"}
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("删除任务失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="TASK_DELETE_FAILED",
-        )
-
-
 class AIConfigSaveResponse(BaseModel):
     success: bool
     message: str
 
 
 class GlobalSettingsRequest(BaseModel):
+    chat_center_enabled: Optional[bool] = None
     sign_interval: Optional[int] = None
     log_retention_days: Optional[int] = None
     data_dir: Optional[str] = None
@@ -305,10 +147,6 @@ class GlobalSettingsRequest(BaseModel):
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
     timezone: Optional[str] = None
-    sign_task_execution_timeout: Optional[int] = None
-    sign_task_account_cooldown: Optional[int] = None
-    sign_task_flow_retry_attempts: Optional[int] = None
-    sign_task_history_max_age_days: Optional[int] = None
     auto_backup_enabled: Optional[bool] = None
     auto_backup_interval_hours: Optional[int] = None
     auto_backup_keep: Optional[int] = None
@@ -319,6 +157,7 @@ class GlobalSettingsRequest(BaseModel):
 
 
 class GlobalSettingsResponse(BaseModel):
+    chat_center_enabled: bool = False
     sign_interval: Optional[int] = None
     log_retention_days: int = 7
     data_dir: Optional[str] = None
@@ -338,10 +177,6 @@ class GlobalSettingsResponse(BaseModel):
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
     timezone: str = "Asia/Hong_Kong"
-    sign_task_execution_timeout: Optional[int] = None
-    sign_task_account_cooldown: Optional[int] = None
-    sign_task_flow_retry_attempts: Optional[int] = None
-    sign_task_history_max_age_days: Optional[int] = None
     auto_backup_enabled: bool = False
     auto_backup_interval_hours: Optional[int] = 24
     auto_backup_keep: Optional[int] = 3

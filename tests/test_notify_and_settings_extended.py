@@ -29,11 +29,6 @@ class TestAdvancedSettingsApi:
         assert resp.status_code == 200
         body = resp.json()
         for key in (
-            "sign_interval",
-            "sign_task_execution_timeout",
-            "sign_task_account_cooldown",
-            "sign_task_flow_retry_attempts",
-            "sign_task_history_max_age_days",
             "ai_vision_timeout",
             "ai_vision_retry_attempts",
             "ai_vision_reasoning_effort",
@@ -53,7 +48,7 @@ class TestAdvancedSettingsApi:
         ):
             assert key in body, f"missing key {key}"
 
-    def test_save_advanced_execution_settings(self, client, db_session):
+    def test_legacy_task_settings_are_not_saved(self, client, db_session):
         resp = client.post(
             "/api/config/settings",
             json={
@@ -65,8 +60,8 @@ class TestAdvancedSettingsApi:
         )
         assert resp.status_code == 200
         got = client.get("/api/config/settings", headers=_auth_headers()).json()
-        assert got["sign_interval"] == 45
-        assert got["sign_task_execution_timeout"] == 240
+        assert "sign_interval" not in got
+        assert "sign_task_execution_timeout" not in got
         assert got["ai_vision_timeout"] == 20
 
 
@@ -395,116 +390,6 @@ def test_global_settings_includes_timezone(client, db_session):
     assert resp.json().get("timezone")
 
 
-class TestCloneSignTask:
-    """签到任务克隆 API。"""
-
-    def _create_minimal(self, client, name: str = "src_task") -> None:
-        with patch("backend.api.routes.sign_tasks_v2.asyncio.ensure_future"):
-            # client fixture 使用内存库，需先有账号目录侧的 create 路径
-            # create_task 会校验账号列表：通过 mock 扩展账号名解析
-            from backend.services.sign_tasks import get_sign_task_service
-
-            svc = get_sign_task_service()
-            with patch.object(
-                svc,
-                "_normalize_account_names",
-                return_value=["acc1"],
-            ), patch.object(
-                svc,
-                "_expand_account_names",
-                return_value=["acc1"],
-            ), patch(
-                "backend.scheduler.add_or_update_sign_task_job",
-            ), patch(
-                "backend.scheduler.remove_sign_task_job",
-            ):
-                task = svc.create_task(
-                    task_name=name,
-                    sign_at="09:00",
-                    chats=[
-                        {
-                            "chat_id": 12345,
-                            "name": "bot",
-                            "actions": [{"action": 1, "text": "/checkin"}],
-                            "action_interval": 1,
-                        }
-                    ],
-                    account_name="acc1",
-                    account_names=["acc1"],
-                    execution_mode="fixed",
-                    retry_count=2,
-                )
-                assert task["name"] == name
-
-    def test_clone_success(self, client, db_session, isolated_env):
-        self._create_minimal(client, "src_clone")
-        with patch("backend.api.routes.sign_tasks_v2.asyncio.ensure_future"), patch(
-            "backend.scheduler.add_or_update_sign_task_job",
-        ), patch(
-            "backend.scheduler.remove_sign_task_job",
-        ):
-            from backend.services.sign_tasks import get_sign_task_service
-
-            svc = get_sign_task_service()
-            with patch.object(
-                svc, "_normalize_account_names", return_value=["acc1"]
-            ), patch.object(
-                svc, "_expand_account_names", return_value=["acc1"]
-            ):
-                resp = client.post(
-                    "/api/sign-tasks/src_clone/clone",
-                    json={"new_name": "src_clone_copy"},
-                    headers=_auth_headers(),
-                )
-        assert resp.status_code == 201, resp.text
-        body = resp.json()
-        assert body["name"] == "src_clone_copy"
-        assert body.get("retry_count") == 2
-
-    def test_clone_duplicate_rejected(self, client, db_session, isolated_env):
-        self._create_minimal(client, "dup_src")
-        self._create_minimal(client, "dup_dst")
-        resp = client.post(
-            "/api/sign-tasks/dup_src/clone",
-            json={"new_name": "dup_dst"},
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 422
-        assert "已存在" in resp.json().get("detail", "")
-
-    def test_clone_missing_source(self, client, db_session):
-        resp = client.post(
-            "/api/sign-tasks/no_such_task/clone",
-            json={"new_name": "x"},
-            headers=_auth_headers(),
-        )
-        assert resp.status_code == 422
-
-    def test_notify_on_success_roundtrip(self, client, db_session, isolated_env):
-        """创建时写入 notify_on_success，更新后可读回。"""
-        from backend.services.sign_tasks import get_sign_task_service
-
-        svc = get_sign_task_service()
-        with patch.object(svc, "_normalize_account_names", return_value=["acc1"]), patch.object(
-            svc, "_expand_account_names", return_value=["acc1"]
-        ), patch("backend.scheduler.add_or_update_sign_task_job"), patch(
-            "backend.scheduler.remove_sign_task_job"
-        ), patch("backend.api.routes.sign_tasks_v2.asyncio.ensure_future"):
-            created = svc.create_task(
-                task_name="notify_ok",
-                sign_at="10:00",
-                chats=[{"chat_id": 1, "name": "c", "actions": [{"action": 1, "text": "x"}]}],
-                account_name="acc1",
-                account_names=["acc1"],
-                notify_on_success=False,
-            )
-            assert created.get("notify_on_success") is False
-            updated = svc.update_task(
-                task_name="notify_ok",
-                account_name="acc1",
-                notify_on_success=True,
-            )
-            assert updated.get("notify_on_success") is True
 
 
 class TestWebdavBackupChain:

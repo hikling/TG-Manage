@@ -7,11 +7,11 @@ This is a modified version of [Silentely/TG-SignPulse](https://github.com/Silent
 | Area | Current implementation |
 | --- | --- |
 | UI | Screenshot inspired sidebar, account cards, responsive layouts, light and dark themes. |
-| Chats | Per-account dialogs including private chats, bots, groups and channels; search, pagination, messages, media, read/archive actions. |
-| Workbench | Shared group message operations and scheduled tasks using the existing scheduler. |
-| Administration | Group details, per-account proxies, Bot API registration/profile/commands/messages. |
+| Chats | Optional chat center, disabled by default. When off, only official Telegram verification messages are retrieved. When on, dialogs, messages and avatars are displayed, with a 5 MB cache limit. |
+| Workbench | Immediate sends and daily scheduled messages, with manual target entry while chat center is off. |
+| Administration | Proxy management under system settings; Bot API registration/profile/commands/messages. |
 | TeleBox | Complete upstream 0.2.9 source pinned to the commit in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json); separate worker, data directory, status, logs and plugin controls per account. |
-| Migration | Former Python custom plugins, marketplace and custom plugin action have been removed. Dedicated channel administration was removed; channel dialogs remain in Chat Center. Existing plugin task data is retained but requires manual migration. |
+| Migration | The former Python task scheduler, actions and keyword monitor have been removed from the panel. TeleBox tasks select loaded commands per account; legacy task data is not executed or migrated automatically. |
 | Development | Trellis specifications and task notes under [`.trellis/`](.trellis/), with Codex skills/hooks. |
 
 ## Requirements
@@ -24,10 +24,10 @@ This is a modified version of [Silentely/TG-SignPulse](https://github.com/Silent
 ## Deploy from source
 
 ```bash
-git clone --branch fix/telebox-esm-workbench https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch refactor/telebox-tasks-chat-switch https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-The private repository requires GitHub access. After this PR merges, omit `--branch fix/telebox-esm-workbench`. Docker Compose builds from source. The app secret is generated and persisted in `data/.app_secret_key`; the script prints a one-time setup token to set the admin password in the browser. For logins without TeleBox, set `SIGNPULSE_TG_API_ID/HASH` in a private server `.env` to avoid entering them in the account form.
+The private repository requires GitHub access. After this PR merges, omit `--branch refactor/telebox-tasks-chat-switch`. Docker Compose builds from source. The app secret is generated and persisted in `data/.app_secret_key`; the script prints a one-time setup token to set the admin password in the browser. For logins without TeleBox, set `SIGNPULSE_TG_API_ID/HASH` in a private server `.env` to avoid entering them in the account form.
 
 Open `http://YOUR_SERVER_IP:8080`, enter the one-time setup token and choose an admin password. When adding an account, opt into TeleBox and enter that account's API ID/Hash, or leave it off to use the server credentials. Verify by code or QR; TeleBox starts automatically for opted-in accounts. Supply Telegram 2FA in the extension page if requested. Test sends and changes with your own test chat first.
 

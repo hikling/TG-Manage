@@ -9,11 +9,10 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from backend.core.config import get_settings
 from backend.utils.cache import TTLCache
-from backend.utils.names import validate_storage_name
 from backend.utils.storage import (
     clear_data_dir_override,
     is_writable_dir,
@@ -27,14 +26,7 @@ _logger = logging.getLogger("backend.config")
 # 2 秒窗口内复用，保存路径显式失效，兼顾响应实时性与磁盘 I/O
 GLOBAL_SETTINGS_CACHE_TTL = 2.0
 
-# 面板全局设置键 → 环境变量名：保存时与启动时统一回灌，
-# 供 tg_signer 等仍读 env 的路径（AI_VISION_*、SIGN_TASK_*）使用
-GLOBAL_SETTINGS_ENV_SYNC = {
-    "sign_task_execution_timeout": "SIGN_TASK_EXECUTION_TIMEOUT",
-    "sign_task_account_cooldown": "SIGN_TASK_ACCOUNT_COOLDOWN",
-    "sign_task_flow_retry_attempts": "SIGN_TASK_FLOW_RETRY_ATTEMPTS",
-    "sign_task_history_max_age_days": "SIGN_TASK_HISTORY_MAX_AGE_DAYS",
-}
+GLOBAL_SETTINGS_ENV_SYNC: Dict[str, str] = {}
 
 # 既有全局任务配置的历史值归一化；新面板不再暴露 AI 设置。
 _REASONING_EFFORT_VALUES = frozenset({"low", "medium", "high", "none"})
@@ -59,10 +51,6 @@ def apply_global_settings_to_env(merged: Dict[str, Any]) -> None:
 # 全局设置数值钳制表：字段名 -> (下限, 上限)；值为 None 的字段保持 None
 _GLOBAL_SETTING_INT_CLAMPS = {
     "device_keepalive_interval_days": (1, 170),
-    "sign_task_execution_timeout": (30, 3600),
-    "sign_task_account_cooldown": (0, 600),
-    "sign_task_flow_retry_attempts": (1, 10),
-    "sign_task_history_max_age_days": (1, 90),
     "ai_vision_timeout": (3, 120),
     "ai_vision_retry_attempts": (1, 8),
     "auto_backup_interval_hours": (1, 168),
@@ -78,6 +66,9 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     - webdav_url/webdav_username/webdav_remote_dir 去首尾空白并兜底默认值
     """
     normalized = dict(settings)
+    for key in list(normalized):
+        if key.startswith("sign_task_") or key == "sign_interval":
+            normalized.pop(key)
 
     for key, (low, high) in _GLOBAL_SETTING_INT_CLAMPS.items():
         if key in normalized:
@@ -129,486 +120,70 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
-class SignTaskConfigMixin:
-    """签到/监控任务配置文件 CRUD 与导入导出。"""
-
-    def list_sign_tasks(self) -> List[str]:
-        """获取所有签到任务名称列表"""
-        tasks = []
-
-        if self.signs_dir.exists():
-            # 扫描顶层目录 (兼容旧版)
-            for path in self.signs_dir.iterdir():
-                if path.is_dir():
-                    # Check if it's a task directory (has config.json)
-                    if (path / "config.json").exists():
-                        tasks.append(path.name)
-                    else:
-                        # Check if it's an account directory containing tasks
-                        for task_dir in path.iterdir():
-                            if task_dir.is_dir() and (task_dir / "config.json").exists():
-                                tasks.append(task_dir.name)
-
-        return sorted(set(tasks))  # 去重并排序
-
-
-    def list_monitor_tasks(self) -> List[str]:
-        """获取所有监控任务名称列表"""
-        tasks = []
-
-        if self.monitors_dir.exists():
-            for task_dir in self.monitors_dir.iterdir():
-                if task_dir.is_dir():
-                    config_file = task_dir / "config.json"
-                    if config_file.exists():
-                        tasks.append(task_dir.name)
-
-        return sorted(tasks)
-
-
-    def _find_sign_task_dirs(self, task_name: str) -> List[Path]:
-        matches = []
-        if not self.signs_dir.exists():
-            return matches
-
-        # 1. 旧版结构: signs/task
-        direct_dir = self.signs_dir / task_name
-        if (direct_dir / "config.json").exists():
-            matches.append(direct_dir)
-
-        # 2. 新版结构: signs/account/task
-        for acc_dir in self.signs_dir.iterdir():
-            if acc_dir.is_dir():
-                nested_task_dir = acc_dir / task_name
-                if (nested_task_dir / "config.json").exists():
-                    matches.append(nested_task_dir)
-
-        return matches
-
-
-    def get_sign_config(
-        self, task_name: str, account_name: Optional[str] = None
-    ) -> Optional[Dict]:
-        """
-        获取签到任务配置
-
-        Args:
-            task_name: 任务名称
-            account_name: 账号名称（可选）
-
-        Returns:
-            配置字典，如果不存在则返回 None
-        """
-        task_name = validate_storage_name(task_name, field_name="task_name")
-        if account_name:
-            account_name = validate_storage_name(account_name, field_name="account_name")
-            task_dir = self.signs_dir / account_name / task_name
-            config_file = task_dir / "config.json"
-            if not config_file.exists():
-                return None
-        else:
-            matches = self._find_sign_task_dirs(task_name)
-            if not matches:
-                return None
-            if len(matches) > 1:
-                raise ValueError(f"任务 {task_name} 存在于多个账号中，请指定 account_name")
-            task_dir = matches[0]
-            config_file = task_dir / "config.json"
-
-        return self._read_json_file(config_file)
-
-
-    def save_sign_config(self, task_name: str, config: Dict) -> bool:
-        """
-        保存签到任务配置
-
-        Args:
-            task_name: 任务名称
-            config: 配置字典
-
-        Returns:
-            是否成功保存
-        """
-        task_name = validate_storage_name(task_name, field_name="task_name")
-        account_name = config.get("account_name", "")
-
-        if account_name:
-            account_name = validate_storage_name(account_name, field_name="account_name")
-            # 使用新版结构: signs/account/task
-            task_dir = self.signs_dir / account_name / task_name
-        else:
-            # 兼容旧版或无账号: signs/task
-            task_dir = self.signs_dir / task_name
-
-        task_dir.mkdir(parents=True, exist_ok=True)
-        config_file = task_dir / "config.json"
-
-        return self._write_json_file(config_file, config)
-
-
-    def delete_sign_config(
-        self, task_name: str, account_name: Optional[str] = None
-    ) -> bool:
-        """
-        删除签到任务配置
-
-        Args:
-            task_name: 任务名称
-            account_name: 账号名称（可选）
-
-        Returns:
-            是否成功删除
-        """
-        task_name = validate_storage_name(task_name, field_name="task_name")
-        if account_name:
-            account_name = validate_storage_name(account_name, field_name="account_name")
-            task_dir = self.signs_dir / account_name / task_name
-            if not task_dir.exists():
-                return False
-        else:
-            matches = self._find_sign_task_dirs(task_name)
-            if not matches:
-                return False
-            if len(matches) > 1:
-                raise ValueError(f"任务 {task_name} 存在于多个账号中，请指定 account_name")
-            task_dir = matches[0]
-
-        try:
-            # 删除配置文件
-            config_file = task_dir / "config.json"
-            if config_file.exists():
-                config_file.unlink()
-
-            # 删除签到记录文件
-            record_file = task_dir / "sign_record.json"
-            if record_file.exists():
-                record_file.unlink()
-
-            # 删除目录
-            # 注意：如果是嵌套结构，这里只删除了任务目录，没有删除可能变空的账号目录
-            # 这通常是可以接受的，或者我们可以检查父目录是否为空并删除
-            import shutil
-            shutil.rmtree(task_dir)
-
-            return True
-        except OSError:
-            return False
-
-
-    def export_sign_task(
-        self, task_name: str, account_name: Optional[str] = None
-    ) -> Optional[str]:
-        """
-        导出签到任务配置为 JSON 字符串
-
-        Args:
-            task_name: 任务名称
-            account_name: 账号名称（可选）
-
-        Returns:
-            JSON 字符串，如果任务不存在则返回 None
-        """
-        config = self.get_sign_config(task_name, account_name=account_name)
-
-        if config is None:
-            return None
-
-        config = dict(config)
-        config.pop("last_run", None)
-        # Keep exported payload account-agnostic for cross-account imports.
-        config.pop("account_name", None)
-
-        # 添加元数据
-        export_data = {
-            "task_name": task_name,
-            "task_type": "sign",
-            "config": config,
-        }
-
-        return json.dumps(export_data, ensure_ascii=False, indent=2)
-
-
-    def import_sign_task(
-        self,
-        json_str: str,
-        task_name: Optional[str] = None,
-        account_name: Optional[str] = None,
-    ) -> bool:
-        """
-        导入签到任务配置
-
-        Args:
-            json_str: JSON 字符串
-            task_name: 新任务名称（可选，如果不提供则使用原名称）
-            account_name: 新账号名称（可选，如果不提供则使用原名称）
-
-        Returns:
-            是否成功导入
-        """
-        try:
-            data = json.loads(json_str)
-
-            # 验证数据格式
-            if "config" not in data:
-                return False
-
-            # 确定任务名称
-            final_task_name = validate_storage_name(
-                task_name or data.get("task_name", "imported_task"),
-                field_name="task_name",
-            )
-
-            config = data["config"]
-            if account_name:
-                account_name = validate_storage_name(
-                    account_name, field_name="account_name"
-                )
-                config["account_name"] = account_name
-
-            # 保存配置
-            return self.save_sign_config(final_task_name, config)
-
-        except (json.JSONDecodeError, KeyError):
-            return False
-
-    # 导出脱敏占位；导入时若见到则跳过密钥写入，避免覆盖真实密钥
-    AI_KEY_MASK = "***MASKED***"
-    SECRET_MASKS = frozenset({AI_KEY_MASK, "***", "MASKED", "REDACTED", "***MASKED***"})
-
-
 class ConfigExportMixin:
-    """全量配置导出/导入。"""
+    """Portable settings export/import. Legacy task definitions are never activated."""
+
+    SECRET_MASKS = frozenset({"***MASKED***", "***", "MASKED", "REDACTED"})
 
     def export_all_configs(self) -> str:
-        """
-        导出业务配置（任务 / 监控 / 设置）。
+        settings = dict(self.get_global_settings())
+        settings = {key: value for key, value in settings.items()
+                    if not key.startswith("sign_task_") and key != "sign_interval"}
+        for key in ("webdav_password", "telegram_bot_token"):
+            if settings.get(key):
+                settings[key] = "***MASKED***"
+        return json.dumps({
+            "_meta": {"format": "tg-signpulse-config-export", "version": 2,
+                      "includes": ["settings"],
+                      "excludes": ["sessions", "db.sqlite", "history", "account_login_state", "telebox-tasks.json"]},
+            "settings": {"global": settings},
+        }, ensure_ascii=False, indent=2)
 
-        不含 sessions、数据库、执行历史。
-        AI api_key / WebDAV 密码 / Bot Token 默认脱敏。
-        """
-        all_configs: Dict[str, Any] = {
-            "_meta": {
-                "format": "tg-signpulse-config-export",
-                "version": 1,
-                "includes": ["signs", "monitors", "settings"],
-                "excludes": [
-                    "sessions",
-                    "db.sqlite",
-                    "history",
-                    "account_login_state",
-                ],
-                "notes": [
-                    "配置迁移用：可导入；不含 Telegram 登录会话。",
-                    "AI api_key / WebDAV 密码 / Bot Token 已脱敏；导入时不会用占位符覆盖现有密钥。",
-                    "整机恢复请用面板「完整数据备份」tar.gz + 手动解压覆盖 data/。",
-                ],
-            },
-            "signs": {},
-            "monitors": {},
-            "settings": {},
-        }
-
-        # 导出所有签到任务
-        if self.signs_dir.exists():
-            # 1. 扫描顶层 (旧版)
-            for path in self.signs_dir.iterdir():
-                if path.is_dir() and (path / "config.json").exists():
-                    config = self._read_json_file(path / "config.json")
-                    if config is not None:
-                        config.pop("last_run", None)
-                        key = path.name
-                        if key in all_configs["signs"]:
-                            key = f"{key}_{config.get('account_name', 'default')}"
-                        all_configs["signs"][key] = config
-
-                # 2. 扫描账号层
-                if path.is_dir():
-                    for task_dir in path.iterdir():
-                        if task_dir.is_dir() and (task_dir / "config.json").exists():
-                            config = self._read_json_file(task_dir / "config.json")
-                            if config is not None:
-                                config.pop("last_run", None)
-                                key = f"{task_dir.name}_{path.name}"
-                                account_name = config.get("account_name")
-                                if account_name:
-                                    key = f"{config.get('name', task_dir.name)}@{account_name}"
-                                else:
-                                    key = config.get("name", task_dir.name)
-
-                                if key in all_configs["signs"]:
-                                    import uuid
-                                    key = f"{key}_{str(uuid.uuid4())[:8]}"
-
-                                all_configs["signs"][key] = config
-
-        # 导出所有监控任务
-        for task_name in self.list_monitor_tasks():
-            config_file = self.monitors_dir / task_name / "config.json"
-            config = self._read_json_file(config_file)
-            if config is not None:
-                config.pop("last_run", None)
-                all_configs["monitors"][task_name] = config
-
-        # 导出设置 — 敏感字段脱敏
-        global_settings = dict(self.get_global_settings())
-        if global_settings.get("webdav_password"):
-            global_settings["webdav_password"] = self.AI_KEY_MASK
-            all_configs["_meta"]["webdav_password_masked"] = True
-        if global_settings.get("telegram_bot_token"):
-            global_settings["telegram_bot_token"] = self.AI_KEY_MASK
-            all_configs["_meta"]["telegram_bot_token_masked"] = True
-
-        all_configs["settings"] = {"global": global_settings}
-
-        return json.dumps(all_configs, ensure_ascii=False, indent=2)
-
-
-    def import_all_configs(
-        self, json_str: str, overwrite: bool = False
-    ) -> Dict[str, Any]:
-        """
-        导入所有配置。
-
-        根节点必须为对象；signs/monitors/settings 非 dict 时记入 errors 并按空处理。
-        """
+    def import_all_configs(self, json_str: str, overwrite: bool = False) -> Dict[str, Any]:
         result: Dict[str, Any] = {
-            "signs_imported": 0,
-            "signs_skipped": 0,
-            "monitors_imported": 0,
-            "monitors_skipped": 0,
-            "settings_imported": 0,
-            "settings_skipped": 0,
-            "errors": [],
-            "warnings": [],
+            "signs_imported": 0, "signs_skipped": 0, "monitors_imported": 0,
+            "monitors_skipped": 0, "settings_imported": 0, "settings_skipped": 0,
+            "errors": [], "warnings": [],
         }
-
         try:
             data = json.loads(json_str)
-            if not isinstance(data, dict):
-                result["errors"].append("配置根节点必须是对象")
-                result["message"] = "导入失败：根节点无效"
-                return result
-
-            signs = data.get("signs") or {}
-            monitors = data.get("monitors") or {}
-            if not isinstance(signs, dict):
-                result["errors"].append("signs 字段格式无效")
-                signs = {}
-            if not isinstance(monitors, dict):
-                result["errors"].append("monitors 字段格式无效")
-                monitors = {}
-
-            # 导入签到任务
-            for key, config in signs.items():
-                if not isinstance(config, dict):
-                    result["errors"].append(f"Failed to import sign task (invalid entry): {key}")
-                    continue
-                task_name = config.get("name")
-                if not task_name:
-                    task_name = key.split("@")[0]
-
-                if not overwrite:
-                    account_name = config.get("account_name")
-                    exists = False
-                    if account_name:
-                        if (self.signs_dir / account_name / task_name).exists():
-                            exists = True
-                    else:
-                        if (self.signs_dir / task_name).exists():
-                            exists = True
-
-                    if exists:
-                        result["signs_skipped"] += 1
-                        continue
-
-                try:
-                    if self.save_sign_config(task_name, config):
-                        result["signs_imported"] += 1
-                    else:
-                        result["errors"].append(f"Failed to import sign task: {task_name}")
-                except ValueError as exc:
-                    # 非法任务/账号名（save_sign_config 内部校验）不中断整体导入
-                    result["errors"].append(f"Failed to import sign task {task_name}: {exc}")
-
-            # 导入监控任务
-            for task_name, config in monitors.items():
-                if not isinstance(config, dict):
-                    result["errors"].append(
-                        f"Failed to import monitor task (invalid entry): {task_name}"
-                    )
-                    continue
-                try:
-                    safe_name = validate_storage_name(
-                        str(task_name), field_name="monitor task name"
-                    )
-                except ValueError as exc:
-                    result["errors"].append(
-                        f"Failed to import monitor task (invalid name): {task_name}: {exc}"
-                    )
-                    continue
-                task_dir = self.monitors_dir / safe_name
-                config_file = task_dir / "config.json"
-
-                if not overwrite and config_file.exists():
-                    result["monitors_skipped"] += 1
-                    continue
-
-                task_dir.mkdir(parents=True, exist_ok=True)
-                if self._write_json_file(config_file, config):
-                    result["monitors_imported"] += 1
+        except json.JSONDecodeError as exc:
+            result["errors"].append(f"Invalid JSON format: {exc}")
+            return result
+        if not isinstance(data, dict):
+            result["errors"].append("配置根节点必须是对象")
+            return result
+        for key, counter in (("signs", "signs_skipped"), ("monitors", "monitors_skipped")):
+            value = data.get(key)
+            if value is not None and not isinstance(value, dict):
+                result["errors"].append(f"{key} 字段格式无效")
+            elif value:
+                result[counter] = len(value)
+                result["warnings"].append(f"Retired {key} skipped")
+        settings = data.get("settings") or {}
+        if not isinstance(settings, dict):
+            result["errors"].append("settings 字段格式无效")
+            return result
+        global_settings = settings.get("global")
+        if global_settings is not None:
+            if not isinstance(global_settings, dict):
+                result["errors"].append("global settings 字段格式无效")
+            else:
+                values = dict(global_settings)
+                for key in ("webdav_password", "telegram_bot_token"):
+                    if str(values.get(key) or "").strip() in self.SECRET_MASKS | {""}:
+                        values.pop(key, None)
+                # Removed task parameters in historical portable exports cannot return.
+                values = {key: value for key, value in values.items()
+                          if not key.startswith("sign_task_") and key != "sign_interval"}
+                if self.save_global_settings(values):
+                    result["settings_imported"] = 1
                 else:
-                    result["errors"].append(
-                        f"Failed to import monitor task: {task_name}"
-                    )
-
-            # 导入设置
-            settings_data = data.get("settings", {})
-
-            if "global" in settings_data:
-                try:
-                    gs = dict(settings_data["global"] or {})
-                    # 脱敏占位不得覆盖已有 WebDAV 密码 / Bot Token
-                    for secret_key, warn in (
-                        (
-                            "webdav_password",
-                            "webdav_password is masked in export; kept existing",
-                        ),
-                        (
-                            "telegram_bot_token",
-                            "telegram_bot_token is masked in export; kept existing",
-                        ),
-                    ):
-                        raw = str(gs.get(secret_key) or "").strip()
-                        if raw in self.SECRET_MASKS:
-                            gs.pop(secret_key, None)
-                            result["warnings"].append(warn)
-                        elif not raw and secret_key in gs:
-                            # 空串：不覆盖
-                            gs.pop(secret_key, None)
-                    if self.save_global_settings(gs):
-                        result["settings_imported"] += 1
-                    else:
-                        result["errors"].append("Failed to import global settings")
-                except Exception as e:
-                    result["errors"].append(f"Failed to import global settings: {e}")
-
-            # Older backups may contain global AI / Telegram API settings.
-            # Keep that historical data in the backup file but never reactivate it.
-            for retired in ("ai", "telegram"):
-                if retired in settings_data:
-                    result["settings_skipped"] += 1
-                    result["warnings"].append(f"Retired {retired} settings skipped")
-
-            try:
-                from backend.services.sign_tasks import get_sign_task_service
-
-                get_sign_task_service().invalidate_tasks_cache()
-            except Exception as e:
-                _logger.warning("Failed to clear cache: %s", e)
-
-        except (json.JSONDecodeError, KeyError) as e:
-            result["errors"].append(f"Invalid JSON format: {str(e)}")
-
+                    result["errors"].append("Failed to import global settings")
+        for retired in ("ai", "telegram"):
+            if retired in settings:
+                result["settings_skipped"] += 1
+                result["warnings"].append(f"Retired {retired} settings skipped")
         return result
 
 class GlobalSettingsMixin:
@@ -641,6 +216,7 @@ class GlobalSettingsMixin:
 
         override_data_dir = load_data_dir_override()
         default_settings = {
+            "chat_center_enabled": False,
             "sign_interval": None,  # None 表示使用随机 1-120 秒
             "log_retention_days": 7,
             "data_dir": str(override_data_dir) if override_data_dir else None,
@@ -658,10 +234,6 @@ class GlobalSettingsMixin:
             "telegram_bot_token": None,
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
-            "sign_task_execution_timeout": None,
-            "sign_task_account_cooldown": None,
-            "sign_task_flow_retry_attempts": None,
-            "sign_task_history_max_age_days": None,
             "ai_vision_timeout": None,
             "ai_vision_retry_attempts": None,
             "ai_vision_reasoning_effort": None,
@@ -713,6 +285,9 @@ class GlobalSettingsMixin:
         config_file = self._get_global_settings_file()
         merged = dict(self.get_global_settings())
         merged.update(settings)
+        for key in list(merged):
+            if key.startswith("sign_task_") or key == "sign_interval":
+                merged.pop(key)
 
         # 校验时区格式（防止导入配置等绕过路由层校验）
         tz_value = merged.get("timezone")
@@ -742,6 +317,9 @@ class GlobalSettingsMixin:
 
         # 写盘成功后失效缓存，保证后续读取拿到最新值
         self._global_settings_cache().delete(str(config_file))
+        if merged.get("chat_center_enabled") is False:
+            from backend.services.avatar_cache import clear_chat_cache
+            clear_chat_cache(get_settings().resolve_workdir() / "avatars" / "chats")
 
         # Apply concurrency change at runtime
         concurrency_val = merged.get("tg_global_concurrency")
@@ -764,71 +342,27 @@ class GlobalSettingsMixin:
 
 
     def preview_import_all(self, json_str: str) -> Dict[str, Any]:
-        """预览导入内容，不写盘。"""
-        errors: List[str] = []
+        """Preview settings import; report retired task definitions without reviving them."""
         try:
             data = json.loads(json_str)
-        except json.JSONDecodeError as e:
-            return {
-                "signs_count": 0,
-                "monitors_count": 0,
-                "settings_keys": [],
-                "conflicts": [],
-                "errors": [str(e)],
-            }
+        except json.JSONDecodeError as exc:
+            return {"signs_count": 0, "monitors_count": 0, "settings_keys": [],
+                    "conflicts": [], "errors": [str(exc)]}
         if not isinstance(data, dict):
-            return {
-                "signs_count": 0,
-                "monitors_count": 0,
-                "settings_keys": [],
-                "conflicts": [],
-                "errors": ["配置根节点必须是对象"],
-            }
-
-        signs = data.get("signs") or {}
-        monitors = data.get("monitors") or {}
-        settings_data = data.get("settings") or {}
-        if not isinstance(signs, dict):
-            signs = {}
-            errors.append("signs 字段格式无效")
-        if not isinstance(monitors, dict):
-            monitors = {}
-            errors.append("monitors 字段格式无效")
-        if not isinstance(settings_data, dict):
-            settings_data = {}
-
-        conflicts: List[str] = []
-        for key, config in signs.items():
-            task_name = ""
-            account_name = None
-            if isinstance(config, dict):
-                task_name = str(config.get("name") or key.split("@")[0])
-                account_name = config.get("account_name")
-            else:
-                task_name = str(key.split("@")[0])
-            exists = False
-            if account_name:
-                exists = (self.signs_dir / str(account_name) / task_name).exists()
-            else:
-                exists = (self.signs_dir / task_name).exists() or bool(
-                    self._find_sign_task_dirs(task_name)
-                )
-            if exists:
-                conflicts.append(f"sign:{task_name}")
-
-        for task_name in monitors:
-            if (self.monitors_dir / str(task_name) / "config.json").exists():
-                conflicts.append(f"monitor:{task_name}")
-
-        settings_keys: List[str] = []
-        for section in ("global", "ai", "telegram"):
-            if section in settings_data and settings_data[section]:
-                settings_keys.append(section)
-
-        return {
-            "signs_count": len(signs),
-            "monitors_count": len(monitors),
-            "settings_keys": settings_keys,
-            "conflicts": conflicts,
-            "errors": errors,
-        }
+            return {"signs_count": 0, "monitors_count": 0, "settings_keys": [],
+                    "conflicts": [], "errors": ["配置根节点必须是对象"]}
+        errors = []
+        counts = {}
+        for key in ("signs", "monitors"):
+            value = data.get(key) or {}
+            if not isinstance(value, dict):
+                errors.append(f"{key} 字段格式无效")
+                value = {}
+            counts[key] = len(value)
+        settings = data.get("settings") or {}
+        if not isinstance(settings, dict):
+            errors.append("settings 字段格式无效")
+            settings = {}
+        return {"signs_count": counts["signs"], "monitors_count": counts["monitors"],
+                "settings_keys": [key for key in ("global", "ai", "telegram") if settings.get(key)],
+                "conflicts": [], "errors": errors}

@@ -62,9 +62,6 @@ speedup = [
 Homepage = "https://github.com/amchii/tg-signer"
 Repository = "https://github.com/amchii/tg-signer"
 
-[project.scripts]
-tg-signer = "tg_signer.__main__:signer"
-
 [tool.setuptools]
 include-package-data = true
 

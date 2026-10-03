@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref,onMounted} from 'vue'
-import {panelRequest,accountPath} from '../lib/api/communications'
-import {errorText} from '../composables/usePanelAccount'
+import {panelRequest,accountPath} from '../../lib/api/communications'
+import {errorText} from '../../composables/usePanelAccount'
 const items=ref<{account:string;proxy:string}[]>([]),error=ref(''),saved=ref(''),busy=ref('')
 async function load(){try{items.value=(await panelRequest<{items:typeof items.value}>('/communications/proxies')).items}catch(e){error.value=errorText(e)}}
 async function save(item:typeof items.value[number]){busy.value=item.account;error.value='';saved.value='';try{await panelRequest(`${accountPath(item.account)}/proxy`,'PUT',{proxy:item.proxy});saved.value=`${item.account} 的代理已保存`}catch(e){error.value=errorText(e)}finally{busy.value=''}}

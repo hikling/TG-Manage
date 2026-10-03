@@ -17,13 +17,11 @@ from backend.core.config import get_settings
 from backend.services.config_mixins import (
     ConfigExportMixin,
     GlobalSettingsMixin,
-    SignTaskConfigMixin,
 )
 from backend.utils.atomic_io import read_json_safe, write_json_atomic
 
 
 class ConfigService(
-    SignTaskConfigMixin,
     ConfigExportMixin,
     GlobalSettingsMixin,
 ):
@@ -47,8 +45,6 @@ class ConfigService(
     def __init__(self):
         # 路径一律经 _ensure_paths / 属性解析，避免单例绑定过期 workdir
         self._workdir: Optional[Path] = None
-        self._signs_dir: Optional[Path] = None
-        self._monitors_dir: Optional[Path] = None
         self._ensure_paths()
 
     def _ensure_paths(self) -> None:
@@ -59,28 +55,13 @@ class ConfigService(
         workdir = get_settings().resolve_workdir()
         if self._workdir != workdir:
             self._workdir = workdir
-            self._signs_dir = workdir / "signs"
-            self._monitors_dir = workdir / "monitors"
-            self._signs_dir.mkdir(parents=True, exist_ok=True)
-            self._monitors_dir.mkdir(parents=True, exist_ok=True)
+            workdir.mkdir(parents=True, exist_ok=True)
 
     @property
     def workdir(self) -> Path:
         self._ensure_paths()
         assert self._workdir is not None
         return self._workdir
-
-    @property
-    def signs_dir(self) -> Path:
-        self._ensure_paths()
-        assert self._signs_dir is not None
-        return self._signs_dir
-
-    @property
-    def monitors_dir(self) -> Path:
-        self._ensure_paths()
-        assert self._monitors_dir is not None
-        return self._monitors_dir
 
 
 # 创建全局实例

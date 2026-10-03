@@ -44,6 +44,18 @@ def test_import_records_invalid_signs_type(isolated_env: Path):
     assert any("signs" in error for error in result["errors"])
 
 
+def test_portable_import_never_recreates_retired_tasks(isolated_env: Path):
+    service = ConfigService()
+    payload = {"signs": {"old": {"name": "old", "actions": [{"action": 1}]}},
+               "monitors": {"watch": {"keyword": "old"}}, "settings": {}}
+    result = service.import_all_configs(json.dumps(payload), overwrite=True)
+    assert result["signs_imported"] == result["monitors_imported"] == 0
+    assert result["signs_skipped"] == result["monitors_skipped"] == 1
+    assert not (service.workdir / "signs").exists()
+    assert not (service.workdir / "monitors").exists()
+    assert "signs" not in json.loads(service.export_all_configs())
+
+
 def test_preview_rejects_non_object(isolated_env: Path):
     preview = ConfigService().preview_import_all(json.dumps("x"))
     assert preview["errors"]

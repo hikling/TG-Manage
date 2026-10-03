@@ -8,16 +8,6 @@ import pytest
 
 from backend.api.routes import accounts
 from backend.services import telebox
-from tg_signer.config import SignChatV3, TeleBoxCommandAction
-
-
-def test_task_config_accepts_telebox_action_and_rejects_legacy_plugin():
-    chat = SignChatV3(chat_id=123, actions=[{
-        "action": 10, "telebox_plugin": "example", "telebox_command": "hello",
-    }])
-    assert isinstance(chat.actions[0], TeleBoxCommandAction)
-    with pytest.raises(ValueError, match="旧版自定义插件"):
-        SignChatV3(chat_id=123, actions=[{"action": 99, "plugin_name": "old"}])
 
 
 def test_login_credentials_choose_account_or_private_server_default(monkeypatch):

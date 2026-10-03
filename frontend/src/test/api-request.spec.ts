@@ -105,7 +105,7 @@ describe('api.request - 401 处理', () => {
     )
 
     const api = await importApi()
-    await expect(api.createSignTask('valid-token', {} as never)).rejects.toThrow('field required')
+    await expect(api.createTeleBoxTask({} as never)).rejects.toThrow('field required')
   })
 
   it('非 JSON 错误响应使用文本', async () => {

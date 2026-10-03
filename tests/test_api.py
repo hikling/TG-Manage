@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import json
 from typing import Iterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -504,28 +503,6 @@ class TestAccountAPI:
 # ============================================================================
 
 
-class TestTaskAPI:
-    """旧版 /api/tasks 已完全移除。"""
-
-    def test_legacy_routes_return_404(self, api_client, db):
-        token = _login(api_client)
-        headers = _auth(token)
-        gone = {404, 405}
-
-        def assert_gone(resp):
-            assert resp.status_code in gone, resp.text
-
-        assert_gone(api_client.get("/api/tasks", headers=headers))
-        assert_gone(api_client.get("/api/tasks/1", headers=headers))
-        assert_gone(
-            api_client.post(
-                "/api/tasks",
-                json={"name": "x", "cron": "0 6 * * *", "enabled": True, "account_id": 1},
-                headers=headers,
-            )
-        )
-        assert_gone(api_client.delete("/api/tasks/1", headers=headers))
-        assert_gone(api_client.post("/api/tasks/1/run", headers=headers))
 
 
 
@@ -588,67 +565,6 @@ class TestTimezoneSettings:
         assert get_resp.json()["timezone"] == "Europe/Berlin"
 
 
-class TestRetryCountValidation:
-    """retry_count 后端校验测试"""
-
-    def test_retry_count_negative_rejected(self, api_client, db):
-        """retry_count < 0 应被拒绝"""
-        token = _login(api_client)
-        _create_account(db, account_name="acc1")
-        db.commit()
-        resp = api_client.post(
-            "/api/sign-tasks",
-            json={
-                "name": "test_task",
-                "account_name": "acc1",
-                "account_names": ["acc1"],
-                "sign_at": "08:00",
-                "chats": [{"chat_id": 123, "name": "test", "actions": [{"action": 1, "text": "hi"}]}],
-                "retry_count": -1,
-            },
-            headers=_auth(token),
-        )
-        assert resp.status_code == 422
-
-    def test_retry_count_over_99_rejected(self, api_client, db):
-        """retry_count > 99 应被拒绝"""
-        token = _login(api_client)
-        _create_account(db, account_name="acc1")
-        db.commit()
-        resp = api_client.post(
-            "/api/sign-tasks",
-            json={
-                "name": "test_task",
-                "account_name": "acc1",
-                "account_names": ["acc1"],
-                "sign_at": "08:00",
-                "chats": [{"chat_id": 123, "name": "test", "actions": [{"action": 1, "text": "hi"}]}],
-                "retry_count": 100,
-            },
-            headers=_auth(token),
-        )
-        assert resp.status_code == 422
-
-    def test_retry_count_valid_accepted(self, api_client, db):
-        """有效 retry_count 应被接受"""
-        token = _login(api_client)
-        _create_account(db, account_name="acc1")
-        db.commit()
-        with patch("backend.api.routes.sign_tasks_v2.asyncio.ensure_future"):
-            resp = api_client.post(
-                "/api/sign-tasks",
-                json={
-                    "name": "test_retry",
-                    "account_name": "acc1",
-                    "account_names": ["acc1"],
-                    "sign_at": "08:00",
-                    "chats": [{"chat_id": 123, "name": "test", "actions": [{"action": 1, "text": "hi"}]}],
-                    "retry_count": 5,
-                },
-                headers=_auth(token),
-            )
-        assert resp.status_code == 201
-        assert resp.json()["retry_count"] == 5
 
 
 class TestDeviceKeepaliveRunResponse:
@@ -710,38 +626,6 @@ class TestDeviceKeepaliveRunResponse:
         assert body["interval_days"] == 7
 
 
-class TestImportSignTaskValidation:
-    """导入签到任务的名称校验与回显守钉"""
-
-    @staticmethod
-    def _payload() -> str:
-        return json.dumps(
-            {"task_name": "orig_task", "task_type": "sign", "config": {"chats": []}}
-        )
-
-    def test_invalid_task_name_returns_400(self, api_client):
-        """非法任务名（含路径分隔符）应返回 400 而非 500"""
-        token = _login(api_client)
-        resp = api_client.post(
-            "/api/config/import/sign",
-            json={"config_json": self._payload(), "task_name": "bad/name"},
-            headers=_auth(token),
-        )
-        assert resp.status_code == 400
-        assert "task_name" in resp.json()["detail"]
-
-    def test_response_echoes_normalized_task_name(self, api_client):
-        """回显的任务名需与服务层规范化后的落盘名一致"""
-        token = _login(api_client)
-        resp = api_client.post(
-            "/api/config/import/sign",
-            json={"config_json": self._payload(), "task_name": "  padded_task  "},
-            headers=_auth(token),
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["task_name"] == "padded_task"
 
 
 class TestRetiredGlobalConfig:

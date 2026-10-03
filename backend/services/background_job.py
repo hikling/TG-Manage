@@ -6,7 +6,7 @@
 - JSON 落盘，服务重启后将未结束任务标为 failed
 - 环形日志、进度计数、可取消
 
-签到 run 仍使用 sign_task_run_status；本模块面向「分钟级」运维作业。
+账号状态检测等分钟级运维作业使用本模块。
 """
 from __future__ import annotations
 

@@ -85,7 +85,7 @@ async function runPlugin(input: any) {
   const plugin = String(input.plugin || "");
   const command = String(input.command || "");
   const args = String(input.args || "");
-  if (!/^[A-Za-z0-9_-]{1,80}$/.test(plugin) || !/^[A-Za-z0-9_ -]{1,80}$/.test(command)
+  if (!/^[A-Za-z0-9_-]{1,80}$/.test(plugin) || !/^[^\x00-\x1f\x7f]{1,80}$/.test(command)
     || args.length > 500 || /[\r\n]/.test(args)) throw new Error("invalid plugin command");
   const manager = require("../src/utils/pluginManager");
   if (manager.getPluginEntry(command)?.plugin.name !== plugin) throw new Error("plugin command unavailable");

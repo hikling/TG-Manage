@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from backend.core.config import get_settings
-from backend.services.sign_task_chats import is_invalid_session_error
 from backend.services.telegram.sessions import (
     _login_sessions,
     _qr_login_sessions,
@@ -42,6 +41,14 @@ settings = get_settings()
 
 
 logger = logging.getLogger("backend.telegram.accounts")
+
+
+def is_invalid_session_error(err: Exception) -> bool:
+    upper = str(err).upper()
+    return bool(upper) and any(code in upper for code in (
+        "UNAUTHORIZED", "AUTH_KEY_UNREGISTERED", "AUTH_KEY_INVALID",
+        "SESSION_REVOKED", "SESSION_EXPIRED", "USER_DEACTIVATED",
+    ))
 
 
 def _session_file_info(session_file) -> tuple[bool, int]:
@@ -887,11 +894,10 @@ class TelegramAccountsMixin:
             rename_account_entry(actual_account_name, new_account_name)
             self._rename_pending_login_records(actual_account_name, new_account_name)
 
-            from backend.services.sign_tasks import get_sign_task_service
+            from backend.services.telebox_tasks import get_telebox_task_service
 
-            get_sign_task_service().rename_account_references(
-                actual_account_name,
-                new_account_name,
+            get_telebox_task_service().rename_account(
+                actual_account_name, new_account_name
             )
 
             self._accounts_cache = None

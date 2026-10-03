@@ -18,6 +18,29 @@ from typing import Awaitable, Callable, Optional
 AVATAR_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 # 临时残存文件清理阈值：1 小时（秒）
 _TMP_FILE_CLEANUP_TTL_SECONDS = 3600
+CHAT_CACHE_MAX_BYTES = 5 * 1024 * 1024
+
+
+def clear_chat_cache(directory: Path) -> None:
+    try:
+        for path in directory.iterdir():
+            if path.is_file():
+                path.unlink(missing_ok=True)
+    except OSError:
+        return
+
+
+def enforce_chat_cache_limit(directory: Path) -> bool:
+    """Clear chat avatar cache as soon as its on-disk size exceeds 5 MiB."""
+    try:
+        files = [path for path in directory.iterdir() if path.is_file()]
+        if sum(path.stat().st_size for path in files) <= CHAT_CACHE_MAX_BYTES:
+            return False
+        clear_chat_cache(directory)
+        return True
+    except OSError:
+        # The cache is disposable; if access fails, do not expose other chats.
+        return False
 
 # 下载回调：返回头像字节；返回 None 表示明确无头像；抛异常表示瞬时故障
 DownloadFn = Callable[[], Awaitable[Optional[bytes]]]

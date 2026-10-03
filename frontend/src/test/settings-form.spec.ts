@@ -20,6 +20,7 @@ const baseSettings = (): SettingsFormState => ({
   proxy: '',
   concurrency: 2,
   deviceKeepaliveEnabled: true,
+  chatCenterEnabled: false,
   deviceKeepaliveIntervalDays: 30,
   botEnabled: false,
   botLoginNotify: false,

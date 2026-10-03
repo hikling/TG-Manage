@@ -14,18 +14,10 @@ describe('api barrel 完整性', () => {
     expect(typeof api.startQrLogin).toBe('function')
     expect(typeof api.fetchAccountAvatar).toBe('function')
   })
-  it('sign-tasks API 导出', () => {
-    expect(typeof api.listSignTasks).toBe('function')
-    expect(typeof api.createSignTask).toBe('function')
-    expect(typeof api.deleteSignTask).toBe('function')
-    expect(typeof api.cloneSignTask).toBe('function')
-    expect(typeof api.batchSignTasks).toBe('function')
-    expect(typeof api.fetchChatAvatar).toBe('function')
-  })
-  it('keyword-hits API 导出', () => {
-    expect(typeof api.listKeywordHits).toBe('function')
-    expect(typeof api.exportKeywordHitsBlob).toBe('function')
-    expect(typeof api.clearKeywordHits).toBe('function')
+  it('TeleBox 任务 API 导出', () => {
+    expect(typeof api.listTeleBoxTasks).toBe('function')
+    expect(typeof api.createTeleBoxTask).toBe('function')
+    expect(typeof api.deleteTeleBoxTask).toBe('function')
   })
   it('config API 导出', () => {
     expect(typeof api.exportAllConfigs).toBe('function')
@@ -35,10 +27,6 @@ describe('api barrel 完整性', () => {
     expect(typeof api.changePassword).toBe('function')
     expect(typeof api.getGlobalSettings).toBe('function')
     expect(typeof api.runDeviceKeepalive).toBe('function')
-  })
-  it('logs API 导出', () => {
-    expect(typeof api.getLoginAuditLogs).toBe('function')
-    expect(typeof api.getTaskHistoryLogs).toBe('function')
   })
   it('ops API 导出', () => {
     expect(typeof api.listScheduledJobs).toBe('function')

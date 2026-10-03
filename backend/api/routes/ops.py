@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -73,6 +73,7 @@ BACKUP_ARCHIVE_PATHS = (
     ".signer",
     ".app_secret_key",
     "telebox",
+    "telebox-tasks.json",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",
@@ -84,6 +85,7 @@ BACKUP_STATUS_PATHS = (
     ".signer",
     ".app_secret_key",
     "telebox",
+    "telebox-tasks.json",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",
@@ -143,89 +145,26 @@ def _dir_size_cached(path: Path) -> int:
 
 @router.get("/scheduled-jobs", response_model=ScheduledJobsResponse)
 def list_scheduled_jobs(current_user: User = Depends(get_current_user)):
-    """列出 APScheduler 中的待执行任务（下次运行时间）。"""
+    """Show the new TeleBox/workbench jobs and system maintenance."""
     from backend.scheduler import scheduler
+    from backend.services.telebox_tasks import get_telebox_task_service
 
     if scheduler is None:
         return ScheduledJobsResponse(jobs=[], total=0, timezone="")
-
-    task_map: Dict[Any, Dict[str, Any]] = {}
-    try:
-        from backend.services.sign_tasks import get_sign_task_service
-
-        for t in get_sign_task_service().list_tasks():
-            acc = str(t.get("account_name") or "")
-            nm = str(t.get("name") or "")
-            if nm:
-                if acc:
-                    task_map[(acc, nm)] = t
-                    task_map[f"sign-{acc}-{nm}"] = t
-    except Exception as exc:
-        logger.debug("预拉取签到任务配置失败: %s", exc)
-
-    jobs_out: List[ScheduledJobOut] = []
+    tasks = {task["id"]: task for task in get_telebox_task_service().list()}
+    jobs = []
     for job in scheduler.get_jobs():
-        jid = str(job.id or "")
-        if jid.startswith("sign-"):
-            kind = "sign"
-        elif jid.startswith("db-"):
-            kind = "legacy_db"
-        elif jid.startswith("system-"):
-            kind = "system"
-        else:
-            kind = "other"
-        next_run = job.next_run_time
-        next_iso = None
-        if next_run is not None:
-            try:
-                if next_run.tzinfo is None:
-                    next_iso = next_run.replace(tzinfo=timezone.utc).isoformat()
-                else:
-                    next_iso = next_run.isoformat()
-            except Exception:
-                next_iso = str(next_run)
-
-        execution_mode = None
-        range_start = None
-        range_end = None
-        task_name = None
-        account_name = None
-
-        if kind == "sign":
-            if getattr(job, "args", None) and len(job.args) >= 2:
-                account_name = str(job.args[0])
-                task_name = str(job.args[1])
-            task_info = (
-                task_map.get((account_name, task_name))
-                or task_map.get(jid)
-            )
-            if task_info:
-                execution_mode = task_info.get("execution_mode") or "fixed"
-                range_start = task_info.get("range_start")
-                range_end = task_info.get("range_end")
-                if not task_name:
-                    task_name = task_info.get("name")
-                if not account_name:
-                    account_name = task_info.get("account_name")
-
-        jobs_out.append(
-            ScheduledJobOut(
-                id=jid,
-                name=str(getattr(job, "name", None) or jid),
-                next_run_time=next_iso,
-                trigger=str(job.trigger) if job.trigger is not None else "",
-                kind=kind,
-                execution_mode=execution_mode,
-                range_start=range_start,
-                range_end=range_end,
-                task_name=task_name,
-                account_name=account_name,
-            )
-        )
-
-    jobs_out.sort(key=lambda j: j.next_run_time or "9999")
-    tz = str(getattr(scheduler, "timezone", "") or "")
-    return ScheduledJobsResponse(jobs=jobs_out, total=len(jobs_out), timezone=tz)
+        identifier = str(job.id)
+        task = tasks.get(identifier[3:]) if identifier.startswith("tb-") else None
+        jobs.append(ScheduledJobOut(
+            id=identifier, name=task["name"] if task else str(job.name or identifier),
+            next_run_time=job.next_run_time.isoformat() if job.next_run_time else None,
+            trigger=str(job.trigger), kind="telebox" if task else "system",
+            task_name=task["name"] if task else None,
+            account_name=task["accounts"][0] if task else None,
+        ))
+    jobs.sort(key=lambda item: item.next_run_time or "9999")
+    return ScheduledJobsResponse(jobs=jobs, total=len(jobs), timezone=str(scheduler.timezone))
 
 
 @router.get("/backup/status", response_model=BackupStatusResponse)
@@ -707,12 +646,23 @@ class TrendsResponse(BaseModel):
 
 
 @router.get("/trends", response_model=TrendsResponse)
-def get_trends(
-    days: int = 7,
-    current_user: User = Depends(get_current_user),
-):
-    """获取最近 N 天的签到历史趋势与成功率指标。"""
-    from backend.services.sign_tasks import SignTaskService
+def get_trends(days: int = 7, current_user: User = Depends(get_current_user)):
+    from backend.services.telebox_tasks import get_telebox_task_service
 
-    service = SignTaskService()
-    return service.get_history_trends(days=days)
+    days = max(1, min(days, 90))
+    history = get_telebox_task_service().history()
+    today = datetime.now(timezone.utc).date()
+    entries = []
+    for offset in range(days - 1, -1, -1):
+        day = (today - timedelta(days=offset)).isoformat()
+        items = [item for item in history if item["time"].startswith(day)]
+        success = sum(bool(item["success"]) for item in items)
+        entries.append(DailyTrendItem(date=day, total=len(items), success=success,
+                                      failed=len(items) - success,
+                                      success_rate=round(100 * success / len(items), 1) if items else 0))
+    total = sum(item.total for item in entries)
+    success = sum(item.success for item in entries)
+    return TrendsResponse(days=days, total_runs=total, total_success=success,
+                          total_failed=total - success,
+                          overall_success_rate=round(100 * success / total, 1) if total else 0,
+                          trends=entries, categories={"telebox": total})
