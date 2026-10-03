@@ -45,3 +45,9 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 - Remove the separate per-account Proxy Management card from System Settings. Account-level proxy editing remains in Account Management.
 - Add Task offers only loaded KITT commands and commands originating from newly installed per-account TeleBox plugins. Other bundled commands do not appear or run through this task list.
 - Plugin tasks do not have a daily execution time. TeleBox owns plugin cron scheduling; existing saved plugin tasks stop receiving panel scheduler jobs. Workbench daily message timing remains available.
+
+## 2026-10-03 visual and resource revision
+
+- Rework the light and dark panel surfaces so the interface has a clear colored hierarchy instead of mostly white cards. The desktop sidebar can collapse to icons, remains a mobile drawer, and each navigation option from Dashboard through Logs has its own identifiable accent color.
+- Account cards follow the supplied compact reference: one bounded tile, a larger avatar at the upper left, name then remark underneath, status below; all existing card actions appear only when the upper-right three-dot button is opened. Retain keyboard/accessible action labels and responsive layout.
+- Favor a small resource footprint for roughly 20 accounts on a 2 GiB host: avoid eager route preloading, limit avatar requests and retained browser blob URLs, and constrain per-account TeleBox Node heap. Do not claim that 20 active TeleBox workers fit 2 GiB without measuring their total RSS on the deployment server.

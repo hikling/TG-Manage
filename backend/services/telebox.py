@@ -28,6 +28,15 @@ SOURCE = Path(__file__).resolve().parents[2] / "telebox"
 PLUGIN_NAME = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
+def node_heap_limit_mb() -> int:
+    """Bound each account's V8 old-space budget on small shared hosts."""
+    try:
+        requested = int(os.getenv("TELEBOX_NODE_HEAP_MB", "128"))
+    except ValueError:
+        requested = 128
+    return min(512, max(64, requested))
+
+
 def redact(text: str, secrets: list[str] = ()) -> str:
     text = str(text)
     for secret in secrets:
@@ -193,7 +202,7 @@ class TeleBoxService:
                         "TB_LOCALSTORAGE_FILE": str(directory / "cache/localstorage"), "NODE_ENV": "production"})
             try:
                 process = await asyncio.create_subprocess_exec(
-                    node, "--max-old-space-size=512", f"--localstorage-file={directory / 'cache/localstorage'}",
+                    node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
                     "-r", "tsconfig-paths/register", "-r", "./scripts/esbuild-register.cjs",
                     "./panel/worker.ts", cwd=directory, env=env,
                     stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,

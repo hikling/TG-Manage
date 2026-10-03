@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, Zap, MonitorSmartphone, MessageCircle, MessagesSquare, Package, CheckCircle2, Search, RefreshCw, XCircle, X, Users } from 'lucide-vue-next'
+import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, Zap, MonitorSmartphone, MessageCircle, MessagesSquare, Package, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical } from 'lucide-vue-next'
 import {
   deleteAccount,
   fetchAccountAvatar,
@@ -37,6 +37,7 @@ const accounts = ref<AccountUiItem[]>([])
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
+const avatarLoads = new Set<string>()
 // 卸载标记：在途头像请求完成后不再创建 ObjectURL，避免 blob 泄漏
 let disposed = false
 /** 重登弹窗延时句柄：卸载时清理，避免关闭组件后仍打开新弹窗 */
@@ -53,6 +54,18 @@ const showOfficialMessagesModal = ref(false)
 const officialMessagesAccountName = ref('')
 const searchQuery = ref('')
 const loadError = ref(false)
+const openActionsName = ref<string | null>(null)
+const onOutsideClick = () => { openActionsName.value = null }
+const onMenuKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && openActionsName.value) {
+    document.querySelector<HTMLButtonElement>('.account-tile--menu-open .account-more')?.focus()
+    openActionsName.value = null
+  }
+}
+const runCardAction = (action: () => void) => {
+  openActionsName.value = null
+  action()
+}
 
 const filteredAccounts = computed(() =>
   filterAccountsByQuery(accounts.value, searchQuery.value),
@@ -83,6 +96,7 @@ const loadAccounts = async () => {
       if (cached) ui.avatarUrl = cached
       return ui
     })
+    avatarCache.retainOnly(new Set(list.map(acc => acc.name)))
     // 限流加载头像，避免账号多时并发打满连接
     void loadAvatars(accounts.value)
   } catch (e: unknown) {
@@ -95,19 +109,24 @@ const loadAccounts = async () => {
 }
 
 const loadAvatar = async (acc: AccountUiItem) => {
+  if (disposed || avatarLoads.has(acc.name)) return
+  avatarLoads.add(acc.name)
   const token = getAuthToken()
   try {
     let url = avatarCache.get(acc.name)
     if (!url) {
       const blob = await fetchAccountAvatar(token, acc.name)
-      if (disposed) return // 组件已卸载：不再创建 ObjectURL，避免 blob 泄漏
+      if (disposed || !accounts.value.some(item => item.name === acc.name)) return
+      if (blob.size > 128 * 1024 || !avatarCache.canStore(acc.name, blob.size)) return
       url = URL.createObjectURL(blob)
-      avatarCache.set(acc.name, url)
+      avatarCache.set(acc.name, url, blob.size)
     }
     acc.avatarUrl = url
   } catch {
     // 头像下载失败/无头像：保留首字母占位，不影响列表
     devLog.info('头像加载失败，保留占位:', acc.name)
+  } finally {
+    avatarLoads.delete(acc.name)
   }
 }
 
@@ -118,12 +137,16 @@ const loadAvatars = async (list: AccountUiItem[]) => {
 }
 
 onMounted(async () => {
+  document.addEventListener('click', onOutsideClick)
+  document.addEventListener('keydown', onMenuKeydown)
   await loadAccounts()
   // 刷新页面后恢复未完成的批量检测
   void resumeActiveBatchJob()
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', onOutsideClick)
+  document.removeEventListener('keydown', onMenuKeydown)
   disposed = true
   if (reloginTimer !== undefined) {
     window.clearTimeout(reloginTimer)
@@ -363,87 +386,35 @@ const goTasks = (name: string) => {
         <p v-else class="ui-empty-desc">{{ t('common.noData') }}</p>
       </div>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-    <div
-      v-for="acc in filteredAccounts" :key="acc.id"
-      class="ui-card ui-card-hover ui-contain-account group relative flex flex-col p-5 min-h-[270px]"
-    >
-      <div class="flex justify-between items-start mb-4">
-        <div class="flex items-center gap-3 truncate max-w-[70%]">
-          <div class="w-10 h-10 shrink-0 bg-gray-50 dark:bg-gray-950 flex items-center justify-center text-xs text-gray-500 font-mono border border-gray-200 dark:border-gray-800/40 overflow-hidden">
-            <img 
-              v-if="acc.avatarUrl" 
-              :src="acc.avatarUrl" 
-              :alt="acc.name"
-              class="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
-            />
-            <span v-else>{{ acc.name.substring(0, 2) }}</span>
-          </div>
-          <div class="truncate">
-            <div class="text-sm font-medium text-gray-900 dark:text-gray-200 truncate" :title="acc.name">{{ acc.name }}</div>
-            <div class="text-xs text-gray-500 mt-0.5 font-mono truncate" :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</div>
+    <article v-for="acc in filteredAccounts" :key="acc.id" class="account-tile" :class="{ 'account-tile--menu-open': openActionsName === acc.name }">
+      <div class="account-tile-top">
+        <div class="account-tile-avatar">
+          <img v-if="acc.avatarUrl" :src="acc.avatarUrl" :alt="acc.name" class="w-full h-full object-cover" loading="lazy" decoding="async" />
+          <span v-else>{{ acc.name.substring(0, 2) }}</span>
+        </div>
+        <div class="account-tile-actions" @click.stop>
+          <button type="button" class="account-more" :aria-label="`${acc.name} 操作`" :title="`${acc.name} 操作`" :aria-expanded="openActionsName === acc.name" aria-haspopup="true" @click="openActionsName = openActionsName === acc.name ? null : acc.name"><MoreVertical class="w-5 h-5" /></button>
+          <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="`${acc.name} 操作`">
+            <button type="button" :disabled="checkingAccount === acc.name" @click="runCardAction(() => handleCheck(acc.name))"><Play class="w-4 h-4" />{{ t('accounts.check') }}</button>
+            <button type="button" @click="runCardAction(() => goTasks(acc.name))"><Zap class="w-4 h-4" />{{ t('accounts.tasks') }}</button>
+            <button type="button" @click="runCardAction(() => goLogs(acc.name))"><FileText class="w-4 h-4" />{{ t('accounts.logs') }}</button>
+            <button type="button" @click="runCardAction(() => router.push({ name: 'chats', query: { account: acc.name } }))"><MessagesSquare class="w-4 h-4" />聊天中心</button>
+            <button type="button" @click="runCardAction(() => router.push({ name: 'telebox', query: { account: acc.name } }))"><Package class="w-4 h-4" />TeleBox</button>
+            <button type="button" @click="runCardAction(() => openDevices(acc.name))"><MonitorSmartphone class="w-4 h-4" />{{ t('accounts.devicesShort') }}</button>
+            <button type="button" @click="runCardAction(() => openOfficialMessages(acc.name))"><MessageCircle class="w-4 h-4" />{{ t('accounts.officialMessagesShort') }}</button>
+            <button type="button" @click="runCardAction(() => openEdit(acc))"><Edit2 class="w-4 h-4" />{{ t('accounts.editBtn') }}</button>
+            <button type="button" class="account-action-danger" @click="runCardAction(() => handleDelete(acc.name))"><Trash2 class="w-4 h-4" />{{ t('accounts.deleteBtn') }}</button>
           </div>
         </div>
-        
-        <!-- Status Indicator -->
-        <div class="flex items-center gap-2 shrink-0 max-w-[45%]">
-          <span
-            class="ui-badge max-w-full"
-            :class="{
-              'ui-badge-success': acc.status === 'active',
-              'ui-badge-warn': acc.status === 'empty',
-              'ui-badge-error': acc.status === 'error',
-            }"
-            :title="acc.message || (acc.status === 'active' ? t('accounts.statusOk') : '')"
-          >
-            <span class="ui-badge-dot" />
-            <span class="truncate">
-              {{ acc.status === 'active' ? t('accounts.statusOk') : (acc.message || t('accounts.statusUnknown')) }}
-            </span>
-          </span>
-        </div>
       </div>
-
-      <!-- Actions：竖排布局保留，语义走 ui-row-action -->
-      <div class="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800/40 grid grid-cols-4 gap-0.5">
-        <button type="button" class="ui-row-action ui-row-action--stack" :disabled="checkingAccount === acc.name" :title="t('accounts.checkStatus')" @click="handleCheck(acc.name)">
-          <span v-if="checkingAccount === acc.name" class="ui-spinner !w-3.5 !h-3.5 !border-2" />
-          <Play v-else class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.check') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" :title="t('accounts.viewTasks')" @click="goTasks(acc.name)">
-          <Zap class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.tasks') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" :title="t('accounts.viewLogs')" @click="goLogs(acc.name)">
-          <FileText class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.logs') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" title="聊天中心" @click="router.push({ name: 'chats', query: { account: acc.name } })">
-          <MessagesSquare class="w-3.5 h-3.5" /><span>聊天</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" title="TeleBox" @click="router.push({ name: 'telebox', query: { account: acc.name } })">
-          <Package class="w-3.5 h-3.5" /><span>TeleBox</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" :title="t('accounts.devices')" @click="openDevices(acc.name)">
-          <MonitorSmartphone class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.devicesShort') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" :title="t('accounts.officialMessages')" @click="openOfficialMessages(acc.name)">
-          <MessageCircle class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.officialMessagesShort') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" :title="t('accounts.edit')" @click="openEdit(acc)">
-          <Edit2 class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.editBtn') }}</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack ui-row-action--danger" :title="t('accounts.deleteBtn')" @click="handleDelete(acc.name)">
-          <Trash2 class="w-3.5 h-3.5" />
-          <span>{{ t('accounts.deleteBtn') }}</span>
-        </button>
+      <div class="account-tile-info">
+        <h2 :title="acc.name">{{ acc.name }}</h2>
+        <p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
       </div>
-    </div>
+      <span class="account-tile-status" :class="`account-tile-status--${acc.status}`" :title="acc.message || ''">
+        <span class="account-status-dot" />{{ acc.status === 'active' ? t('accounts.statusOk') : (acc.message || t('accounts.statusUnknown')) }}
+      </span>
+    </article>
     </div>
     </div>
 

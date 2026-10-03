@@ -16,13 +16,14 @@ import {
   Moon,
   Sun,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   X,
 } from 'lucide-vue-next'
 import { useTheme } from '../composables/useTheme'
 import { useI18n } from '../composables/useI18n'
 import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
-import { devLog } from '../lib/devLog'
 import { createViewPrefetcher } from '../lib/view-prefetch'
 
 const route = useRoute()
@@ -32,6 +33,7 @@ const { locale, toggleLanguage, t } = useI18n()
 const isMobileMenuOpen = ref(false)
 const showProfileModal = ref(false)
 const sidebarVersion = ref('')
+const sidebarCollapsed = ref(false)
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
 
@@ -87,10 +89,10 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
+  try { sidebarCollapsed.value = window.localStorage.getItem('tg-sidebar-collapsed') === '1' } catch { /* private mode */ }
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
   void loadSidebarVersion()
-  scheduleViewWarmup()
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
@@ -109,38 +111,28 @@ const viewLoaders: Record<string, () => Promise<unknown>> = {
   settings: () => import('../views/Settings.vue'),
 }
 
-const { prefetch: prefetchLoadedView, warmup: warmupAllViews } = createViewPrefetcher(viewLoaders, {
-  warn: (name, error) => devLog.warn('页面预加载失败', { name, error }),
-})
+const { prefetch: prefetchLoadedView } = createViewPrefetcher(viewLoaders)
 
 const prefetchView = (name: string) => {
   if (route.name === name) return
   prefetchLoadedView(name)
 }
 
-// 首屏渲染完成后在空闲期预热全部视图 chunk：
-// 触屏与键盘用户不会触发 hover/focus 预载，这里兜底保证首次跳转无需等待 chunk 下载
-let viewWarmupDone = false
-const scheduleViewWarmup = () => {
-  if (viewWarmupDone) return
-  viewWarmupDone = true
-  if (typeof window.requestIdleCallback === 'function') {
-    window.requestIdleCallback(() => warmupAllViews(), { timeout: 3000 })
-  } else {
-    window.setTimeout(warmupAllViews, 1500)
-  }
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try { window.localStorage.setItem('tg-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0') } catch { /* private mode */ }
 }
 
 const navigation = computed(() => [
-  { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
-  { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts' },
-  { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台' },
-  { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心' },
-  { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心' },
-  { id: 'telebox', name: 'telebox', icon: Package, labelKey: '拓展插件' },
-  { id: 'tasks', name: 'tasks', icon: Zap, labelKey: 'nav.tasks' },
-  { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs' },
-  { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings' },
+  { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard', color: 'cyan' },
+  { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts', color: 'blue' },
+  { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台', color: 'violet' },
+  { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心', color: 'green' },
+  { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心', color: 'orange' },
+  { id: 'telebox', name: 'telebox', icon: Package, labelKey: '拓展插件', color: 'pink' },
+  { id: 'tasks', name: 'tasks', icon: Zap, labelKey: 'nav.tasks', color: 'yellow' },
+  { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs', color: 'slate' },
+  { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings', color: 'teal' },
 ])
 
 const currentTitle = computed(() => {
@@ -168,7 +160,7 @@ const handleNavClick = () => {
 </script>
 
 <template>
-  <div class="panel-shell flex min-h-screen w-full overflow-x-hidden text-gray-700 dark:text-gray-300 font-sans">
+  <div class="panel-shell flex min-h-screen w-full overflow-x-hidden font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <!-- 移动端遮罩：点击关闭侧栏 -->
     <div
       v-if="isMobileMenuOpen"
@@ -178,14 +170,14 @@ const handleNavClick = () => {
     />
 
     <aside 
-      class="ui-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-300 ease-in-out w-64"
+      class="ui-sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-[width,transform] duration-200 ease-in-out w-64"
       :class="isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
       :aria-hidden="sidebarHidden ? 'true' : undefined"
       :inert="sidebarHidden || undefined"
     >
-      <div class="flex items-center h-14 px-4 border-b border-[var(--sp-border)] gap-2">
+      <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
         <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">TG</div>
-        <div class="min-w-0 flex-1">
+        <div class="sidebar-label min-w-0 flex-1">
           <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG 管理面板</div>
           <div class="text-[10px] text-gray-400 mt-1 tracking-wide truncate">
             <button
@@ -198,6 +190,9 @@ const handleNavClick = () => {
             <span v-else>{{ t('common.brandSubtitle') }}</span>
           </div>
         </div>
+        <button type="button" class="sidebar-collapse-toggle hidden lg:inline-flex" :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar">
+          <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" /><PanelLeftClose v-else class="w-4 h-4" />
+        </button>
         <!-- 仅移动端抽屉显示关闭；提高可点区域与层级 -->
         <button
           ref="drawerCloseButtonRef"
@@ -215,34 +210,36 @@ const handleNavClick = () => {
           v-for="nav in navigation" 
           :key="nav.id"
           :to="{ name: nav.name }"
-          class="flex items-center h-10 px-3 transition-colors whitespace-nowrap rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50"
-          :class="route.name === nav.name
-            ? 'ui-nav-active'
-            : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/[0.03]'"
+          class="sidebar-link flex items-center h-11 px-2.5 whitespace-nowrap rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          :class="[{ 'ui-nav-active': route.name === nav.name }, `sidebar-link--${nav.color}`]"
           :aria-current="route.name === nav.name ? 'page' : undefined"
+          :title="nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey"
+          :aria-label="nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey"
           @click="handleNavClick"
           @mouseenter="prefetchView(nav.name)"
           @focus="prefetchView(nav.name)"
           @pointerdown="prefetchView(nav.name)"
         >
-          <component :is="nav.icon" class="w-[18px] h-[18px] shrink-0 opacity-80" stroke-width="1.5" />
-          <span class="ml-3 text-sm font-medium">{{ nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey }}</span>
+          <span class="sidebar-link-icon"><component :is="nav.icon" class="w-[19px] h-[19px]" stroke-width="1.9" /></span>
+          <span class="sidebar-label ml-3 text-sm font-medium">{{ nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey }}</span>
         </router-link>
       </nav>
 
       <div class="border-t border-[var(--sp-border)] p-3">
         <button
           type="button"
-          class="flex items-center w-full h-10 px-3 transition-colors whitespace-nowrap rounded-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+          class="sidebar-link flex items-center w-full h-11 px-2.5 whitespace-nowrap rounded-xl"
+          :title="t('nav.profile')"
+          :aria-label="t('nav.profile')"
           @click="showProfileModal = true; isMobileMenuOpen = false"
         >
-          <UserCircle class="w-[18px] h-[18px] shrink-0 opacity-80" stroke-width="1.5" />
-          <span class="ml-3 text-sm font-medium">{{ t('nav.profile') }}</span>
+          <span class="sidebar-link-icon"><UserCircle class="w-[19px] h-[19px]" stroke-width="1.9" /></span>
+          <span class="sidebar-label ml-3 text-sm font-medium">{{ t('nav.profile') }}</span>
         </button>
       </div>
     </aside>
 
-    <main class="panel-main flex-1 w-full pl-0 lg:pl-64 flex flex-col min-h-screen transition-all duration-300 max-w-[100vw]">
+    <main class="panel-main flex-1 w-full pl-0 lg:pl-64 flex flex-col min-h-screen transition-[padding] duration-200 max-w-[100vw]">
       <header class="ui-header-glass sticky top-0 z-30 h-14 flex items-center justify-between px-4 lg:px-8 shrink-0">
         <div class="flex items-center gap-3 min-w-0">
           <button

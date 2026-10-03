@@ -10,6 +10,14 @@ from backend.api.routes import accounts
 from backend.services import telebox
 
 
+def test_node_heap_limit_for_multi_account_host(monkeypatch):
+    monkeypatch.delenv("TELEBOX_NODE_HEAP_MB", raising=False)
+    assert telebox.node_heap_limit_mb() == 128
+    for value, expected in [("96", 96), ("8", 64), ("999", 512), ("bad", 128)]:
+        monkeypatch.setenv("TELEBOX_NODE_HEAP_MB", value)
+        assert telebox.node_heap_limit_mb() == expected
+
+
 def test_login_credentials_choose_account_or_private_server_default(monkeypatch):
     monkeypatch.setenv("SIGNPULSE_TG_API_ID", "12345")
     monkeypatch.setenv("SIGNPULSE_TG_API_HASH", "a" * 32)

@@ -48,4 +48,16 @@ describe('AvatarUrlCache', () => {
     cache.set('acc-1', 'blob:c')
     expect(cache.get('acc-1')).toBe('blob:c')
   })
+
+  it('限制头像总字节数并回收已删除账号', () => {
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const cache = new AvatarUrlCache()
+    cache.set('acc-1', 'blob:a', 1024 * 1024)
+    expect(cache.canStore('acc-2', 1024 * 1024)).toBe(true)
+    expect(cache.canStore('acc-2', 1024 * 1024 + 1)).toBe(false)
+    cache.retainOnly(new Set(['acc-2']))
+    expect(revoke).toHaveBeenCalledWith('blob:a')
+    expect(cache.get('acc-1')).toBeUndefined()
+    expect(cache.canStore('acc-2', 2 * 1024 * 1024)).toBe(true)
+  })
 })
