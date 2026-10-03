@@ -52,3 +52,5 @@
 - 修复后从新 PR 分支或合并后的 main 更新，再执行 `bash scripts/install.sh`。无需删除 data/ 或修改密码、API 凭据。
 - 验证结果和 PR 地址将在完成检查后补充；本环境仍无 Docker，不宣称完整镜像构建通过。
 - 验证：新建空目录仅复制两个依赖文件，使用 Node 24 执行 `npm ci --include=dev --ignore-scripts --dry-run --offline --no-audit --no-fund` 成功（384 包）。锁文件版本 3、根依赖/开发依赖与 package.json 完全匹配，453 个锁定条目仅使用 registry.npmjs.org。此检查验证锁文件可用性，不编译原生模块；完整 Docker 构建由服务器重试验证。
+
+- 修复已上传至 `fix/telebox-docker-lockfile`，创建 [PR #13](https://github.com/hikling/TG-SignPulse-Private/pull/13)。保护的 main 未改动；服务器在原目录执行 `git fetch origin && git switch fix/telebox-docker-lockfile && bash scripts/install.sh` 即可合并前验证。
