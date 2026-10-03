@@ -67,4 +67,4 @@
 
 验证（离线）：前端 `npm run typecheck`、417 项 Vitest、`npm run build` 通过；TeleBox `npx tsc --noEmit` 通过；后端任务桥接、账号隔离与任务执行相关 44 项测试通过。原 `test_sign_task_runner.py` 夹具缺少上一轮新增的账号 API 凭据，本轮补了模拟凭据后 29 项正常通过。FastAPI TestClient 在本运行环境会阻塞；Docker 和真实 Telegram 会话不可在此验证。README、账号/任务指南、Docker 部署说明同步写入搭建条件和改动。
 
-交付：远端 `main` 已合并上一轮 PR #12/#13。本轮 35 个文本文件与本地暂存文件树 SHA 一致，位于私有分支 `feat/telebox-login-chat-task-logs` 和[草稿 PR #14](https://github.com/hikling/TG-SignPulse-Private/pull/14)；保护的 `main` 未改动。完整服务器验收后由仓库所有者合并。
+交付：远端 `main` 已合并上一轮 PR #12/#13。本轮 35 个文本文件与本地暂存文件树 SHA 一致，位于私有分支 `feat/telebox-login-chat-task-logs` 和 [PR #14](https://github.com/hikling/TG-SignPulse-Private/pull/14)；保护的 `main` 未改动。PR 已可审阅，服务器上的真实会话和 Docker 验收仍待完成，合并由仓库所有者决定。
