@@ -17,15 +17,15 @@
 git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-合并至 main 后可省略 `--branch feat/telebox-only-onboarding`。脚本构建镜像、启动容器、检测就绪并打印首次设置码。应用密钥自动生成并保存在 `data/.app_secret_key`；无需编辑 `.env`。浏览器打开 `http://服务器IP:8080`，输入一次性设置码并自行设置管理员密码（至少 12 位）。已有账号不会被重置。公网访问请配置 HTTPS。
+合并至 main 后可省略 `--branch feat/telebox-only-onboarding`。脚本构建镜像、启动容器、检测就绪并打印首次设置码。应用密钥自动生成并保存在 `data/.app_secret_key`。浏览器打开 `http://服务器IP:8080`，输入一次性设置码并自行设置管理员密码（至少 12 位）。不启用 TeleBox 且希望登录页免填 API 时，先在服务器私有 `.env` 设置 `SIGNPULSE_TG_API_ID/HASH`；Telegram 授权仍需应用凭据。已有账号不会被重置。公网访问请配置 HTTPS。
 
 查看状态：`docker compose ps`；查看日志：`docker compose logs --tail=100 app`。克隆私有仓库需要 GitHub 授权。
 
 ## 4. 登录账号并试用
 
-1. “账号管理”：填写该账号专属 API ID/Hash，再使用手机验证码或二维码登录自己的 Telegram 测试账号；启用两步验证的账号还需密码。
-2. “聊天中心”：选择账号，查看私聊、群组、频道及机器人会话；先用测试会话尝试发送、编辑、归档等操作。
-3. “任务编排”：检查原有签到任务并创建新任务。已移除的 Python 自定义插件动作不会自动迁移。
-4. “拓展插件”：选择已登录账号启动独立会话，等待状态变为运行中；如提示 `password_required`，在面板输入 Telegram 两步验证密码。每账号独立运行，插件管理与日志都在此页。
+1. “账号管理”：选择是否启用 TeleBox。勾选时输入该账号专属 API ID/Hash，登录后自动请求启动；不勾选时使用服务器私有凭据。再用手机验证码或二维码登录测试账号。
+2. “聊天中心”：选择账号，查看带头像的私聊、群组、频道及机器人会话；先用测试会话尝试发送、编辑、归档等操作。
+3. “任务编排”：可选当前账号已加载的 TeleBox 插件命令。已移除的 Python 自定义插件动作不会自动迁移。
+4. “拓展插件”：查看独立会话状态、插件清单和错误阶段；如提示 `password_required`，输入 Telegram 两步验证密码。统一“日志”页也显示 TeleBox 运行记录。
 
 完整目录与升级/备份说明见 [README](../../README.md#数据升级与备份) 和 [Docker 部署](../deploy/docker.md)。真实 Telegram 授权、Bot API 和 TPM 远程安装需要在你自己的环境中检验。

@@ -245,6 +245,10 @@ def runner_env(monkeypatch, tmp_path):
         "backend.utils.tg_session.get_session_mode", lambda: env.session_mode
     )
     monkeypatch.setattr(
+        "backend.utils.tg_session.get_account_api_credentials",
+        lambda account: (12345, "a" * 32),
+    )
+    monkeypatch.setattr(
         "backend.utils.tg_session.get_account_session_string",
         lambda account: env.session_string,
     )

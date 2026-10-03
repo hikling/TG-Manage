@@ -92,10 +92,9 @@ const {
     </div>
     <div v-else class="space-y-6">
 
-      <!-- 配置卡片双列平衡布局 -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <!-- 通用设置与数据管理 -->
-        <div class="flex flex-col gap-6">
+      <div class="settings-accordions">
+        <details class="settings-accordion">
+          <summary>通用设置 <span>时区、运行与基础配置</span></summary>
           <GeneralSettings
             v-model="settings"
             :timezone-options="timezoneOptions"
@@ -104,6 +103,9 @@ const {
             @save="saveSettings"
             @run-keepalive="runKeepaliveNow"
           />
+        </details>
+        <details class="settings-accordion">
+          <summary>数据管理 <span>导出、恢复与远程备份</span></summary>
           <DataManagementSettings
             v-model="settings"
             :webdav-password-set="webdavPasswordSet"
@@ -124,10 +126,10 @@ const {
             @webdav-download="handleDownloadRemoteBackup"
             @save-advanced="saveAdvancedSettings"
           />
-        </div>
+        </details>
 
-        <!-- Bot 通知 -->
-        <div class="flex flex-col gap-6">
+        <details class="settings-accordion">
+          <summary>机器人通知 <span>通知配置与连通性测试</span></summary>
           <BotNotifySettings
             v-model="settings"
             :bot-token-set="botTokenSet"
@@ -138,11 +140,7 @@ const {
             @test="testBot"
             @toggle-reveal="toggleReveal"
           />
-        </div>
-      </div>
-
-      <div>
-
+        </details>
       </div>
 
       <!-- 关于 / 版本：始终固定在所有配置卡片的最底部 -->

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -60,6 +61,16 @@ logger = logging.getLogger("backend.accounts_api")
 rate_limiter = get_rate_limiter()
 
 
+def _login_api_credentials(api_id: int | None, api_hash: str | None) -> tuple[int | str, str]:
+    if bool(api_id) != bool(api_hash):
+        raise ValueError("Telegram API ID 和 API Hash 必须同时填写")
+    resolved_id = api_id or os.environ.get("SIGNPULSE_TG_API_ID")
+    resolved_hash = api_hash or os.environ.get("SIGNPULSE_TG_API_HASH")
+    if not resolved_id or not resolved_hash:
+        raise ValueError("服务器缺少 Telegram 应用凭据：请在服务器私有 .env 设置 SIGNPULSE_TG_API_ID/HASH，或在登录时启用 TeleBox 并填写账号凭据")
+    return resolved_id, resolved_hash
+
+
 def _apply_rate_limit(
     scope: str,
     request: Request,
@@ -104,12 +115,13 @@ async def start_account_login(
             window_seconds=600,
             block_seconds=900,
         )
+        api_id, api_hash = _login_api_credentials(request.api_id, request.api_hash)
         result = await get_telegram_service().start_login(
             account_name=request.account_name,
             phone_number=request.phone_number,
             proxy=request.proxy,
-            api_id=request.api_id,
-            api_hash=request.api_hash,
+            api_id=api_id,
+            api_hash=api_hash,
         )
         rate_limiter.reset("accounts.login.start", limit_key)
 
@@ -209,9 +221,10 @@ async def start_qr_login(
             window_seconds=600,
             block_seconds=900,
         )
+        api_id, api_hash = _login_api_credentials(request.api_id, request.api_hash)
         result = await get_telegram_service().start_qr_login(
             account_name=request.account_name, proxy=request.proxy,
-            api_id=request.api_id, api_hash=request.api_hash,
+            api_id=api_id, api_hash=api_hash,
         )
         rate_limiter.reset("accounts.qr.start", limit_key)
 

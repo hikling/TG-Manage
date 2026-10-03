@@ -190,6 +190,7 @@ class SupportAction(int, Enum):
     REPLY_BY_IMAGE_RECOGNITION = 6  # AI image recognition then send text
     CLICK_BUTTON_BY_CALCULATION_PROBLEM = 7  # AI calculation then click button
     KEYWORD_NOTIFY = 8  # Listen for keywords
+    TELEBOX_COMMAND = 10  # Dispatch installed TeleBox plugin command
 
     @property
     def desc(self):
@@ -202,6 +203,7 @@ class SupportAction(int, Enum):
             SupportAction.REPLY_BY_IMAGE_RECOGNITION: "AI image recognition then send text",
             SupportAction.CLICK_BUTTON_BY_CALCULATION_PROBLEM: "AI calculation then click button",
             SupportAction.KEYWORD_NOTIFY: "关键词监听",
+            SupportAction.TELEBOX_COMMAND: "TeleBox 插件命令",
         }[self]
 
 
@@ -277,7 +279,15 @@ class KeywordNotifyAction(SignAction):
     continue_actions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
+class TeleBoxCommandAction(SignAction):
+    action: Literal[SupportAction.TELEBOX_COMMAND] = SupportAction.TELEBOX_COMMAND
+    telebox_plugin: str = Field(min_length=1, max_length=80, regex=r"^[A-Za-z0-9_-]+$")
+    telebox_command: str = Field(min_length=1, max_length=80, regex=r"^[A-Za-z0-9_ -]+$")
+    telebox_args: str = Field(default="", max_length=500)
+
+
 ActionT: TypeAlias = Union[
+    TeleBoxCommandAction,
     SendTextAction,
     SendDiceAction,
     ClickKeyboardByTextAction,

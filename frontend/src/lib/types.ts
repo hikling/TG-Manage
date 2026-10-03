@@ -85,6 +85,7 @@ export type TaskActionType =
   | 'vision_send'
   | 'calc_click'
   | 'bot_cmd'
+  | 'telebox_plugin'
   | 'delay';
 
 export interface TaskActionItem {
@@ -93,6 +94,7 @@ export interface TaskActionItem {
   value: string;
   aiPrompt: string;
   commandPrefix?: string;
+  teleboxArgs?: string;
   continue_on_error?: boolean;
   skip_if_matched?: string;
 }
@@ -106,6 +108,9 @@ export interface RawTaskAction {
   ai_prompt?: string;
   bot_username?: string;
   command_prefix?: string;
+  telebox_plugin?: string;
+  telebox_command?: string;
+  telebox_args?: string;
   keywords?: string[];
   match_mode?: string;
   push_channel?: string;
@@ -131,6 +136,9 @@ export interface BuiltAction {
   ai_prompt?: string;
   bot_username?: string;
   command_prefix?: string;
+  telebox_plugin?: string;
+  telebox_command?: string;
+  telebox_args?: string;
   keywords?: string[];
   match_mode?: string;
   push_channel?: string;

@@ -6,7 +6,7 @@
 
 - Docker Engine 24+、Docker Compose v2，且主机能访问 npm/PyPI、Telegram；受限网络需为 Telegram 配置代理。
 - Compose 默认限制容器使用 2 GiB 内存、2 CPU；构建阶段还需额外磁盘及内存。每运行一个 TeleBox 账号会再启动 Node 进程，应随账号数调高资源。
-- 登录每个账号时填写自己的 Telegram API ID 和 API Hash；至少一个可完成验证码/扫码验证的账号。
+- Telegram 授权始终需要有效 API ID/Hash：启用 TeleBox 时在账号登录表单填写；不启用时可在服务器私有 `.env` 预设 `SIGNPULSE_TG_API_ID/HASH`，登录页面免填。
 
 Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编译/安装 TeleBox 原生依赖、Python 3.11 运行 FastAPI。生产镜像包含 Node 24 与 TeleBox 源码、插件和依赖。项目默认持久化目录为容器 `/data`。
 
@@ -18,7 +18,7 @@ Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编
 git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-合并后克隆时可省略 `--branch`。脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。无需 `.env` 或统一 Telegram API 凭据；账号登录时分别输入。域名和 TLS 见 [Nginx 示例](nginx.md)。
+合并后克隆时可省略 `--branch`。脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。不启用 TeleBox 且要免填账号 API 时，在构建前复制 `.env.example` 为 `.env` 并填入 `SIGNPULSE_TG_API_ID/HASH`，文件只留在服务器，不提交仓库。域名和 TLS 见 [Nginx 示例](nginx.md)。
 
 ## Compose 约定
 
@@ -32,14 +32,14 @@ git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-Si
 | `healthcheck` | `/readyz` 返回服务就绪状态后标记健康。 |
 | `restart: unless-stopped` | 异常退出/重启主机后拉起服务。 |
 
-不注入共享 Telegram API、应用密钥或管理员密码。首次启动在 `data/` 生成持久密钥和一次性管理员设置码。备份整个 `data/`，尤其是密钥文件。
+应用密钥和管理员密码不需注入。可选的服务器 Telegram 应用凭据通过 Compose 从私有 `.env` 注入，仅供关闭 TeleBox 的账号登录。首次启动在 `data/` 生成持久密钥和一次性管理员设置码。备份整个 `data/`，尤其是密钥文件。
 
 ## 首次登录与 TeleBox
 
 1. 用安装脚本显示的一次性设置码在网页登录页设置 `admin` 密码，可启用 TOTP。
-2. 在账号管理中输入该账号的 API ID/Hash，完成 Telegram 手机验证码/二维码授权。
-3. 先在聊天中心用测试会话检查消息读写，再在 TeleBox 页启动该账号的**独立**会话。状态如果要求 Telegram 两步验证密码，在界面填写。
-4. 按账号查看 TeleBox 进程状态、日志和插件。其数据在 `data/telebox/`，另有 `data/sessions/` 中的面板会话，不要直接替换或合并。
+2. 在账号管理选择是否启用 TeleBox；勾选时输入该账号 API ID/Hash，登录成功后自动请求独立会话。不勾选时若服务器已配应用凭据，表单无需填写。
+3. 先在聊天中心用测试会话检查头像、消息读写。启用 TeleBox 的账号在拓展插件页查看启动状态、错误阶段、两步验证及插件。
+4. 任务编排可选择已加载的插件命令，日志页提供 TeleBox 日志标签。命令投递不等同于插件执行完成；其数据在 `data/telebox/`，另有 `data/sessions/` 中的面板会话。
 
 ## 升级、备份和恢复
 

@@ -15,6 +15,7 @@ const ACTION_TYPE_MAP: Record<number, TaskActionType> = {
   6: 'vision_send',
   7: 'calc_click',
   9: 'bot_cmd',
+  10: 'telebox_plugin',
 }
 
 const DEFAULT_CMD_PREFIX = '/start'
@@ -68,6 +69,10 @@ export function parseSingleAction(raw: RawTaskAction): TaskActionItem[] {
     case 'bot_cmd':
       item.value = raw.bot_username || ''
       item.commandPrefix = raw.command_prefix || DEFAULT_CMD_PREFIX
+      break
+    case 'telebox_plugin':
+      item.value = `${raw.telebox_plugin || ''}::${raw.telebox_command || ''}`
+      item.teleboxArgs = raw.telebox_args || ''
       break
     case 'vision_click':
     case 'calc_send':
@@ -138,6 +143,15 @@ export function buildSingleAction(
       result.bot_username = (action.value || '').trim().replace(/^@/, '')
       result.command_prefix = (action.commandPrefix || DEFAULT_CMD_PREFIX).trim()
       break
+    case 'telebox_plugin': {
+      const [plugin, command] = action.value.split('::')
+      if (!plugin || !command) throw new Error('请选择已安装的 TeleBox 插件命令')
+      result.action = 10
+      result.telebox_plugin = plugin
+      result.telebox_command = command
+      result.telebox_args = action.teleboxArgs?.trim() || ''
+      break
+    }
   }
 
   // 从前一个 delay 动作获取延迟值

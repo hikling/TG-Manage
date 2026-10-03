@@ -9,6 +9,7 @@ import { useToast } from '../../composables/useToast'
 import { startChainPoll, type ChainPollHandle } from '../../lib/chain-poll'
 import { getErrorCode, getLocalizedErrorMessage } from '../../lib/types'
 import { devLog } from '../../lib/devLog'
+import { panelRequest } from '../../lib/api/communications'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -17,6 +18,7 @@ const props = defineProps<{ isOpen: boolean, initialMethod?: 'code' | 'qr', init
 const emit = defineEmits<{ (e: 'close'): void, (e: 'success'): void }>()
 
 const loginMethod = ref<'code' | 'qr'>('code')
+const enableTelebox = ref(false)
 
 const form = ref({
   account_name: '',
@@ -80,6 +82,7 @@ const reset = async () => {
     }
   }
   form.value = { account_name: props.initialAccountName || '', api_id: '', api_hash: '', remark: '', phone_number: '', phone_code: '', password: '', proxy: '' }
+  enableTelebox.value = false
   phoneCodeHash.value = ''
   error.value = ''
   codeSent.value = false
@@ -106,6 +109,7 @@ watch(loginMethod, () => {
   const accountName = form.value.account_name
   const apiId = form.value.api_id
   const apiHash = form.value.api_hash
+  const enable = enableTelebox.value
   const remark = form.value.remark
   const password = form.value.password
   const proxy = form.value.proxy
@@ -113,6 +117,7 @@ watch(loginMethod, () => {
   form.value.account_name = accountName
   form.value.api_id = apiId
   form.value.api_hash = apiHash
+  enableTelebox.value = enable
   form.value.remark = remark
   form.value.password = password
   form.value.proxy = proxy
@@ -133,6 +138,16 @@ const saveRemarkIfPresent = async (token: string) => {
   }
 }
 
+const applyTeleboxPreference = async () => {
+  const name = encodeURIComponent(form.value.account_name)
+  try {
+    await panelRequest(`/telebox/${name}/${enableTelebox.value ? 'start' : 'stop'}`, 'POST')
+    if (enableTelebox.value) toast.info('TeleBox 已请求启动，请在拓展插件中查看运行状态')
+  } catch (err) {
+    toast.error(`账号登录成功，但 TeleBox 设置失败：${getLocalizedErrorMessage(err, t)}`)
+  }
+}
+
 // ============ QR Login Logic ============
 
 const pollStatus = async (token: string, lid: string) => {
@@ -142,6 +157,7 @@ const pollStatus = async (token: string, lid: string) => {
       pollHandle?.stop()
       pollHandle = null
       await saveRemarkIfPresent(token)
+      await applyTeleboxPreference()
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
@@ -182,6 +198,7 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
     // 如果后端直接返回 success，说明登录已完成，无需再轮询
     if (res.success) {
       await saveRemarkIfPresent(token)
+      await applyTeleboxPreference()
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
@@ -198,7 +215,7 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
 }
 
 const handleGetQr = async () => {
-  if (!form.value.api_id || !form.value.api_hash) {
+  if (enableTelebox.value && (!form.value.api_id || !form.value.api_hash)) {
     error.value = '请填写此账号的 Telegram API ID 和 API Hash'
     return
   }
@@ -214,8 +231,8 @@ const handleGetQr = async () => {
   try {
     const res = await startQrLogin(token, {
       account_name: form.value.account_name,
-      api_id: Number(form.value.api_id),
-      api_hash: form.value.api_hash.trim(),
+      api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
+      api_hash: form.value.api_hash.trim() || undefined,
       proxy: form.value.proxy || undefined
     })
     loginId.value = res.login_id
@@ -234,7 +251,7 @@ const handleGetQr = async () => {
 // ============ Code Login Logic ============
 
 const handleSendCode = async () => {
-  if (!form.value.api_id || !form.value.api_hash) {
+  if (enableTelebox.value && (!form.value.api_id || !form.value.api_hash)) {
     error.value = '请填写此账号的 Telegram API ID 和 API Hash'
     return
   }
@@ -250,8 +267,8 @@ const handleSendCode = async () => {
   try {
     const res = await startAccountLogin(token, {
       account_name: form.value.account_name,
-      api_id: Number(form.value.api_id),
-      api_hash: form.value.api_hash.trim(),
+      api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
+      api_hash: form.value.api_hash.trim() || undefined,
       phone_number: form.value.phone_number,
       proxy: form.value.proxy || undefined
     })
@@ -294,6 +311,7 @@ const handleSave = async () => {
         proxy: form.value.proxy || undefined
       })
       await saveRemarkIfPresent(token)
+      await applyTeleboxPreference()
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
@@ -371,8 +389,12 @@ onUnmounted(() => {
         {{ error }}
       </div>
 
+      <label class="flex items-center gap-3 rounded-xl border border-[var(--sp-border)] p-3 cursor-pointer">
+        <input v-model="enableTelebox" type="checkbox" class="h-4 w-4" aria-label="启用 TeleBox">
+        <span><strong class="block text-sm">启用 TeleBox</strong><small class="panel-muted">登录成功后自动启动；关闭时使用服务器的 Telegram 应用凭据。</small></span>
+      </label>
       <!-- Common Fields -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div v-if="enableTelebox" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="space-y-1.5">
           <label class="ui-label" for="account-api-id">Telegram API ID <span class="text-rose-500">*</span></label>
           <input id="account-api-id" v-model="form.api_id" type="number" min="1" inputmode="numeric" autocomplete="off" class="ui-input" required>

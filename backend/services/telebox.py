@@ -134,6 +134,7 @@ class TeleBoxService:
                 plugins.extend({"name": p.stem, "kind": kind} for p in sorted(folder.glob("*.ts")))
         return {"account": account, "status": worker["status"] if worker else "stopped", "enabled": enabled,
                 "version": self.metadata()["version"], "plugins": plugins,
+                "commands": worker.get("commands", []) if worker else [],
                 "message": worker.get("message", "") if worker else ""}
 
     def overview(self):
@@ -195,11 +196,21 @@ class TeleBoxService:
                 lock_handle.close()
                 raise
             worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
+            ready = asyncio.get_running_loop().create_future()
+            worker["pending"]["init"] = ready
             self.workers[account] = worker
             self._marker(account, True)
             worker["readers"] = [asyncio.create_task(self._stdout(account, worker)), asyncio.create_task(self._stderr(account, worker)), asyncio.create_task(self._watch(account, worker))]
             await self._send(worker, {"action": "init", "id": "init", **credentials})
             self._log(account, "TeleBox 正在启动独立账号会话")
+            try:
+                result = await asyncio.wait_for(asyncio.shield(ready), 3)
+                if not result.get("ok"):
+                    raise ValueError(result.get("message") or "TeleBox 启动失败，请查看运行日志")
+            except asyncio.TimeoutError:
+                # QR authorization can legitimately take minutes. The later
+                # state event and log report the actual outcome.
+                pass
             return self.status(account)
 
     async def _accept(self, account: str, worker: dict, token: str):
@@ -231,6 +242,9 @@ class TeleBoxService:
                     task = asyncio.create_task(self._accept(account, worker, event.get("token", "")))
                     worker["tasks"].add(task)
                     task.add_done_callback(worker["tasks"].discard)
+                elif event.get("event") == "commands":
+                    worker["commands"] = [item for item in event.get("items", [])
+                                          if isinstance(item, dict) and PLUGIN_NAME.fullmatch(str(item.get("plugin", "")))]
                 elif event.get("event") == "state" and event.get("status") in {"running", "password_required", "failed"}:
                     worker["status"] = event["status"]
                 elif event.get("event") == "result":
@@ -238,7 +252,9 @@ class TeleBoxService:
                     if future and not future.done():
                         future.set_result(event)
                     if event.get("id") == "init" and not event.get("ok"):
-                        worker["message"] = "TeleBox 启动失败，请检查运行日志"
+                        worker["status"] = "failed"
+                        worker["message"] = redact(event.get("message") or "TeleBox 启动失败，请检查运行日志", self.secrets.get(account, []))
+                        self._log(account, worker["message"], "error")
         except (ValueError, OSError):
             self._log(account, "TeleBox 控制通道已关闭", "error")
 
@@ -251,6 +267,9 @@ class TeleBoxService:
     async def _watch(self, account: str, worker: dict):
         code = await worker["process"].wait()
         worker["status"] = "stopped" if worker.get("stopping") else "failed"
+        worker["commands"] = []
+        if not worker.get("stopping") and not worker.get("message"):
+            worker["message"] = f"TeleBox 进程退出（代码 {code}），请查看运行日志"
         for future in worker["pending"].values():
             if not future.done():
                 future.set_result({"ok": False, "message": "TeleBox 进程已停止"})
@@ -319,6 +338,31 @@ class TeleBoxService:
             if not result.get("ok"):
                 raise ValueError(result.get("message", "插件操作失败"))
             return self.status(account)
+
+    async def run_command(self, account: str, plugin: str, command: str, args: str = ""):
+        account = self._account(account)
+        if not PLUGIN_NAME.fullmatch(plugin) or not re.fullmatch(r"[A-Za-z0-9_ -]{1,80}", command):
+            raise ValueError("TeleBox 插件或命令无效")
+        if len(args) > 500 or "\n" in args or "\r" in args:
+            raise ValueError("TeleBox 命令参数无效")
+        worker = self.workers.get(account)
+        if not worker or worker["status"] != "running":
+            raise ValueError("此账号 TeleBox 未运行")
+        if {"plugin": plugin, "command": command} not in worker.get("commands", []):
+            raise ValueError("此账号没有加载所选 TeleBox 插件命令")
+        identifier = uuid.uuid4().hex
+        future = asyncio.get_running_loop().create_future()
+        worker["pending"][identifier] = future
+        try:
+            await self._send(worker, {"action": "run", "id": identifier,
+                                      "plugin": plugin, "command": command, "args": args})
+            result = await asyncio.wait_for(future, 30)
+            if not result.get("ok"):
+                raise ValueError(result.get("message") or "TeleBox 命令投递失败")
+            self._log(account, f"TeleBox 已投递命令：{plugin} / {command}")
+            return {"ok": True, "message": "命令已投递到 TeleBox；执行结果请查看运行日志"}
+        finally:
+            worker["pending"].pop(identifier, None)
 
     def log_items(self, account: str):
         account = self._account(account)
