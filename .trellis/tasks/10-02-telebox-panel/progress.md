@@ -77,3 +77,4 @@
 - 删除专用群聊管理页面、侧边栏入口、账号快捷入口、路由和对应群资料/退出 API。聊天中心继续提供普通群会话，工作台继续使用 `dialogs?kind=groups` 查询共有群。
 - 离线验证：真实 Node 24 工作进程加载后用替身 `connect()` 抛出 `OFFLINE_CONNECT_SENTINEL`，错误进入“连接 Telegram”阶段，不再出现 `Directory import`；上游运行时/TPM/插件管理器模块解析通过，TeleBox TypeScript 检查通过。前端类型检查、417 项测试与构建通过；Python 4 项针对性测试和 Ruff 通过。Python `TestClient` 仍在本沙箱阻塞；未使用真实 Telegram 凭据、未发消息，Docker 及插件远程安装需要服务器验收。
 - 上一轮 PR #14 已于 2026-10-03 合并到 `main`（合并提交 `033936f`）。本次修复以该提交为基线，使用 `fix/telebox-esm-workbench` 独立分支；需在服务器用此分支重建镜像后观察真实 TeleBox 授权及插件加载。
+- 已创建 [PR #15：修复 TeleBox 启动错误并优化账号工作台](https://github.com/hikling/TG-SignPulse-Private/pull/15)，目标为受保护的 `main`，暂未合并。首次远端提交 `2c522da` 的 Git 树与本地暂存树 `eb0b5db` 完全一致；本段后续进度记录将在同一分支追加。
