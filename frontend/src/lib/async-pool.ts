@@ -38,4 +38,4 @@ export async function mapPool<T, R>(
 }
 
 /** 头像批量拉取默认并发上限 */
-export const AVATAR_FETCH_CONCURRENCY = 4
+export const AVATAR_FETCH_CONCURRENCY = 2

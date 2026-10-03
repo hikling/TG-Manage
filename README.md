@@ -41,6 +41,8 @@
 | 前端 Node | 构建阶段 Node 22.23.1 | Node 22.23.1，见根目录 `.nvmrc` |
 | TeleBox Node | 构建/运行阶段 Node 24 | 另外安装 Node 24.x，并用 `TELEBOX_NODE` 指定可执行文件 |
 | 资源 | 当前 `docker-compose.yml` 设置 2 GiB 容器内存与 2 CPU；构建时还需要额外内存和磁盘 | 每增加一个运行中的 TeleBox 账号都会启动一个独立 Node 进程；按账号数量预留内存 |
+
+面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。这不是进程 RSS 上限；20 个账号若都同时启用 TeleBox，2 GiB 容器能否承载取决于实际插件和连接开销，须在目标服务器逐步启用并观察内存，不能按堆上限相加保证容量。
 | 网络与账号 | 能访问 Telegram、npm/PyPI（构建时）；至少一个可完成验证的 Telegram 账号 | 同左；受限网络需先配置 Telegram 代理 |
 | Telegram API | 启用 TeleBox 的账号登录时填写专属 API ID/Hash；不启用时从服务器私有 `.env` 读取 `SIGNPULSE_TG_API_ID/HASH` | 同左；Telegram 登录无论是否启用 TeleBox 都需要一组有效应用凭据 |
 
@@ -138,6 +140,7 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 | `APP_CORS_ALLOW_ORIGINS` | 分离部署的前端来源列表，逗号分隔 | 默认 localhost 开发来源 |
 | `LOG_LEVEL` | 服务日志等级 | Compose 为 `INFO` |
 | `TELEBOX_NODE` | 本地指定 Node 24 可执行文件；Docker 镜像内 Node 24 已就绪 | 默认查找 `node` |
+| `TELEBOX_NODE_HEAP_MB` | 每个 TeleBox Node 进程的 V8 老生代上限，限制在 64–512 MiB | 默认 128 MiB，非进程总内存上限 |
 | `ENABLE_API_DOCS` | 开启 Swagger/ReDoc/OpenAPI | 默认关闭 |
 
 实际可配置项还见 [`backend/core/config.py`](backend/core/config.py) 与 [本地配置参考](docs/reference/configuration.md)。不要将真实 API ID、API Hash、密码、session、Bot Token 或导出的数据写进 README、`.env.example` 或 Git。

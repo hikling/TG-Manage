@@ -5,7 +5,7 @@ services:
     container_name: tg-signpulse
     ports:
       - "8080:8080"
-    # TeleBox 单实例 Node 堆上限 512 MiB；多账号需进一步调高。
+    # 单账号 TeleBox V8 老生代默认 128 MiB；实际进程还包含原生内存。
     mem_limit: 2g
     cpus: 2.0
     volumes:
@@ -17,6 +17,7 @@ services:
       - LOG_LEVEL=INFO
       - APP_LEGACY_TASKS_READONLY=1
       - APP_SCHEDULER_LOCK=1
+      - TELEBOX_NODE_HEAP_MB=${TELEBOX_NODE_HEAP_MB:-128}
       - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
       - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
       # - ENABLE_API_DOCS=false

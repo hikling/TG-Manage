@@ -61,3 +61,12 @@ Live Docker build, Telegram account authorization, Bot API and remote TeleBox pl
 - [ ] Validate a full Docker build, real Telegram authorization, KITT/installed plugin discovery and execution, official-message-only mode and scheduled Workbench delivery on the owner's server. Keep this task `in_progress` until those checks finish.
 
 Earlier sections record the implementation sequence and test counts at those points in time. This checklist describes the behavior merged through PR #17.
+
+## Visual and capacity checklist (2026-10-03)
+
+- [x] Add a persisted desktop sidebar collapse toggle and distinct navigation accents; preserve mobile drawer and accessible names.
+- [x] Rework shared light/dark surfaces and account tiles to match the supplied avatar/name/remark reference; move all account actions behind one three-dot menu.
+- [x] Remove eager page warmup; bound account avatar request concurrency, blob size and total browser cache; release URLs on account removal and page exit.
+- [x] Reduce the default per-worker V8 old-space limit from 512 to 128 MiB, make the 64–512 MiB setting configurable, document that it does not cap total process RSS.
+- [x] Run frontend typecheck, tests and build; focused backend tests and Ruff; Git whitespace check.
+- [ ] Visually check the authenticated account page on desktop/mobile in a real browser and measure total server RSS with the intended 20-account mix before claiming 2 GiB capacity.

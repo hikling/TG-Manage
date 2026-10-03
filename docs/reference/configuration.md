@@ -24,6 +24,7 @@
 | `APP_CORS_ALLOW_ORIGINS` | localhost 开发来源 | 分离部署时允许的前端 origin |
 | `ENABLE_API_DOCS` | `false` | 允许 `/docs`、`/redoc`、`/openapi.json` |
 | `TELEBOX_NODE` | `node` | 本地开发指定 Node 24 可执行文件 |
+| `TELEBOX_NODE_HEAP_MB` | `128` | 每个账号 TeleBox 的 V8 老生代上限，允许 64–512 MiB；不包含 Node 原生内存，20 个账号的总 RSS 须实测 |
 | `SIGNPULSE_TG_API_ID/HASH` | 空 | 关闭 TeleBox 时账号登录使用的私有应用凭据；Compose 从未提交的 `.env` 读取 |
 
 生产环境备份**整个** `data/`，尤其是 `.app_secret_key` 与账号会话。密钥丢失后已加密的账号凭据和 Bot Token 无法解密，需重新登录或恢复原备份。备份与历史导入中的全局 AI/Telegram API 设置不再重新激活。真实 Telegram 登录、插件安装和 Docker 构建需在服务器上验证。
