@@ -115,3 +115,4 @@
 - 删除空闲时对所有路由 chunk 的预热，保留交互时按需预取；头像下载并发 4→2，单图不超过 128 KiB、浏览器页内总量不超过 2 MiB，移除账号和离开页面时回收 Object URL。
 - 每个 TeleBox 工作进程 V8 老生代默认上限从 512→128 MiB，`TELEBOX_NODE_HEAP_MB` 可在 64–512 间设置；这不是总进程 RSS 上限。20 个账号能否在 2 GiB 下同时启用 TeleBox，仍需服务器观察内存和插件工作量。
 - 离线验证：前端类型检查、251 项 Vitest 和生产构建通过；TeleBox 桥接 4 项 Python 测试、改动 Python 文件 Ruff、Git whitespace 检查通过。无已授权的浏览器/Telegram/Docker 环境，真实页面视觉与 20 账号内存实测尚未完成。
+- 已建立独立功能分支 `feat/colored-panel-account-cards` 与 [PR #19](https://github.com/hikling/TG-SignPulse-Private/pull/19)，目标为受保护的 `main`；代码和 Trellis 同步提交，合并留给仓库所有者。

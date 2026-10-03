@@ -16,7 +16,7 @@
   "base_branch": "main",
   "worktree_path": null,
   "commit": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/hikling/TG-SignPulse-Private/pull/19",
   "subtasks": [],
   "children": [],
   "parent": null,
@@ -34,6 +34,6 @@
     "frontend/src/style.css",
     "telebox/panel/worker.ts"
   ],
-  "notes": "PR #17 and Trellis alignment PR #18 merged into main. Current visual/resource revision is under review. Live Docker, Telegram, 20-account RSS and installed-plugin checks remain open.",
+  "notes": "PR #17 and Trellis alignment PR #18 merged into main. Visual/resource revision is in PR #19 for review. Live Docker, Telegram, 20-account RSS and installed-plugin checks remain open.",
   "meta": {}
 }
