@@ -15,7 +15,7 @@ Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编
 安装 Docker Engine 24+、Docker Compose v2 和 Git，确保服务器有私有仓库读取权限及构建网络。当前 PR 合并前执行：
 
 ```bash
-git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch feat/telebox-login-chat-task-logs https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
 合并后克隆时可省略 `--branch`。脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。不启用 TeleBox 且要免填账号 API 时，在构建前复制 `.env.example` 为 `.env` 并填入 `SIGNPULSE_TG_API_ID/HASH`，文件只留在服务器，不提交仓库。域名和 TLS 见 [Nginx 示例](nginx.md)。
