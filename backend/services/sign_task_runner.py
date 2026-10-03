@@ -205,23 +205,16 @@ async def _runner_setup_logging(state: Dict[str, Any]) -> None:
 
 async def _runner_resolve_credentials(state: Dict[str, Any]) -> None:
     """Phase 5: 解析 API 凭据、session 模式、代理配置。"""
-    from backend.services.config import get_config_service
-    from backend.services.telegram.credentials import resolve_telegram_api_credentials
     from backend.utils.proxy import build_proxy_dict
     from backend.utils.tg_session import (
+        get_account_api_credentials,
         get_session_mode,
         load_account_session_string,
     )
 
     svc: SignTaskService = state["svc"]
     account_name = state["account_name"]
-    config_service = get_config_service()
-    tg_config = config_service.get_telegram_config()
-    api_id, api_hash = resolve_telegram_api_credentials(
-        tg_config,
-        env_api_id=os.getenv("TG_API_ID"),
-        env_api_hash=os.getenv("TG_API_HASH"),
-    )
+    api_id, api_hash = get_account_api_credentials(account_name)
 
     session_dir = state["settings"].resolve_session_dir()
     session_mode = get_session_mode()

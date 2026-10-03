@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import os
@@ -133,8 +135,48 @@ def _save_account_store(data: dict) -> None:
 
     path = _account_store_path()
     write_json_atomic(path, data)
+    path.chmod(0o600)
     # 写后失效缓存，下次读取重新落盘
     _account_store_cache.pop(str(path), None)
+
+
+def _account_cipher():
+    from cryptography.fernet import Fernet
+
+    secret = get_settings().secret_key.encode("utf-8")
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(secret).digest()))
+
+
+def set_account_api_credentials(account_name: str, api_id: int, api_hash: str) -> None:
+    """Keep the login's API pair with its account, encrypted at rest."""
+    from backend.services.telegram.credentials import validate_telegram_api_credentials
+
+    api_id, api_hash = validate_telegram_api_credentials(api_id, api_hash)
+    data = _load_account_store()
+    entry = data["accounts"].get(account_name)
+    if not isinstance(entry, dict):
+        entry = {}
+    encrypted = _account_cipher().encrypt(
+        json.dumps({"api_id": api_id, "api_hash": api_hash}).encode("utf-8")
+    )
+    entry["api_credentials"] = encrypted.decode("ascii")
+    entry["updated_at"] = utc_now_iso()
+    data["accounts"][account_name] = entry
+    _save_account_store(data)
+
+
+def get_account_api_credentials(account_name: str) -> tuple[int, str]:
+    from backend.services.telegram.credentials import validate_telegram_api_credentials
+
+    entry = _load_account_store().get("accounts", {}).get(account_name)
+    token = entry.get("api_credentials") if isinstance(entry, dict) else None
+    if not isinstance(token, str):
+        raise ValueError(f"账号 {account_name} 缺少 Telegram API 凭据，请重新登录")
+    try:
+        values = json.loads(_account_cipher().decrypt(token.encode("ascii")))
+        return validate_telegram_api_credentials(values["api_id"], values["api_hash"])
+    except Exception as exc:
+        raise ValueError(f"账号 {account_name} 的 Telegram API 凭据不可用，请重新登录") from exc
 
 
 def list_account_names() -> list[str]:

@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import GeneralSettings from '../components/settings/GeneralSettings.vue'
-import TelegramApiSettings from '../components/settings/TelegramApiSettings.vue'
-import AiSettings from '../components/settings/AiSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
 import DataManagementSettings from '../components/settings/DataManagementSettings.vue'
 import AboutSettings from '../components/settings/AboutSettings.vue'
@@ -12,12 +10,7 @@ const {
   t,
   settings,
   timezoneOptions,
-  tgConfig,
-  aiConfig,
-  aiKeyDecryptFailed,
   loading,
-  tgLoading,
-  aiLoading,
   dataLoading,
   backupLoading,
   backupStatus,
@@ -50,10 +43,6 @@ const {
   saveAdvancedSettings,
   saveAllSettings,
   testBot,
-  saveTgConfig,
-  resetTgConfig,
-  saveAiConfig,
-  testAi,
   handleExport,
   handleImportFile,
   handleBackupExport,
@@ -82,7 +71,7 @@ const {
       <button
         type="button"
         class="ui-btn-primary !px-3 !py-1.5 !text-xs shrink-0"
-        :disabled="saveAllLoading || loading || botLoading || advancedLoading || tgLoading || aiLoading"
+        :disabled="saveAllLoading || loading || botLoading || advancedLoading"
         @click="saveAllSettings"
       >
         {{ saveAllLoading ? t('common.saving') : t('settings.saveAll') }}
@@ -105,7 +94,7 @@ const {
 
       <!-- 配置卡片双列平衡布局 -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <!-- 左列配置卡片：通用设置 + Telegram API + 数据管理 -->
+        <!-- 通用设置与数据管理 -->
         <div class="flex flex-col gap-6">
           <GeneralSettings
             v-model="settings"
@@ -114,14 +103,6 @@ const {
             :keepalive-loading="keepaliveLoading"
             @save="saveSettings"
             @run-keepalive="runKeepaliveNow"
-          />
-          <TelegramApiSettings
-            v-model="tgConfig"
-            :reveal="{ tgApiId: revealSecrets.tgApiId, tgApiHash: revealSecrets.tgApiHash }"
-            :loading="tgLoading"
-            @save="saveTgConfig"
-            @reset="resetTgConfig"
-            @toggle-reveal="toggleReveal"
           />
           <DataManagementSettings
             v-model="settings"
@@ -145,18 +126,8 @@ const {
           />
         </div>
 
-        <!-- 右列配置卡片：AI 配置 + Bot 通知 -->
+        <!-- Bot 通知 -->
         <div class="flex flex-col gap-6">
-          <AiSettings
-            v-model:ai-model-value="aiConfig"
-            v-model:settings-model-value="settings"
-            :reveal="{ aiKey: revealSecrets.aiKey }"
-            :ai-loading="aiLoading"
-            :key-decrypt-failed="aiKeyDecryptFailed"
-            @save-ai="saveAiConfig"
-            @test-ai="testAi"
-            @toggle-reveal="toggleReveal"
-          />
           <BotNotifySettings
             v-model="settings"
             :bot-token-set="botTokenSet"

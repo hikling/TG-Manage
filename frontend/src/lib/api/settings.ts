@@ -1,6 +1,5 @@
 /**
- * 系统设置 API：用户资料（密码/用户名/TOTP）、AI 配置、全局设置、
- * Telegram API 配置、设备保活。
+ * 系统设置 API：用户资料、全局设置与设备保活。
  */
 import { MEDIUM_TIMEOUT_MS, request, requestBlob } from "./core";
 
@@ -47,40 +46,6 @@ export const changeUsername = (token: string, newUsername: string, password: str
   request<ChangeUsernameResponse>("/user/username", {
     method: "PUT",
     body: JSON.stringify({ new_username: newUsername, password: password }),
-  }, token);
-
-// ─── AI 配置 ───
-
-export interface AIConfig {
-  has_config: boolean;
-  base_url?: string;
-  model?: string;
-  api_key_masked?: string;
-  /** 磁盘有配置但 APP_SECRET_KEY 不匹配，需重填 Key */
-  api_key_decrypt_failed?: boolean;
-}
-
-export interface AITestResult {
-  success: boolean;
-  message: string;
-  model_used?: string;
-}
-
-export const getAIConfig = (token: string) =>
-  request<AIConfig>("/config/ai", {}, token);
-
-export const saveAIConfig = (
-  token: string,
-  config: { api_key?: string; base_url?: string; model?: string }
-) =>
-  request<{ success: boolean; message: string }>("/config/ai", {
-    method: "POST",
-    body: JSON.stringify(config),
-  }, token);
-
-export const testAIConnection = (token: string) =>
-  request<AITestResult>("/config/ai/test", {
-    method: "POST",
   }, token);
 
 // ─── 全局设置 ───
@@ -159,30 +124,3 @@ export const runDeviceKeepalive = (token: string) =>
     // 多账号保活可能超过默认 30s
     MEDIUM_TIMEOUT_MS,
   );
-
-// ─── Telegram API 配置 ───
-
-export interface TelegramConfig {
-  api_id: string;
-  api_hash: string;
-  is_custom: boolean;
-  default_api_id: string;
-  default_api_hash: string;
-}
-
-export const getTelegramConfig = (token: string) =>
-  request<TelegramConfig>("/config/telegram", {}, token);
-
-export const saveTelegramConfig = (
-  token: string,
-  config: { api_id: string; api_hash: string }
-) =>
-  request<{ success: boolean; message: string }>("/config/telegram", {
-    method: "POST",
-    body: JSON.stringify(config),
-  }, token);
-
-export const resetTelegramConfig = (token: string) =>
-  request<{ success: boolean; message: string }>("/config/telegram", {
-    method: "DELETE",
-  }, token);

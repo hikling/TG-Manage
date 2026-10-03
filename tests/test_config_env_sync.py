@@ -11,141 +11,30 @@ from __future__ import annotations
 from pathlib import Path
 
 from backend.services.config import ConfigService
-from backend.services.config_mixins import (
-    GLOBAL_SETTINGS_ENV_SYNC,
-    apply_global_settings_to_env,
-    normalize_global_settings,
-)
+from backend.services.config_mixins import apply_global_settings_to_env
 
 
 class TestApplyGlobalSettingsToEnv:
-    def test_maps_all_sync_keys(self, isolated_env: Path, monkeypatch):
+    def test_task_settings_sync_without_retired_ai_values(self, isolated_env: Path, monkeypatch):
         import os
 
-        for env_key in GLOBAL_SETTINGS_ENV_SYNC.values():
-            monkeypatch.delenv(env_key, raising=False)
-        apply_global_settings_to_env(
-            {
-                "sign_task_execution_timeout": 300,
-                "sign_task_account_cooldown": 5,
-                "sign_task_flow_retry_attempts": 1,
-                "sign_task_history_max_age_days": 7,
-                "ai_vision_timeout": 30,
-                "ai_vision_retry_attempts": 4,
-            }
-        )
-        assert os.environ["AI_VISION_TIMEOUT"] == "30"
-        assert os.environ["AI_VISION_RETRY_ATTEMPTS"] == "4"
-        assert os.environ["SIGN_TASK_EXECUTION_TIMEOUT"] == "300"
-
-    def test_invalid_value_skipped(self, isolated_env: Path, monkeypatch):
-        import os
-
+        monkeypatch.delenv("SIGN_TASK_EXECUTION_TIMEOUT", raising=False)
         monkeypatch.delenv("AI_VISION_TIMEOUT", raising=False)
-        apply_global_settings_to_env({"ai_vision_timeout": "not-a-number"})
+        apply_global_settings_to_env({
+            "sign_task_execution_timeout": 300,
+            "ai_vision_timeout": 30,
+        })
+        assert os.environ["SIGN_TASK_EXECUTION_TIMEOUT"] == "300"
         assert "AI_VISION_TIMEOUT" not in os.environ
 
-    def test_empty_value_keeps_existing_env(self, isolated_env: Path, monkeypatch):
-        import os
-
-        monkeypatch.setenv("AI_VISION_TIMEOUT", "42")
-        apply_global_settings_to_env({"ai_vision_timeout": None})
-        assert os.environ["AI_VISION_TIMEOUT"] == "42"
-
-    def test_restart_reinjects_from_persisted_settings(
-        self, isolated_env: Path, monkeypatch
-    ):
-        """模拟重启：保存设置 → 清空 env → 从持久化回灌，值应恢复。"""
+    def test_restart_restores_task_settings_only(self, isolated_env: Path, monkeypatch):
         import os
 
         service = ConfigService()
-        service.save_global_settings({"ai_vision_timeout": 30})
-        for env_key in GLOBAL_SETTINGS_ENV_SYNC.values():
-            monkeypatch.delenv(env_key, raising=False)
-
-        # 重启后：读持久化设置并回灌
+        service.save_global_settings({"sign_task_execution_timeout": 300})
+        monkeypatch.delenv("SIGN_TASK_EXECUTION_TIMEOUT", raising=False)
         apply_global_settings_to_env(service.get_global_settings())
-        assert os.environ["AI_VISION_TIMEOUT"] == "30"
-
-    def test_save_syncs_env_immediately(self, isolated_env: Path, monkeypatch):
-        import os
-
-        for env_key in GLOBAL_SETTINGS_ENV_SYNC.values():
-            monkeypatch.delenv(env_key, raising=False)
-        service = ConfigService()
-        service.save_global_settings({"ai_vision_retry_attempts": 6})
-        assert os.environ["AI_VISION_RETRY_ATTEMPTS"] == "6"
-
-    def test_string_sync_sets_env_lowercased(self, isolated_env: Path, monkeypatch):
-        """字符串型设置（思考度）应小写透传到 env。"""
-        import os
-
-        monkeypatch.delenv("AI_VISION_REASONING_EFFORT", raising=False)
-        apply_global_settings_to_env({"ai_vision_reasoning_effort": "None"})
-        assert os.environ["AI_VISION_REASONING_EFFORT"] == "none"
-
-    def test_string_sync_clears_env_on_empty(self, isolated_env: Path, monkeypatch):
-        """思考度重置为默认（None/空）时，应清除 env 停止透传。"""
-        import os
-
-        monkeypatch.setenv("AI_VISION_REASONING_EFFORT", "none")
-        apply_global_settings_to_env({"ai_vision_reasoning_effort": None})
-        assert "AI_VISION_REASONING_EFFORT" not in os.environ
-
-    def test_string_sync_invalid_value_clears_env(self, isolated_env: Path, monkeypatch):
-        """apply 侧兜底：非法思考度值不应透传到 env。"""
-        import os
-
-        monkeypatch.setenv("AI_VISION_REASONING_EFFORT", "banana")
-        apply_global_settings_to_env({"ai_vision_reasoning_effort": "banana"})
-        assert "AI_VISION_REASONING_EFFORT" not in os.environ
-
-    def test_save_syncs_reasoning_effort_immediately(
-        self, isolated_env: Path, monkeypatch
-    ):
-        import os
-
-        monkeypatch.delenv("AI_VISION_REASONING_EFFORT", raising=False)
-        service = ConfigService()
-        service.save_global_settings({"ai_vision_reasoning_effort": "none"})
-        assert os.environ["AI_VISION_REASONING_EFFORT"] == "none"
-
-    def test_reasoning_effort_restart_reinjects_and_reset_clears(
-        self, isolated_env: Path, monkeypatch
-    ):
-        """保存 → 重启回灌；重置为默认后重启不应回灌。"""
-        import os
-
-        service = ConfigService()
-        service.save_global_settings({"ai_vision_reasoning_effort": "high"})
-        monkeypatch.delenv("AI_VISION_REASONING_EFFORT", raising=False)
-        apply_global_settings_to_env(service.get_global_settings())
-        assert os.environ["AI_VISION_REASONING_EFFORT"] == "high"
-
-        # 重置为默认：持久化 None，重启回灌后 env 应被清除
-        service.save_global_settings({"ai_vision_reasoning_effort": None})
-        apply_global_settings_to_env(service.get_global_settings())
-        assert "AI_VISION_REASONING_EFFORT" not in os.environ
-
-
-class TestNormalizeReasoningEffort:
-    """normalize_global_settings 对思考度字段的归一化。"""
-
-    def test_valid_value_lowercased(self):
-        normalized = normalize_global_settings({"ai_vision_reasoning_effort": "NONE"})
-        assert normalized["ai_vision_reasoning_effort"] == "none"
-
-    def test_empty_value_normalized_to_none(self):
-        normalized = normalize_global_settings({"ai_vision_reasoning_effort": ""})
-        assert normalized["ai_vision_reasoning_effort"] is None
-
-    def test_invalid_value_dropped(self):
-        normalized = normalize_global_settings({"ai_vision_reasoning_effort": "banana"})
-        assert "ai_vision_reasoning_effort" not in normalized
-
-    def test_absent_key_untouched(self):
-        normalized = normalize_global_settings({"ai_vision_timeout": 30})
-        assert "ai_vision_reasoning_effort" not in normalized
+        assert os.environ["SIGN_TASK_EXECUTION_TIMEOUT"] == "300"
 
 
 class TestGetGlobalProxy:

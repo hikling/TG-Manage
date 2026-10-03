@@ -13,3 +13,12 @@ export const login = (payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+export const getSetupStatus = () =>
+  request<{ setup_required: boolean }>("/auth/setup-status");
+
+export const completeInitialSetup = (payload: { setup_token: string; password: string }) =>
+  request<TokenResponse>("/auth/setup", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });

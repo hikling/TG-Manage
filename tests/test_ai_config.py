@@ -200,19 +200,15 @@ class TestTestAiConnection:
 
 
 class TestExportAllConfigs:
-    """export_all_configs 应脱敏 AI 配置"""
+    """Retired AI settings must not leave or reenter portable exports."""
 
-    def test_export_masks_api_key(self, isolated_env: Path):
-        """导出时 AI 配置的 api_key 应被脱敏为 ***MASKED***"""
+    def test_export_omits_old_ai_config(self, isolated_env: Path):
         service = ConfigService()
         service.save_ai_config(api_key="sk-test-secret", model="gpt-4o")
 
         exported = json.loads(service.export_all_configs())
-        ai_config = exported["settings"]["ai"]
-
-        assert ai_config["api_key"] == "***MASKED***"
-        assert ai_config["model"] == "gpt-4o"
-        assert exported.get("_meta", {}).get("ai_api_key_masked") is True
+        assert "ai" not in exported["settings"]
+        assert "sk-test-secret" not in json.dumps(exported)
         assert "sessions" in exported["_meta"]["excludes"]
 
     def test_export_handles_no_ai_config(self, isolated_env: Path):
@@ -222,10 +218,9 @@ class TestExportAllConfigs:
         if config_file.exists():
             config_file.unlink()
         exported = json.loads(service.export_all_configs())
-        assert exported["settings"]["ai"] is None
+        assert "ai" not in exported["settings"]
 
-    def test_import_skips_masked_api_key(self, isolated_env: Path):
-        """导入脱敏密钥不得覆盖服务器已有 api_key"""
+    def test_import_skips_retired_ai_config(self, isolated_env: Path):
         service = ConfigService()
         service.save_ai_config(
             api_key="sk-real-key", base_url="https://api.orig.com", model="gpt-4o"
@@ -241,12 +236,12 @@ class TestExportAllConfigs:
         }
         result = service.import_all_configs(json.dumps(payload), overwrite=True)
         assert result["settings_skipped"] >= 1
-        assert any("masked" in w.lower() for w in result["warnings"])
+        assert any("retired ai" in w.lower() for w in result["warnings"])
         stored = service.get_ai_config()
         assert stored is not None
         # get_ai_config 返回解密后的明文供使用
-        assert stored.get("base_url") == "https://api.new.com"
-        assert stored.get("model") == "gpt-4o-mini"
+        assert stored.get("base_url") == "https://api.orig.com"
+        assert stored.get("model") == "gpt-4o"
         assert stored.get("api_key") == "sk-real-key"
 
 

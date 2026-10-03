@@ -34,15 +34,11 @@ GLOBAL_SETTINGS_ENV_SYNC = {
     "sign_task_account_cooldown": "SIGN_TASK_ACCOUNT_COOLDOWN",
     "sign_task_flow_retry_attempts": "SIGN_TASK_FLOW_RETRY_ATTEMPTS",
     "sign_task_history_max_age_days": "SIGN_TASK_HISTORY_MAX_AGE_DAYS",
-    "ai_vision_timeout": "AI_VISION_TIMEOUT",
-    "ai_vision_retry_attempts": "AI_VISION_RETRY_ATTEMPTS",
 }
 
 # 字符串型全局设置键 → 环境变量名：小写透传，None/空值表示清除该 env
 # （区别于整数值的"空值保留已有 env"：思考度由面板全权管理，重置即关闭透传）
-GLOBAL_SETTINGS_ENV_SYNC_STR = {
-    "ai_vision_reasoning_effort": "AI_VISION_REASONING_EFFORT",
-}
+GLOBAL_SETTINGS_ENV_SYNC_STR = {}
 
 # reasoning_effort 合法取值（商汤 SenseNova 等文档：low/medium/high/none）
 _REASONING_EFFORT_VALUES = frozenset({"low", "medium", "high", "none"})
@@ -487,21 +483,6 @@ class ConfigExportMixin:
                 all_configs["monitors"][task_name] = config
 
         # 导出设置 — 敏感字段脱敏
-        ai_config = self.get_ai_config()
-        if ai_config:
-            ai_config = dict(ai_config)
-            # 导出不对外暴露解密失败内部标记
-            ai_config.pop("api_key_decrypt_failed", None)
-            if ai_config.get("api_key"):
-                ai_config["api_key"] = self.AI_KEY_MASK
-                all_configs["_meta"]["ai_api_key_masked"] = True
-            elif ai_config.get("api_key") is None:
-                # 解密失败或空 key：导出侧用脱敏占位，避免把 None 误当可导入明文
-                raw_file = self._read_json_file(self._get_ai_config_file()) or {}
-                if raw_file.get("api_key"):
-                    ai_config["api_key"] = self.AI_KEY_MASK
-                    all_configs["_meta"]["ai_api_key_masked"] = True
-
         global_settings = dict(self.get_global_settings())
         if global_settings.get("webdav_password"):
             global_settings["webdav_password"] = self.AI_KEY_MASK
@@ -510,11 +491,7 @@ class ConfigExportMixin:
             global_settings["telegram_bot_token"] = self.AI_KEY_MASK
             all_configs["_meta"]["telegram_bot_token_masked"] = True
 
-        all_configs["settings"] = {
-            "global": global_settings,
-            "ai": ai_config,
-            "telegram": self.get_telegram_config(),
-        }
+        all_configs["settings"] = {"global": global_settings}
 
         return json.dumps(all_configs, ensure_ascii=False, indent=2)
 
@@ -648,60 +625,12 @@ class ConfigExportMixin:
                 except Exception as e:
                     result["errors"].append(f"Failed to import global settings: {e}")
 
-            # AI 配置：脱敏占位符不得覆盖现有密钥
-            if "ai" in settings_data and settings_data["ai"]:
-                try:
-                    ai_conf = settings_data["ai"]
-                    raw_key = str(ai_conf.get("api_key") or "").strip()
-                    if not raw_key:
-                        result["settings_skipped"] += 1
-                        result["warnings"].append(
-                            "AI config skipped: empty api_key"
-                        )
-                    elif raw_key in self.SECRET_MASKS:
-                        result["settings_skipped"] += 1
-                        result["warnings"].append(
-                            "AI api_key is masked in export; kept existing key on server"
-                        )
-                        # 仍可更新 base_url / model（保留现有 key）
-                        existing = self.get_ai_config() or {}
-                        keep_key = str(existing.get("api_key") or "").strip()
-                        if keep_key:
-                            if self.save_ai_config(
-                                keep_key,
-                                ai_conf.get("base_url") or existing.get("base_url"),
-                                ai_conf.get("model") or existing.get("model"),
-                            ):
-                                result["settings_imported"] += 1
-                                result["warnings"].append(
-                                    "AI base_url/model updated with existing api_key"
-                                )
-                    else:
-                        if self.save_ai_config(
-                            raw_key, ai_conf.get("base_url"), ai_conf.get("model")
-                        ):
-                            result["settings_imported"] += 1
-                        else:
-                            result["errors"].append("Failed to import AI config")
-                except Exception as e:
-                    result["errors"].append(f"Failed to import AI config: {e}")
-
-            if "telegram" in settings_data:
-                try:
-                    tg_conf = settings_data["telegram"]
-                    if (
-                        tg_conf.get("is_custom")
-                        and tg_conf.get("api_id")
-                        and tg_conf.get("api_hash")
-                    ):
-                        if self.save_telegram_config(
-                            str(tg_conf["api_id"]), tg_conf["api_hash"]
-                        ):
-                            result["settings_imported"] += 1
-                        else:
-                            result["errors"].append("Failed to import Telegram config")
-                except Exception as e:
-                    result["errors"].append(f"Failed to import Telegram config: {e}")
+            # Older backups may contain global AI / Telegram API settings.
+            # Keep that historical data in the backup file but never reactivate it.
+            for retired in ("ai", "telegram"):
+                if retired in settings_data:
+                    result["settings_skipped"] += 1
+                    result["warnings"].append(f"Retired {retired} settings skipped")
 
             try:
                 from backend.services.sign_tasks import get_sign_task_service

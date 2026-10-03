@@ -18,7 +18,7 @@
 - **只搬任务流程** → 用配置 JSON  
 - **换机 / 灾难恢复** → 用完整备份（本页）
 
-完整备份**不含** `.admin_bootstrap_password`（避免初始密码随备份传播）。
+迁移时应另外备份完整 `data/`，尤其是 `.app_secret_key`，否则账号级 API 凭据和 Bot Token 无法解密。
 
 ---
 

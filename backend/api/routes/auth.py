@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel
+from filelock import FileLock
+from pydantic import BaseModel, constr
 from sqlalchemy.orm import Session
 
 from backend.core import auth as auth_core
@@ -16,10 +18,11 @@ from backend.core.auth import (
 )
 from backend.core.database import get_db
 from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
-from backend.core.security import verify_password
+from backend.core.security import hash_password, verify_password
 from backend.models.login_log import LoginLog
 from backend.models.user import User
 from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
+from backend.services.users import prepare_admin_setup, setup_token_path
 
 router = APIRouter()
 logger = logging.getLogger("backend.auth")
@@ -29,6 +32,43 @@ LOGIN_RATE_LIMIT_DETAIL = "Too many login attempts. Please try again later."
 RESET_TOTP_RATE_LIMIT_DETAIL = (
     "Too many TOTP reset attempts. Please try again later."
 )
+
+
+class InitialSetupRequest(BaseModel):
+    setup_token: constr(min_length=32, max_length=128)
+    password: constr(min_length=12, max_length=128)
+
+
+@router.get("/setup-status")
+def setup_status(db: Session = Depends(get_db)):
+    required = db.query(User.id).first() is None
+    if required:
+        prepare_admin_setup(db)
+    return {"setup_required": required}
+
+
+@router.post("/setup", response_model=TokenResponse)
+def initial_setup(payload: InitialSetupRequest, request: Request, db: Session = Depends(get_db)):
+    rate_limiter.hit(
+        scope="auth.setup", key=compose_rate_limit_key(request, "setup"),
+        max_attempts=5, window_seconds=900, block_seconds=1800,
+        detail="Too many setup attempts. Please try again later.",
+    )
+    path = setup_token_path()
+    with FileLock(str(path) + ".lock", timeout=10):
+        if db.query(User.id).first() is not None:
+            raise HTTPException(409, "管理员已设置")
+        try:
+            expected = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            raise HTTPException(503, "首次设置凭据尚未生成，请重启服务") from None
+        if not expected or not secrets.compare_digest(expected, payload.setup_token):
+            raise HTTPException(403, "初始化凭据无效")
+        user = User(username="admin", password_hash=hash_password(payload.password))
+        db.add(user)
+        db.commit()
+        path.unlink(missing_ok=True)
+    return TokenResponse(access_token=create_access_token({"sub": "admin"}))
 
 
 def _resolve_request_ip(request: Request) -> str:

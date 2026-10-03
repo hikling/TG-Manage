@@ -68,6 +68,13 @@ def api_client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     database_module._engine = engine
     database_module._SessionLocal = testing_session
 
+    # Existing-installation fixture: startup no longer creates an admin password.
+    from backend.core.security import hash_password
+    from backend.models.user import User
+    with testing_session() as seeded:
+        seeded.add(User(username="admin", password_hash=hash_password("admin123")))
+        seeded.commit()
+
     # 导入应用（触发模块注册，但不执行 lifespan）
     main = importlib.import_module("backend.main")
 
@@ -113,7 +120,7 @@ def db(api_client: TestClient):
 # 辅助函数
 # ============================================================================
 
-# ensure_admin 在 lifespan 启动时已创建 admin 用户，密码来自 ADMIN_PASSWORD 环境变量
+# 此 fixture 在启动前注入已有管理员；首次安装走网页设置流程。
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"
 
@@ -737,33 +744,11 @@ class TestImportSignTaskValidation:
         assert body["task_name"] == "padded_task"
 
 
-class TestTelegramConfigValidation:
-    """Telegram API 凭据保存的入参校验守钉"""
+class TestRetiredGlobalConfig:
+    """No shared Telegram API or AI model configuration routes remain."""
 
-    @pytest.mark.parametrize("api_id", ["abc", "1.5", "0", "-5", " "])
-    def test_invalid_api_id_rejected(self, api_client, api_id):
-        """非数字、非正整数或纯空白的 api_id 应返回 400"""
+    @pytest.mark.parametrize("path", ["telegram", "ai"])
+    def test_old_config_endpoints_are_gone(self, api_client, path):
         token = _login(api_client)
-        resp = api_client.post(
-            "/api/config/telegram",
-            json={"api_id": api_id, "api_hash": "somehash"},
-            headers=_auth(token),
-        )
-        assert resp.status_code == 400
-
-    def test_valid_api_id_saved_normalized(self, api_client):
-        """合法 api_id 保存成功，且保存的是去除首尾空白后的值"""
-        token = _login(api_client)
-        resp = api_client.post(
-            "/api/config/telegram",
-            json={"api_id": " 12345 ", "api_hash": "somehash"},
-            headers=_auth(token),
-        )
-        assert resp.status_code == 200
-        assert resp.json()["success"] is True
-
-        get_resp = api_client.get("/api/config/telegram", headers=_auth(token))
-        assert get_resp.status_code == 200
-        body = get_resp.json()
-        assert body["api_id"] == "12345"
-        assert body["is_custom"] is True
+        assert api_client.get(f"/api/config/{path}", headers=_auth(token)).status_code == 404
+        assert api_client.post(f"/api/config/{path}", json={}, headers=_auth(token)).status_code == 404

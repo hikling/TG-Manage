@@ -158,12 +158,6 @@ const emit = defineEmits<{
                 { label: t('taskForm.sendDice'), value: 'send_dice' },
                 { label: t('taskForm.botCmd'), value: 'bot_cmd' },
                 { label: t('taskForm.delay'), value: 'delay' },
-                { label: t('taskForm.aiVision'), value: '_ai_vision', disabled: true },
-                { label: t('taskForm.visionSend'), value: 'vision_send', indent: true },
-                { label: t('taskForm.visionClick'), value: 'vision_click', indent: true },
-                { label: t('taskForm.aiCalc'), value: '_ai_calc', disabled: true },
-                { label: t('taskForm.calcSend'), value: 'calc_send', indent: true },
-                { label: t('taskForm.calcClick'), value: 'calc_click', indent: true },
               ]"
               className="w-full"
             />
@@ -243,8 +237,7 @@ const emit = defineEmits<{
               />
             </template>
 
-            <!-- 6. 自定义插件 -->
-            <!-- 7. AI 识图 / AI 计算 动作 -->
+            <!-- AI 识图 / AI 计算 动作 -->
             <div
               v-else-if="['vision_send', 'vision_click', 'calc_send', 'calc_click'].includes(action.type)"
               class="flex flex-col gap-1 w-full"

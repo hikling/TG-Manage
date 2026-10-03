@@ -84,15 +84,24 @@ def get_default_secret_key(env: Optional[Mapping[str, str]] = None) -> str:
     try:
         existing = secret_file.read_text(encoding="utf-8").strip()
         if existing:
+            secret_file.chmod(0o600)
             return existing
     except OSError:
         pass
 
     generated = secrets.token_urlsafe(48)
     try:
-        secret_file.write_text(generated, encoding="utf-8")
-    except OSError:
-        pass
+        fd = os.open(secret_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        existing = secret_file.read_text(encoding="utf-8").strip()
+        if not existing:
+            raise RuntimeError("应用密钥文件为空，请修复数据目录") from None
+        secret_file.chmod(0o600)
+        return existing
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(generated)
+        handle.flush()
+        os.fsync(handle.fileno())
     return generated
 
 

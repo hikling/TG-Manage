@@ -45,7 +45,7 @@ from backend.scheduler import (  # noqa: E402
     shutdown_scheduler,
     sync_jobs,
 )
-from backend.services.users import ensure_admin  # noqa: E402
+from backend.services.users import prepare_admin_setup  # noqa: E402
 from backend.utils.paths import ensure_data_dirs  # noqa: E402
 from tg_signer.async_utils import create_logged_task  # noqa: E402
 
@@ -420,7 +420,7 @@ async def on_startup() -> None:
     init_engine()
     Base.metadata.create_all(bind=get_engine())
     with get_session_local()() as db:
-        ensure_admin(db)
+        prepare_admin_setup(db)
     await init_scheduler(sync_on_startup=False)
 
     # Pre-export session strings from .session files to avoid SQLite locks during task execution

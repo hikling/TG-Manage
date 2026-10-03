@@ -153,7 +153,7 @@ docker logs -f tg-signpulse
 
 面板 **WebDAV 完整备份** 的逐步说明见 [WebDAV 备份与恢复](/guide/backup-webdav)。
 
-面板上传/导出备份包会打包推荐路径（**不含** `.admin_bootstrap_password`）。
+面板上传/导出备份包会打包推荐路径（务必另外备份完整 `data/`，尤其是 `.app_secret_key`）。
 
 宿主机整目录备份示例：
 
@@ -275,10 +275,10 @@ ls -ld data
 touch data/.probe && rm data/.probe
 ```
 
-### 读取首登密码
+### 获取首次设置码
 
 ```bash
-cat data/.admin_bootstrap_password
+cat data/.admin_setup_token
 ```
 
 ### 观察健康状态

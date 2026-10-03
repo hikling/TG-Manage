@@ -372,7 +372,6 @@ async def refresh_account_chats(
     连接 Telegram 并刷新 Chat 列表，写入 signs_dir/<account>/chats_cache.json。
     """
     from backend.core.config import get_settings
-    from backend.services.config import get_config_service
     from backend.utils.account_locks import get_account_lock
     from backend.utils.proxy import build_proxy_dict
     from backend.utils.tg_session import (
@@ -399,17 +398,9 @@ async def refresh_account_chats(
     fallback_session_string = session_info["fallback_session_string"]
     used_fallback_session = session_info["used_fallback_session"]
 
-    config_service = get_config_service()
-    tg_config = config_service.get_telegram_config()
-    from backend.services.telegram.credentials import (
-        resolve_telegram_api_credentials,
-    )
+    from backend.utils.tg_session import get_account_api_credentials
 
-    api_id, api_hash = resolve_telegram_api_credentials(
-        tg_config,
-        env_api_id=os.getenv("TG_API_ID"),
-        env_api_hash=os.getenv("TG_API_HASH"),
-    )
+    api_id, api_hash = get_account_api_credentials(account_name)
 
     proxy_dict = None
     proxy_value = get_effective_proxy(account_name)

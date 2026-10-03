@@ -6,8 +6,6 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import {
   getGlobalSettings,
-  getTelegramConfig,
-  getAIConfig,
   getRuntimeStatus,
   getMemoryStats,
 } from '../lib/api'
@@ -239,8 +237,6 @@ export function useSettingsPage() {
     botLoading,
     advancedLoading,
     saveAllLoading,
-    tgLoading,
-    aiLoading,
     botTestLoading,
     keepaliveLoading,
     saveSettings,
@@ -249,10 +245,6 @@ export function useSettingsPage() {
     saveAdvancedSettings,
     saveAllSettings,
     testBot,
-    saveTgConfig,
-    resetTgConfig,
-    saveAiConfig,
-    testAi,
   } = useSettingsSave({
     tgConfig,
     aiConfig,
@@ -276,29 +268,13 @@ export function useSettingsPage() {
     }
 
     try {
-      const [res, tgRes, aiRes] = await Promise.all([
-        getGlobalSettings(token),
-        getTelegramConfig(token).catch(() => null),
-        getAIConfig(token).catch(() => null)
-      ])
+      const res = await getGlobalSettings(token)
       const flags = applyGlobalSettingsToForm(settings.value, res)
       botTokenSet.value = flags.botTokenSet
       webdavPasswordSet.value = flags.webdavPasswordSet
       // 同步面板展示时区：Settings 加载后，Dashboard/Logs 等页的时间格式跟随
       setPanelTimezone(res.timezone)
 
-      if (tgRes && tgRes.is_custom) {
-        tgConfig.value.api_id = tgRes.api_id
-        tgConfig.value.api_hash = tgRes.api_hash
-      }
-
-      if (aiRes && aiRes.has_config) {
-        aiConfig.value.base_url = aiRes.base_url || ''
-        aiConfig.value.model = aiRes.model || ''
-        aiKeyDecryptFailed.value = !!aiRes.api_key_decrypt_failed
-      } else {
-        aiKeyDecryptFailed.value = false
-      }
 
       // 运行信息互不依赖，并行请求可以减少设置页首屏等待；单项失败仍然降级。
       const [backupResult, runtimeResult, memoryResult, versionResult] =
@@ -363,8 +339,6 @@ export function useSettingsPage() {
     aiConfig,
     aiKeyDecryptFailed,
     loading,
-    tgLoading,
-    aiLoading,
     dataLoading,
     backupLoading,
     backupStatus,
@@ -399,10 +373,6 @@ export function useSettingsPage() {
     saveAdvancedSettings,
     saveAllSettings,
     testBot,
-    saveTgConfig,
-    resetTgConfig,
-    saveAiConfig,
-    testAi,
     handleExport,
     handleImportFile,
     handleBackupExport,

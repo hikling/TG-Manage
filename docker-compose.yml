@@ -14,15 +14,9 @@ services:
       - PORT=8080
       - APP_DATA_DIR=/data
       - TZ=Asia/Shanghai
-      - TG_API_ID=${TG_API_ID:-}
-      - TG_API_HASH=${TG_API_HASH:-}
-      - APP_SECRET_KEY=${APP_SECRET_KEY:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - LOG_LEVEL=INFO
       - APP_LEGACY_TASKS_READONLY=1
       - APP_SCHEDULER_LOCK=1
-      # - APP_SECRET_KEY=replace-me
-      # - ADMIN_PASSWORD=replace-me
       # - ENABLE_API_DOCS=false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]

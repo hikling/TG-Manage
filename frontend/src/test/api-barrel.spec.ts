@@ -33,7 +33,6 @@ describe('api barrel 完整性', () => {
   })
   it('settings API 导出', () => {
     expect(typeof api.changePassword).toBe('function')
-    expect(typeof api.getAIConfig).toBe('function')
     expect(typeof api.getGlobalSettings).toBe('function')
     expect(typeof api.runDeviceKeepalive).toBe('function')
   })

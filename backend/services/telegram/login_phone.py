@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 from typing import Any, Dict, Optional
 
@@ -19,6 +18,7 @@ from backend.utils.tg_session import (
     get_global_semaphore,
     get_session_mode,
     save_session_string_file,
+    set_account_api_credentials,
     set_account_session_string,
 )
 
@@ -65,7 +65,8 @@ class TelegramPhoneLoginMixin:
 
 
     async def start_login(
-        self, account_name: str, phone_number: str, proxy: Optional[str] = None
+        self, account_name: str, phone_number: str, proxy: Optional[str] = None,
+        api_id: int = None, api_hash: str = None,
     ) -> Dict[str, Any]:
         """
         开始登录流程（发送验证码）
@@ -132,22 +133,15 @@ class TelegramPhoneLoginMixin:
         except Exception as e:
             logger.debug("start_login 清理后台客户端失败: %s", e)
 
-        # 获取 API credentials
+        # Each login supplies credentials for this account.
         from backend.services.config import get_config_service
-
         config_service = get_config_service()
-        tg_config = config_service.get_telegram_config()
-
         from backend.services.telegram.credentials import (
-            resolve_telegram_api_credentials,
+            validate_telegram_api_credentials,
         )
 
         try:
-            api_id, api_hash = resolve_telegram_api_credentials(
-                tg_config,
-                env_api_id=os.getenv("TG_API_ID"),
-                env_api_hash=os.getenv("TG_API_HASH"),
-            )
+            api_id, api_hash = validate_telegram_api_credentials(api_id, api_hash)
         except ValueError:
             _release_account_lock()
             raise ValueError("Telegram API ID / API Hash 未配置或无效") from None
@@ -212,6 +206,8 @@ class TelegramPhoneLoginMixin:
                 "phone_number": phone_number,
                 "lock": account_lock,
                 "account_name": account_name,
+                "api_id": api_id,
+                "api_hash": api_hash,
                 "_created_at": time.monotonic(),
             }
 
@@ -317,6 +313,7 @@ class TelegramPhoneLoginMixin:
                     # get_me 走超时保护：网络挂起时登录接口不能无限等待
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
                     await self._persist_client_session(client, account_name, proxy)
+                    set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                     # 断开连接并清理（成功路径同样容忍断连抖动，避免已登录被误报失败）
                     await _discard_login_client(client, session_key, _release_account_lock)
@@ -339,6 +336,7 @@ class TelegramPhoneLoginMixin:
                         await client.check_password(password)
                         me = await asyncio.wait_for(client.get_me(), timeout=10)
                         await self._persist_client_session(client, account_name, proxy)
+                        set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                         # 断开连接并清理
                         await _discard_login_client(client, session_key, _release_account_lock)
@@ -413,5 +411,3 @@ class TelegramPhoneLoginMixin:
             set_account_profile(account_name, proxy=proxy)
         mark_account_connected(account_name)
         self._accounts_cache = None
-
-

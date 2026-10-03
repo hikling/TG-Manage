@@ -24,7 +24,7 @@
 | 账号与聊天 | 账号管理支持手机验证码/二维码登录、状态检测、代理等；聊天中心按账号查看私聊、机器人、群组和频道会话，搜索/翻页、收发文字与附件、回复、编辑/删除消息、已读及归档等。 |
 | 账号工作台 | 选择账号与目标群聊执行消息操作，并通过原有调度体系创建定时任务。 |
 | 群聊、机器人、代理 | 独立页面提供群聊信息、Bot Token 接入及资料/命令/消息管理、账号代理管理。Bot Token 在服务端加密存储。 |
-| 任务编排 | 保留签到、定时消息、关键词监听、任务运行记录和既有的 AI 动作设置。 |
+| 任务编排 | 保留签到、定时消息、关键词监听和任务运行记录；全局 AI 模型与 Telegram API 配置入口已移除。 |
 | 内置 TeleBox | 保留 TeleBox 0.2.9 的上游源码、内置插件和 TPM；面板按账号启动/停止/重启独立 Node 进程，查看状态和日志、执行插件操作。上游固定提交见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。 |
 | 清理旧功能 | 移除原 Python 自定义插件系统、插件市场/调试入口及其“自定义插件动作”；移除独立频道管理页。频道会话仍在聊天中心。旧任务数据不自动删除，包含旧插件动作的任务要人工检查并迁移。 |
 | 开发流程 | 接入 Trellis 的任务记录、后端/前端规范、Codex 技能与 hooks；搭建过程见 [bootstrap 记录](.trellis/tasks/00-bootstrap-guidelines/progress.md)。 |
@@ -42,49 +42,21 @@
 | TeleBox Node | 构建/运行阶段 Node 24 | 另外安装 Node 24.x，并用 `TELEBOX_NODE` 指定可执行文件 |
 | 资源 | 当前 `docker-compose.yml` 设置 2 GiB 容器内存与 2 CPU；构建时还需要额外内存和磁盘 | 每增加一个运行中的 TeleBox 账号都会启动一个独立 Node 进程；按账号数量预留内存 |
 | 网络与账号 | 能访问 Telegram、npm/PyPI（构建时）；至少一个可完成验证的 Telegram 账号 | 同左；受限网络需先配置 Telegram 代理 |
-| Telegram API | 自己的 `TG_API_ID`、`TG_API_HASH` | 同左；从 `my.telegram.org` 取得，不要写入代码或文档 |
+| Telegram API | 每次登录账号填写自己的 API ID、API Hash | 同左；从 `my.telegram.org` 取得，不要写入代码或文档 |
 
-AI 识图/回答功能另需兼容 OpenAI 的服务与密钥，可在面板系统设置中配置；普通账号与聊天功能无需 AI 密钥。TeleBox 中某些上游插件可能另有自己的依赖或外部服务配置。
+TeleBox 插件可能需要自己的外部服务配置；其插件清单在“拓展插件”按账号显示。
 
 ## Docker Compose 搭建（推荐）
 
-以下命令在**仓库根目录**执行。私有仓库克隆需要你的 GitHub 账号有访问权限；已经下载源码可直接从第 2 步开始。
+服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行（当前 PR 合并前使用功能分支；合并后可以去掉 `--branch feat/telebox-only-onboarding`）：
 
 ```bash
-# 1. 获取本二改仓库，不要克隆上游原版
-git clone https://github.com/hikling/TG-SignPulse-Private.git
-cd TG-SignPulse-Private
-
-# 2. 创建仅供本机使用的环境文件
-cp .env.example .env
+git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-编辑 `.env`，至少填写以下值（均使用你自己的值，**不要把真实值提交到 Git**）：
+脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
 
-```dotenv
-TG_API_ID=your_api_id
-TG_API_HASH=your_api_hash
-APP_SECRET_KEY=replace_with_a_long_random_secret
-ADMIN_PASSWORD=replace_with_a_strong_password
-```
-
-`APP_SECRET_KEY` 可用 `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` 生成。示例文件里还有可选配置；`docker-compose.yml` 会把上述值注入容器。不要在公开截图、日志或 issue 中粘贴 `.env`。Linux/macOS 可运行 `chmod 600 .env`。
-
-```bash
-# 3. 从当前源码构建前端、TeleBox 和 Python 服务并启动
-docker compose up -d --build
-
-# 4. 查看状态及启动日志
-docker compose ps
-docker compose logs --tail=100 app
-
-# 5. 检查就绪状态
-curl -f http://127.0.0.1:8080/readyz
-```
-
-浏览器打开 `http://服务器IP:8080`。如需公网访问，请先配置 HTTPS 反向代理，参考 [`docs/deploy/nginx.md`](docs/deploy/nginx.md)。Compose 默认映射 `8080:8080`，`PORT` 是容器内 Uvicorn 端口；不要只改端口映射右侧而不改容器的 `PORT`。
-
-> **不要用** `docker compose pull` 或上游 GHCR `latest` 取代 `--build`。本分支尚未提供包含这些改动的预构建镜像。首次构建 TeleBox 的原生 npm 依赖可能需要较长时间。
+脚本调用 `docker compose up -d --build`；查看运行状态用 `docker compose ps`，日志用 `docker compose logs --tail=100 app`。首次构建 TeleBox 的原生模块可能较久。
 
 ### 停止与重启
 
@@ -99,11 +71,11 @@ docker compose up -d --build  # 代码更新后重新构建
 
 ## 首次使用
 
-1. 登录面板：用户名 `admin`，密码为 `.env` 里的 `ADMIN_PASSWORD`。若未设置，查看 `data/.admin_bootstrap_password`，登录后立即修改。建议启用面板 TOTP。
-2. 在“账号管理”中通过验证码或二维码登录 Telegram。若需要代理，在系统设置或账号代理页面先配置；登录可能要求 Telegram 两步验证密码。
+1. 首次打开网页，填入安装脚本输出的设置码，自行设置 `admin` 密码；完成后设置码失效。已有部署用原账号登录。建议启用面板 TOTP。
+2. 在“账号管理”中填写本账号的 API ID/Hash，再通过验证码或二维码登录 Telegram。若需要代理，在系统设置或账号代理页面先配置；登录可能要求 Telegram 两步验证密码。
 3. 进入“聊天中心”，选择账号和会话。发送、删除、编辑和群聊操作会触发真实 Telegram 请求，请先用自己的测试会话验证。
 4. 在“任务编排”中创建或检查原有任务。旧 Python 插件动作不能自动转为 TeleBox 插件；逐个检查后改成受支持的任务动作或在 TeleBox 中配置。
-5. 在“TeleBox”页面选择已登录账号并启动。它会申请**独立的新 Telegram 会话**，面板会用该账号的既有授权接受请求；如界面显示需要密码，填写该账号的 Telegram 两步验证密码。等待状态变为运行中，再管理插件和查看日志。
+5. 在“拓展插件”页面选择已登录账号并启动。它会申请**独立的新 Telegram 会话**，面板会用该账号的既有授权接受请求；如界面显示需要密码，填写该账号的 Telegram 两步验证密码。等待状态变为运行中，再管理插件和查看日志。
 
 每个账号的 TeleBox 数据独立保存在 `data/telebox/` 的散列目录中，不能共用同一个工作目录。TeleBox 上游命令/插件仍受其自身许可及运行规则约束，详见 [`telebox/README.md`](telebox/README.md)。
 
@@ -130,12 +102,10 @@ cd telebox && npm ci --include=dev && cd ..
 
 `canvas`、`better-sqlite3` 等 Node 原生模块在 Linux 上可能需要 Python、C/C++ 工具链及 Cairo/Pango/JPEG/GIF 开发包；准确的 Debian 包清单在 [`Dockerfile`](Dockerfile) 的 `telebox-builder` 阶段。Node 版本必须与安装依赖时使用的 ABI 匹配。不要从 `telebox/` 单独再启动一个共用账号的服务进程。
 
-创建 `.env` 后，本地开发请把 `APP_DATA_DIR` 改为仓库内的 `./data`（示例文件的 `/data` 是容器路径）。**Python 的 Telegram 客户端直接读取进程环境中的 `TG_API_ID/HASH`**，仅将这两个值写在 `.env` 不一定会传给这些模块；在你信任的本地 `.env` 中填写后，启动后端前执行：
+本地开发建议设置 `APP_DATA_DIR=./data`，也可不设置而使用程序默认数据目录。账号 API 凭据在登录页面输入；无需给进程提供共享凭据。启动后端前执行：
 
 ```bash
-set -a
-. ./.env
-set +a
+export APP_DATA_DIR=./data
 export TELEBOX_NODE="$(command -v node)"  # 此时应指向 Node 24
 uvicorn backend.main:app --host 127.0.0.1 --port 8080
 ```
@@ -154,9 +124,9 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 
 | 变量 | 用途 | 当前默认/来源 |
 | --- | --- | --- |
-| `TG_API_ID` / `TG_API_HASH` | Telegram API 凭据；账号登录与 TeleBox 授权需要 | Compose 从 `.env` 传入；也可从面板 Telegram API 设置读取，但部署时建议显式设置自有凭据 |
-| `APP_SECRET_KEY` | JWT 签名及 Bot Token 加密的根密钥；升级/恢复数据时必须保持一致 | 未设置会生成持久文件 `.app_secret_key`；建议显式设置 |
-| `ADMIN_PASSWORD` | 首次创建管理员时使用 | 未设置则随机生成至 `data/.admin_bootstrap_password`；修改现有管理员密码不会被此变量覆盖 |
+| 账号 API ID/Hash | 手机/扫码登录时输入，登录成功后加密保存在账号记录 | 必填；旧账号如未保存专属凭据需重登 |
+| `APP_SECRET_KEY` | JWT、Bot Token、账号凭据加密根密钥 | 自动持久化在 `data/.app_secret_key`；备份并保持原值 |
+| 初次管理员密码 | 在网页首次设置，服务端一次性设置码见安装脚本输出 | 既有账号保持原密码 |
 | `APP_DATA_DIR` | SQLite、session、任务、日志、TeleBox 持久数据目录 | Compose 为 `/data`；本地建议 `./data` |
 | `PORT` | Docker 入口脚本监听端口 | Compose 为 `8080` |
 | `APP_PORT` | Python Settings 默认端口（直接用 uvicorn 启动时显式 `--port` 覆盖） | `3000` |
@@ -173,9 +143,9 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 
 ## 数据、升级与备份
 
-- Compose 将宿主机 `./data` 挂载到容器 `/data`。主库、账号会话、签到数据、日志和 TeleBox 状态均依赖此目录；迁移服务器时应备份整个 `data/`，并保留同一 `APP_SECRET_KEY`。
-- 更新前停服务、备份 `data/` 与你自己的 `.env`，再从**这个私有仓库**获取新代码并执行 `docker compose up -d --build`。不要从上游镜像覆盖本二改版本。
-- 恢复时先还原数据目录与密钥，再启动；账号是否需要重新登录取决于 Telegram session 的实际有效性。不要向公共仓库上传备份包。
+- Compose 将宿主机 `./data` 挂载到容器 `/data`。主库、账号会话、签到数据、日志和 TeleBox 状态均依赖此目录；迁移服务器时应备份整个 `data/`（包括 `.app_secret_key`）。
+- 更新前停服务、备份 `data/`，再从**这个私有仓库**获取新代码并执行 `docker compose up -d --build`。不要从上游镜像覆盖本二改版本。
+- 恢复时先还原完整数据目录（含密钥文件），再启动；账号是否需要重新登录取决于 Telegram session 的实际有效性。不要向公共仓库上传备份包。
 - Dockerfile 在 Python 镜像内嵌入 Node 24 与 TeleBox 依赖；前端使用 Node 22 单独构建。Compose 开启只读根文件系统、`/tmp` 临时卷和 2 GiB 内存限额，`data/` 必须可写。更多见 [Docker 部署指南](docs/deploy/docker.md)。
 
 ## 验证与已知限制

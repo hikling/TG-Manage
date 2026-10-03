@@ -36,3 +36,13 @@ The user requested that changes, setup and required environment all be visible i
 | `docs/index.md`, `docs/README.md` | Point documentation readers to this fork and the new installation guide. |
 
 Static validation: all six modified Markdown files have balanced code fences and valid local links; the supplied API ID/Hash values are absent; `git diff --check` passes. This environment has Python 3.12 and Node 24, but no Docker CLI, so `docker compose config/build/up` were not run. This docs-only update did not rerun application tests or contact Telegram.
+
+## User revisions (2026-10-03)
+
+- [ ] Inventory and remove remaining legacy plugin surfaces and task action branches while preserving actionable migration errors.
+- [ ] Add first-run administrator setup without a generated/printed password; retain existing installations safely.
+- [ ] Require and securely persist per-account Telegram API ID/Hash from both phone and QR login; update every client consumer and TeleBox.
+- [ ] Remove global AI model and Telegram API settings/UI/routes; keep unrelated settings and task history intact.
+- [ ] Show per-account installed TeleBox plugins in the extension area and support allowed controls.
+- [ ] Implement one-command server setup, update README/quick start/Compose and an ongoing Markdown change log.
+- [ ] Run focused backend/frontend tests and static validation. Publish a feature branch and draft PR against protected main; do not merge.

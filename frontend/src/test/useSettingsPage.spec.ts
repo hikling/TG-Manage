@@ -111,7 +111,7 @@ describe('useSettingsPage (mount + dirty)', () => {
     })
   })
 
-  it('onMounted loads settings/tg/ai and marks clean', async () => {
+  it('onMounted loads supported settings and marks clean', async () => {
     const { result, unmount } = mountComposable(() => useSettingsPage())
     await vi.waitFor(() => {
       expect(result.pageLoading.value).toBe(false)
@@ -124,8 +124,8 @@ describe('useSettingsPage (mount + dirty)', () => {
     expect(result.settings.value.botThreadId).toBe('9')
     expect(result.botTokenSet.value).toBe(true)
     expect(result.webdavPasswordSet.value).toBe(true)
-    expect(result.tgConfig.value.api_id).toBe('123')
-    expect(result.aiConfig.value.model).toBe('m1')
+    expect(api.getTelegramConfig).not.toHaveBeenCalled()
+    expect(api.getAIConfig).not.toHaveBeenCalled()
     expect(result.runtimeStatus.value).toEqual({ uptime: 1 })
     expect(result.memoryStats.value).toEqual({ rss: 1 })
     expect(result.backupStatus.value).toEqual({ last: 'ok' })
