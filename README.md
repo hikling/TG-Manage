@@ -23,7 +23,7 @@
 | 管理页面 | 参照提供的截图重做导航、账号卡片、内容面板、浅色/深色主题与移动端布局；保留仪表盘、账号、任务、日志、设置等入口。 |
 | 账号与聊天 | 账号管理支持手机验证码/二维码登录、状态检测、代理及登录时启用 TeleBox；聊天中心按账号查看私聊、机器人、群组和频道会话，显示 Telegram 头像、搜索/翻页、收发文字与附件、回复、编辑/删除消息、已读及归档等。 |
 | 账号工作台 | 选择账号与目标群聊执行消息操作，并通过原有调度体系创建定时任务。 |
-| 群聊、机器人、代理 | 独立页面提供群聊信息、Bot Token 接入及资料/命令/消息管理、账号代理管理。Bot Token 在服务端加密存储。 |
+| 机器人、代理 | 独立页面提供 Bot Token 接入及资料/命令/消息管理、账号代理管理。群会话保留在聊天中心与账号工作台，不提供单独的群聊管理。Bot Token 在服务端加密存储。 |
 | 任务编排与日志 | 保留签到、定时消息、关键词监听和任务运行记录；定时动作可选择当前账号已加载的 TeleBox 插件命令，并在统一日志页查看 TeleBox 运行记录。全局 AI 模型与 Telegram API 配置入口已移除。 |
 | 内置 TeleBox | 保留 TeleBox 0.2.9 的上游源码、内置插件和 TPM；登录账号时选择启用并自动请求独立会话，拓展插件页查看状态、插件和日志。上游固定提交见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。 |
 | 清理旧功能 | 移除原 Python 自定义插件系统、插件市场/调试入口及其“自定义插件动作”；移除独立频道管理页。频道会话仍在聊天中心。旧任务数据不自动删除，包含旧插件动作的任务要人工检查并迁移。 |
@@ -48,10 +48,10 @@ TeleBox 插件可能需要自己的外部服务配置；其插件清单在“拓
 
 ## Docker Compose 搭建（推荐）
 
-服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行（当前 PR 合并前使用功能分支；合并后可以去掉 `--branch feat/telebox-login-chat-task-logs`）：
+服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行（本次修复合并前使用修复分支；合并后可以省略 `--branch`）：
 
 ```bash
-git clone --branch feat/telebox-login-chat-task-logs https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch fix/telebox-esm-workbench https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
 脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
@@ -74,7 +74,7 @@ docker compose up -d --build  # 代码更新后重新构建
 1. 首次打开网页，填入安装脚本输出的设置码，自行设置 `admin` 密码；完成后设置码失效。已有部署用原账号登录。建议启用面板 TOTP。
 2. 在“账号管理”选择是否启用 TeleBox。勾选时填写该账号 API ID/Hash；不勾选时使用服务器私有 `.env` 中的应用凭据，网页登录无需重复填写。两种方式都通过验证码或二维码授权 Telegram；缺少任何可用 API 凭据时登录会明确报错。
 3. 启用 TeleBox 的账号在登录成功后自动申请**独立的新 Telegram 会话**。在“拓展插件”查看状态；如要求两步验证密码，在这里填写。若失败，状态和日志显示失败阶段及脱敏错误，再检查网络、授权、依赖与代理。
-4. 进入“聊天中心”选择账号和会话。头像从 Telegram 读取；无照片时显示文字占位。发送、删除、编辑和群聊操作会触发真实 Telegram 请求，先用自己的测试会话验证。
+4. 进入“聊天中心”选择账号和会话。头像从 Telegram 读取；无照片时显示文字占位。发送、删除、编辑消息会触发真实 Telegram 请求；群聊会话也在这里展示，没有单独的群聊管理页面。账号工作台可多选操作账号和共有群，发送消息或创建每日任务。
 5. 在“任务编排”中创建定时任务时可以选 TeleBox 插件命令。该账号需处于运行中并已加载此命令；多账号任务的每个账号都需具备相同插件。任务日志记录投递，插件详细输出在“日志”→“TeleBox 日志”。旧 Python 插件动作不会自动迁移。
 
 每个账号的 TeleBox 数据独立保存在 `data/telebox/` 的散列目录中，不能共用同一个工作目录。TeleBox 上游命令/插件仍受其自身许可及运行规则约束，详见 [`telebox/README.md`](telebox/README.md)。

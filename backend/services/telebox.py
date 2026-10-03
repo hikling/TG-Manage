@@ -111,8 +111,11 @@ class TeleBoxService:
                 shutil.copytree(source, target)
             else:
                 shutil.copy2(source, target)
-        # Always refresh our IPC adapter; this contains no user settings.
+        # Refresh managed integration code on existing account directories too.
+        # Upstream plugins, user plugins and account config remain account-local.
         shutil.copytree(self.source / "panel", directory / "panel", dirs_exist_ok=True)
+        for script in ("esbuild-register.cjs", "esbuild-esm-loader.mjs", "cjs-helpers.js"):
+            shutil.copy2(self.source / "scripts" / script, directory / "scripts" / script)
         for folder in ["home", "cache", "temp"]:
             (directory / folder).mkdir(exist_ok=True, mode=0o700)
         dependencies = directory / "node_modules"

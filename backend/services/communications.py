@@ -196,24 +196,6 @@ async def dialog_action(account: str, chat_id: str, action: str):
     return {"ok": True}
 
 
-async def group(account: str, chat_id: str, changes: dict | None = None, leave: bool = False):
-    async with account_client(account) as client:
-        peer = peer_id(chat_id)
-        chat = await client.get_chat(peer)
-        if getattr(chat.type, "value", str(chat.type)) not in {"group", "supergroup"}:
-            raise HTTPException(400, "该会话不是群聊")
-        if leave:
-            await client.leave_chat(peer)
-            return {"ok": True}
-        if changes:
-            if "title" in changes:
-                await client.set_chat_title(peer, changes["title"])
-            if "description" in changes:
-                await client.set_chat_description(peer, changes["description"])
-            chat = await client.get_chat(peer)
-        return {"id": str(chat.id), "title": chat.title, "description": getattr(chat, "description", None) or "", "members_count": getattr(chat, "members_count", None), "username": getattr(chat, "username", None)}
-
-
 def proxies():
     return {"items": [{"account": item["name"], "proxy": get_account_proxy(item["name"]) or ""} for item in get_telegram_service().list_accounts()]}
 

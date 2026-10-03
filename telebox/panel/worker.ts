@@ -24,7 +24,7 @@ function safeError(error: unknown): string {
 async function shutdown(code = 0) {
   if (stop) return;
   stop = true;
-  try { if (initialized) await (await import("../src/utils/runtimeManager")).shutdownRuntime(); }
+  try { if (initialized) await require("../src/utils/runtimeManager").shutdownRuntime(); }
   finally { process.exit(code); }
 }
 process.on("SIGTERM", () => void shutdown());
@@ -34,8 +34,10 @@ async function initialize(input: any) {
   if (initialized) throw new Error("already initialized");
   initialized = true;
   stage = "依赖加载";
-  const { TelegramClient } = await import("teleproto");
-  const { StringSession } = await import("teleproto/sessions");
+  // The bundled TeleBox runtime and teleproto are CommonJS. Use the same
+  // resolver as upstream; ESM rejects directory imports such as sessions.
+  const { TelegramClient } = require("teleproto");
+  const { StringSession } = require("teleproto/sessions");
   const old = fs.existsSync("config.json") ? JSON.parse(fs.readFileSync("config.json", "utf8")) : {};
   privateValues = [String(input.api_hash || ""), String(old.session || ""), String(input.proxy?.password || "")];
   const config = { ...old, api_id: input.api_id, api_hash: input.api_hash, proxy: input.proxy || undefined };
@@ -64,18 +66,18 @@ async function initialize(input: any) {
     fs.writeFileSync("config.json", JSON.stringify(config), { mode: 0o600 });
   } finally { await client.destroy(); }
   stage = "加载插件";
-  const { initPluginBaseConfig } = await import("../src/utils/pluginBase");
+  const { initPluginBaseConfig } = require("../src/utils/pluginBase");
   initPluginBaseConfig();
-  await import("../src/hook/patches/telegram.patch");
+  require("../src/hook/patches/telegram.patch");
   stage = "启动运行时";
-  await (await import("../src/utils/runtimeManager")).startRuntime();
+  await require("../src/utils/runtimeManager").startRuntime();
   stage = "运行中";
   await emitCommands();
   emit({ event: "state", status: "running" });
 }
 async function emitCommands() {
-  const manager = await import("../src/utils/pluginManager");
-  emit({ event: "commands", items: manager.listCommands().map(command => ({
+  const manager = require("../src/utils/pluginManager");
+  emit({ event: "commands", items: manager.listCommands().map((command: string) => ({
     command, plugin: manager.getPluginEntry(command)?.plugin.name || "",
   })) });
 }
@@ -85,9 +87,9 @@ async function runPlugin(input: any) {
   const args = String(input.args || "");
   if (!/^[A-Za-z0-9_-]{1,80}$/.test(plugin) || !/^[A-Za-z0-9_ -]{1,80}$/.test(command)
     || args.length > 500 || /[\r\n]/.test(args)) throw new Error("invalid plugin command");
-  const manager = await import("../src/utils/pluginManager");
+  const manager = require("../src/utils/pluginManager");
   if (manager.getPluginEntry(command)?.plugin.name !== plugin) throw new Error("plugin command unavailable");
-  const { getGlobalClient } = await import("../src/utils/runtimeAccess");
+  const { getGlobalClient } = require("../src/utils/runtimeAccess");
   const client = await getGlobalClient() as TelegramClient;
   await client.sendMessage("me", { message: `${manager.getPrefixes()[0]}${command}${args.trim() ? ` ${args.trim()}` : ""}` });
   // The plugin processes the self-message asynchronously through its normal handler.
@@ -98,7 +100,7 @@ async function pluginOperation(action: string, name?: string) {
   if (name && !/^[a-zA-Z0-9_-]{1,80}$/.test(name)) throw new Error("invalid plugin name");
   if (["install", "uninstall"].includes(action) && (!name || name === "all")) throw new Error("one plugin name required");
   if (action === "reload") {
-    await (await import("../src/utils/runtimeManager")).reloadRuntime();
+    await require("../src/utils/runtimeManager").reloadRuntime();
     return;
   }
   const outputs: string[] = [];
@@ -106,7 +108,7 @@ async function pluginOperation(action: string, name?: string) {
   const write = async (value: any) => { const text = String(value.text || value.message || value || ""); outputs.push(text); console.info(text); return sink; };
   const sink: any = { __panelStatus: true, id: 0, message: `.tpm ${action} ${name || ""}`,
     edit: write, reply: write, delete: async () => {}, client: { sendMessage: async (_: unknown, value: unknown) => write(value) } };
-  const tpm = (await import("../src/plugin/tpm")).default;
+  const tpm = require("../src/plugin/tpm").default;
   await tpm.cmdHandlers.tpm(sink);
   if (outputs.some(text => /❌|安装失败|卸载失败|更新失败/.test(text))) throw new Error("TPM operation failed; see logs");
   await emitCommands();

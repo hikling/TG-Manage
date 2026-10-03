@@ -14,10 +14,10 @@
 服务器准备 Docker Engine 24+、Compose v2、Git 和本私有仓库的读取权限。当前 PR 合并前执行：
 
 ```bash
-git clone --branch feat/telebox-login-chat-task-logs https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch fix/telebox-esm-workbench https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-合并至 main 后可省略 `--branch feat/telebox-login-chat-task-logs`。脚本构建镜像、启动容器、检测就绪并打印首次设置码。应用密钥自动生成并保存在 `data/.app_secret_key`。浏览器打开 `http://服务器IP:8080`，输入一次性设置码并自行设置管理员密码（至少 12 位）。不启用 TeleBox 且希望登录页免填 API 时，先在服务器私有 `.env` 设置 `SIGNPULSE_TG_API_ID/HASH`；Telegram 授权仍需应用凭据。已有账号不会被重置。公网访问请配置 HTTPS。
+合并至 main 后可省略 `--branch fix/telebox-esm-workbench`。脚本构建镜像、启动容器、检测就绪并打印首次设置码。应用密钥自动生成并保存在 `data/.app_secret_key`。浏览器打开 `http://服务器IP:8080`，输入一次性设置码并自行设置管理员密码（至少 12 位）。不启用 TeleBox 且希望登录页免填 API 时，先在服务器私有 `.env` 设置 `SIGNPULSE_TG_API_ID/HASH`；Telegram 授权仍需应用凭据。已有账号不会被重置。公网访问请配置 HTTPS。
 
 查看状态：`docker compose ps`；查看日志：`docker compose logs --tail=100 app`。克隆私有仓库需要 GitHub 授权。
 

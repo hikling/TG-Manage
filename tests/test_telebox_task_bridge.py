@@ -33,6 +33,24 @@ def test_login_credentials_choose_account_or_private_server_default(monkeypatch)
         accounts._login_api_credentials(None, None)
 
 
+def test_existing_telebox_account_refreshes_managed_loader_without_losing_plugins(tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    directory = service.directory("one")
+    (directory / "scripts").mkdir(parents=True)
+    (directory / "plugins").mkdir()
+    (directory / "scripts" / "esbuild-register.cjs").write_text("outdated loader")
+    (directory / "plugins" / "custom.ts").write_text("user plugin")
+    (directory / "config.json").write_text('{"session":"private"}')
+
+    service._prepare("one")
+
+    assert (directory / "scripts" / "esbuild-register.cjs").read_bytes() == (
+        telebox.SOURCE / "scripts" / "esbuild-register.cjs"
+    ).read_bytes()
+    assert (directory / "plugins" / "custom.ts").read_text() == "user plugin"
+    assert (directory / "config.json").read_text() == '{"session":"private"}'
+
+
 @pytest.mark.asyncio
 async def test_dispatch_requires_loaded_command_and_account(monkeypatch, tmp_path):
     service = telebox.TeleBoxService(root=tmp_path)
