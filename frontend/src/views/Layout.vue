@@ -135,7 +135,6 @@ const navigation = [
   { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts' },
   { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台' },
-  { id: 'groups', name: 'groups', icon: Users, labelKey: '群聊管理' },
   { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心' },
   { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心' },
   { id: 'proxies', name: 'proxies', icon: Network, labelKey: '代理管理' },

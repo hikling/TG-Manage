@@ -15,7 +15,7 @@ Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编
 安装 Docker Engine 24+、Docker Compose v2 和 Git，确保服务器有私有仓库读取权限及构建网络。当前 PR 合并前执行：
 
 ```bash
-git clone --branch feat/telebox-login-chat-task-logs https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch fix/telebox-esm-workbench https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
 合并后克隆时可省略 `--branch`。脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。不启用 TeleBox 且要免填账号 API 时，在构建前复制 `.env.example` 为 `.env` 并填入 `SIGNPULSE_TG_API_ID/HASH`，文件只留在服务器，不提交仓库。域名和 TLS 见 [Nginx 示例](nginx.md)。
@@ -62,6 +62,7 @@ docker compose up -d --build
 | `/readyz` 未就绪 | `docker compose ps`、`docker compose logs --tail=200 app`、`./data` 是否可写。 |
 | 无法登录 Telegram | API ID/Hash、验证码/2FA、服务器访问 Telegram 的网络与代理。 |
 | TeleBox 提示未安装依赖 | 必须从本仓库 `docker compose up -d --build`，不要换成上游旧镜像。 |
+| TeleBox 报 `Directory import ... teleproto/sessions` | 旧启动器在 Node ESM 中导入了目录。更新包含修复的功能分支，执行 `git pull && docker compose up -d --build`；账号目录的启动器会自动刷新，保留插件和会话配置。API ID/Hash 不会引起此错误。 |
 | TeleBox 内存不足 | 提高宿主机可用内存及 Compose `mem_limit`，减少同时运行的账号数。 |
 | 旧自定义插件任务失败 | 旧 Python 插件体系已移除；备份后手工改用现有任务动作或 TeleBox 插件。 |
 

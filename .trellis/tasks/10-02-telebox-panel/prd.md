@@ -8,12 +8,14 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 - Keep existing login, accounts, scheduling, logs, settings and authentication behavior.
 - Chat center across all account dialogs: private, bot, group and channel conversations, history pagination, text/media send, reply, edit/delete, archive/unarchive, read state and search. Channel conversations remain here without a separate channel administration area.
 - Account workbench: select account/targets, send messages and create timed tasks through the existing scheduler.
-- Group management and proxy management with real APIs. Bot center with token registration, profile/commands and message management through Telegram Bot API.
+- Proxy management with real APIs. Bot center with token registration, profile/commands and message management through Telegram Bot API.
 - Vendor complete TeleBox source, preserve its license, plugin runtime, built-in commands, TPM and lifecycle. Integrate per-account runtime control and logs into the panel; each account has isolated persistent plugin/config/data paths.
 - Remove legacy Python plugin system, marketplace, debug/storage/editor UI, custom-plugin action and associated build/scripts/tests/docs. Existing legacy actions must fail visibly and never silently run a substitute.
 - Supplied Telegram credentials belong only in an ignored private backend environment file; no secrets in frontend, git, API output or logs.
 
 ## 2026-10-03 revised requirements
+
+- Remove the dedicated group management page, navigation, account shortcut and group management API. Group conversations remain available in chat and workbench.
 
 - Remove all remaining original TG-SignPulse plugin UI, API, runtime references and plugin-specific task actions; TeleBox is the only plugin system. Historical task data remains readable for migration, with a clear error if it attempts an old action.
 - Simplify server installation to a single copyable command. Generate and persist `APP_SECRET_KEY` automatically. On a fresh instance, the administrator sets their own password in a guarded web setup flow; no printed bootstrap password.

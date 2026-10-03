@@ -1,14 +1,149 @@
 <script setup lang="ts">
-import {ref,watch} from 'vue'
-import {Send,Workflow} from 'lucide-vue-next'
-import {usePanelAccount,errorText} from '../composables/usePanelAccount'
-import {listDialogs,sendMessage,type Dialog} from '../lib/api/communications'
-import {createSignTask} from '../lib/api/sign-tasks'
-import {getAuthToken} from '../lib/api/core'
-import {useConfirm} from '../composables/useConfirm'
-const {store,account,error}=usePanelAccount();const {confirm}=useConfirm();const selected=ref<string[]>([]),dialogs=ref<Dialog[]>([]),targets=ref<string[]>([]),text=ref(''),mode=ref('now'),time=ref('09:00'),name=ref(''),busy=ref(false),result=ref('');let generation=0
-watch(account,a=>{if(a&&!selected.value.length)selected.value=[a]})
-watch(selected,async accounts=>{const gen=++generation;targets.value=[];dialogs.value=[];error.value='';if(!accounts.length)return;try{const pages=await Promise.all(accounts.map(async a=>{let items:Dialog[]=[];let offset=0;for(let i=0;i<200;i++){const p=await listDialogs(a,'',offset,false,'groups');items.push(...p.items);if(!p.has_more)break;offset=p.next_offset??offset+50}return items}));if(gen!==generation)return;dialogs.value=(pages[0]??[]).filter(d=>pages.every(p=>p.some(x=>x.id===d.id)))}catch(e){if(gen===generation)error.value=errorText(e)}})
-async function submit(){if(busy.value||!selected.value.length||!targets.value.length||!text.value.trim())return;if(mode.value==='schedule'&&targets.value.some(id=>!Number.isSafeInteger(Number(id)))){error.value='群聊 ID 超过浏览器安全整数范围，请在任务编排中创建此任务';return}if(!await confirm({title:mode.value==='now'?'发送群消息':'创建定时任务',message:`将对 ${selected.value.length} 个账号的 ${targets.value.length} 个群聊${mode.value==='now'?'立即发送消息':'创建每日发送任务'}，是否继续？`}))return;busy.value=true;error.value='';result.value='';let sent=0;try{if(mode.value==='now'){for(const a of selected.value)for(const chat of targets.value){await sendMessage(a,chat,text.value);sent++}result.value=`已成功发送 ${sent} 条消息`}else{await createSignTask(getAuthToken(),{name:name.value.trim(),account_name:selected.value[0]!,account_names:selected.value,sign_at:time.value,execution_mode:'fixed',chats:targets.value.map(id=>({chat_id:Number(id),name:dialogs.value.find(d=>d.id===id)?.title||id,action_interval:1,actions:[{action:1,text:text.value}]}))});result.value='定时任务已创建，可在任务编排中查看与停用'}}catch(e){error.value=(sent?`已有 ${sent} 条发送成功，剩余未执行。`:'')+errorText(e)}finally{busy.value=false}}
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { Check, Clock3, Search, Send, UsersRound, Workflow } from 'lucide-vue-next'
+import { usePanelAccount, errorText } from '../composables/usePanelAccount'
+import { listDialogs, sendMessage, type Dialog } from '../lib/api/communications'
+import { createSignTask } from '../lib/api/sign-tasks'
+import { getAuthToken } from '../lib/api/core'
+import { useConfirm } from '../composables/useConfirm'
+import ChatAvatar from '../components/ChatAvatar.vue'
+
+const { store, account, error } = usePanelAccount()
+const { confirm } = useConfirm()
+const selected = ref<string[]>([])
+const dialogs = ref<Dialog[]>([])
+const targets = ref<string[]>([])
+const search = ref('')
+const text = ref('')
+const mode = ref<'now' | 'schedule'>('now')
+const time = ref('09:00')
+const name = ref('')
+const busy = ref(false)
+const loading = ref(false)
+const result = ref('')
+let generation = 0
+
+const visibleDialogs = computed(() => dialogs.value.filter(dialog =>
+  (dialog.title + ' ' + (dialog.username || '')).toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()),
+))
+function toggle(list: string[], value: string) {
+  const index = list.indexOf(value)
+  if (index === -1) list.push(value)
+  else list.splice(index, 1)
+}
+watch(account, value => { if (value && !selected.value.length) selected.value = [value] })
+watch(selected, async accounts => {
+  const current = ++generation
+  targets.value = []
+  dialogs.value = []
+  error.value = ''
+  if (!accounts.length) { loading.value = false; return }
+  loading.value = true
+  try {
+    const pages = await Promise.all(accounts.map(async accountName => {
+      const items: Dialog[] = []
+      let offset = 0
+      for (let page = 0; page < 200; page++) {
+        const response = await listDialogs(accountName, '', offset, false, 'groups')
+        items.push(...response.items)
+        if (!response.has_more) break
+        offset = response.next_offset ?? offset + response.items.length
+      }
+      return items
+    }))
+    if (current !== generation) return
+    const otherIds = pages.slice(1).map(items => new Set(items.map(item => item.id)))
+    dialogs.value = (pages[0] ?? []).filter(dialog => otherIds.every(ids => ids.has(dialog.id)))
+  } catch (cause) {
+    if (current === generation) error.value = errorText(cause)
+  } finally {
+    if (current === generation) loading.value = false
+  }
+}, { deep: true })
+onUnmounted(() => { ++generation })
+
+async function submit() {
+  if (busy.value || !selected.value.length || !targets.value.length || !text.value.trim()) return
+  if (mode.value === 'schedule' && targets.value.some(id => !Number.isSafeInteger(Number(id)))) {
+    error.value = '群聊 ID 超过浏览器安全整数范围，请在任务编排中创建此任务'
+    return
+  }
+  const action = mode.value === 'now' ? '立即发送消息' : '创建每日发送任务'
+  if (!await confirm({ title: action, message: `将对 ${selected.value.length} 个账号的 ${targets.value.length} 个群聊${action}，是否继续？` })) return
+  busy.value = true
+  error.value = ''
+  result.value = ''
+  let sent = 0
+  try {
+    if (mode.value === 'now') {
+      for (const accountName of selected.value) for (const chat of targets.value) {
+        await sendMessage(accountName, chat, text.value)
+        sent++
+      }
+      result.value = `已成功发送 ${sent} 条消息`
+    } else {
+      await createSignTask(getAuthToken(), {
+        name: name.value.trim(), account_name: selected.value[0]!, account_names: selected.value,
+        sign_at: time.value, execution_mode: 'fixed',
+        chats: targets.value.map(id => ({
+          chat_id: Number(id), name: dialogs.value.find(dialog => dialog.id === id)?.title || id,
+          action_interval: 1, actions: [{ action: 1, text: text.value }],
+        })),
+      })
+      result.value = '定时任务已创建，可在任务编排中查看与停用'
+    }
+  } catch (cause) {
+    error.value = (sent ? `已有 ${sent} 条发送成功，剩余未执行。` : '') + errorText(cause)
+  } finally { busy.value = false }
+}
 </script>
-<template><div class="panel-stack"><section class="panel-card"><p class="panel-eyebrow"><Workflow :size="18"/>多账号操作与会话策略</p><h2 class="panel-title">账号工作台</h2><p class="panel-muted">选择一个或多个账号，向共同加入的群聊发送消息。定时发送会创建独立任务并保留运行记录。</p></section><p v-if="error" class="panel-error" role="alert">{{error}}</p><p v-if="result" class="panel-success" role="status">{{result}}</p><section class="panel-card panel-stack"><h3>选择账号与共有群</h3><div class="panel-columns"><label>操作账号（可多选）<select v-model="selected" class="panel-input mt-3" multiple size="4" :disabled="busy"><option v-for="a in store.accounts" :key="a.name" :value="a.name">{{a.name}}</option></select></label><label>目标会话（可多选）<select v-model="targets" class="panel-input mt-3" multiple size="4" :disabled="busy"><option v-for="d in dialogs" :key="d.id" :value="d.id">{{d.title}}</option></select></label></div><p class="panel-muted text-sm">仅显示所有选中账号都加入的群聊。电脑可按 Ctrl / Command 多选。</p></section><form class="panel-card panel-stack" @submit.prevent="submit"><h3 class="flex items-center gap-3"><Send :size="20"/>群消息操作</h3><div class="panel-columns"><label>发送方式<select v-model="mode" class="panel-input mt-3" :disabled="busy"><option value="now">立即发送</option><option value="schedule">每日定时发送</option></select></label><label v-if="mode==='schedule'">执行时间（服务器时区）<input v-model="time" type="time" required class="panel-input mt-3"/></label></div><label v-if="mode==='schedule'">任务名称<input v-model="name" required maxlength="80" class="panel-input mt-3"/></label><label>消息内容<textarea v-model="text" rows="7" class="panel-input mt-3" required :disabled="busy" placeholder="输入要发送到所选群聊的消息"/></label><div class="panel-row"><p class="panel-muted">目标：{{selected.length}} 个账号 × {{targets.length}} 个共有群</p><button class="panel-button primary" :disabled="busy||!targets.length||!selected.length">{{busy?'正在处理…':mode==='now'?'立即发送':'创建定时任务'}}</button></div></form></div></template>
+
+<template>
+  <div class="panel-stack workbench">
+    <header class="panel-card workbench-intro">
+      <p class="panel-eyebrow"><Workflow :size="18" /> 账号工作台</p>
+      <h2 class="panel-title">一次选择，清楚掌握发送范围</h2>
+      <p class="panel-muted">选择操作账号和共有群会话，发送消息或建立每日任务。</p>
+      <div class="workbench-summary" aria-live="polite"><span><strong>{{ selected.length }}</strong> 个账号</span><span class="workbench-summary-dot" aria-hidden="true" /><span><strong>{{ targets.length }}</strong> 个目标会话</span></div>
+    </header>
+    <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
+    <p v-if="result" class="panel-success" role="status">{{ result }}</p>
+    <section class="workbench-pickers" aria-label="选择发送范围">
+      <div class="panel-card workbench-picker">
+        <div class="workbench-picker-header"><div class="workbench-step">01</div><div><h3>操作账号</h3><p class="panel-muted">选择一个或多个已登录账号</p></div><span class="panel-badge">{{ selected.length }} 已选</span></div>
+        <div v-if="!store.accounts.length" class="panel-empty">暂无账号，请先在账号管理登录。</div>
+        <div v-else class="workbench-options" role="group" aria-label="操作账号">
+          <label v-for="item in store.accounts" :key="item.name" class="workbench-option" :class="{ selected: selected.includes(item.name) }">
+            <input type="checkbox" :checked="selected.includes(item.name)" :disabled="busy" @change="toggle(selected, item.name)" />
+            <span class="workbench-account-avatar" aria-hidden="true">{{ item.name.slice(0, 2) }}</span>
+            <span class="workbench-option-content"><strong>{{ item.name }}</strong><small>{{ item.status === 'active' ? '已连接' : (item.status_message || '账号已登录') }}</small></span>
+            <span class="workbench-check" aria-hidden="true"><Check :size="14" /></span>
+          </label>
+        </div>
+      </div>
+      <div class="panel-card workbench-picker">
+        <div class="workbench-picker-header"><div class="workbench-step">02</div><div><h3>目标对话</h3><p class="panel-muted">仅显示所选账号共同加入的群聊</p></div><span class="panel-badge">{{ targets.length }} 已选</span></div>
+        <label class="workbench-search"><Search :size="18" /><input v-model="search" type="search" placeholder="搜索群名称或用户名" aria-label="搜索目标对话" :disabled="loading || !selected.length" /></label>
+        <div v-if="visibleDialogs.length && !loading" class="workbench-select-actions"><button type="button" :disabled="busy" @click="targets = visibleDialogs.map(dialog => dialog.id)">选择当前结果</button><button type="button" :disabled="busy || !targets.length" @click="targets = []">清空选择</button></div>
+        <p v-if="loading" class="panel-empty" role="status">正在读取共有群会话…</p>
+        <p v-else-if="!selected.length" class="panel-empty">先选择操作账号</p>
+        <p v-else-if="!visibleDialogs.length" class="panel-empty">{{ search ? '没有匹配的群会话' : '这些账号没有共有群会话' }}</p>
+        <div v-else class="workbench-options" role="group" aria-label="目标对话">
+          <label v-for="dialog in visibleDialogs" :key="dialog.id" class="workbench-option" :class="{ selected: targets.includes(dialog.id) }">
+            <input type="checkbox" :checked="targets.includes(dialog.id)" :disabled="busy" @change="toggle(targets, dialog.id)" />
+            <ChatAvatar :account="selected[0]!" :chat-id="dialog.id" :name="dialog.title" />
+            <span class="workbench-option-content"><strong>{{ dialog.title }}</strong><small>{{ dialog.username ? '@' + dialog.username : dialog.type === 'supergroup' ? '超级群组' : '群组' }}</small></span>
+            <span class="workbench-check" aria-hidden="true"><Check :size="14" /></span>
+          </label>
+        </div>
+      </div>
+    </section>
+    <form class="panel-card workbench-compose" @submit.prevent="submit">
+      <div class="workbench-picker-header"><div class="workbench-step">03</div><div><h3>编写消息</h3><p class="panel-muted">发送前可核对所选账号与会话</p></div></div>
+      <fieldset class="workbench-mode" :disabled="busy"><legend>发送方式</legend><label :class="{ selected: mode === 'now' }"><input v-model="mode" type="radio" value="now" /><Send :size="18" />立即发送</label><label :class="{ selected: mode === 'schedule' }"><input v-model="mode" type="radio" value="schedule" /><Clock3 :size="18" />每日定时</label></fieldset>
+      <div v-if="mode === 'schedule'" class="panel-columns"><label>任务名称<input v-model="name" required maxlength="80" class="panel-input mt-2" :disabled="busy" placeholder="例如：每日上午问候" /></label><label>执行时间（服务器时区）<input v-model="time" type="time" required class="panel-input mt-2" :disabled="busy" /></label></div>
+      <label class="workbench-message-label">消息内容<textarea v-model="text" rows="5" class="panel-input mt-2" required :disabled="busy" placeholder="输入要发送的消息…" /></label>
+      <div class="workbench-footer"><p class="panel-muted"><UsersRound :size="17" /> {{ selected.length }} 个账号 · {{ targets.length }} 个共有群</p><button class="panel-button primary" :disabled="busy || loading || !targets.length || !selected.length || !text.trim()">{{ busy ? '正在处理…' : mode === 'now' ? '确认并发送' : '创建定时任务' }}</button></div>
+    </form>
+  </div>
+</template>

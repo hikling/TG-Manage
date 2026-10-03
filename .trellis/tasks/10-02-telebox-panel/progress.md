@@ -68,3 +68,13 @@
 验证（离线）：前端 `npm run typecheck`、417 项 Vitest、`npm run build` 通过；TeleBox `npx tsc --noEmit` 通过；后端任务桥接、账号隔离与任务执行相关 44 项测试通过。原 `test_sign_task_runner.py` 夹具缺少上一轮新增的账号 API 凭据，本轮补了模拟凭据后 29 项正常通过。FastAPI TestClient 在本运行环境会阻塞；Docker 和真实 Telegram 会话不可在此验证。README、账号/任务指南、Docker 部署说明同步写入搭建条件和改动。
 
 交付：远端 `main` 已合并上一轮 PR #12/#13。本轮 35 个文本文件与本地暂存文件树 SHA 一致，位于私有分支 `feat/telebox-login-chat-task-logs` 和 [PR #14](https://github.com/hikling/TG-SignPulse-Private/pull/14)；保护的 `main` 未改动。PR 已可审阅，服务器上的真实会话和 Docker 验收仍待完成，合并由仓库所有者决定。
+
+## TeleBox ESM 故障与工作台修订（2026-10-03）
+
+- 收到服务器明确错误：Node ESM 拒绝动态导入 `teleproto/sessions` 目录，失败发生在工作进程的“依赖加载”阶段，早于 API ID/Hash 验证和独立授权。适配器改为与 TeleBox 上游一致的 CommonJS `require`，并统一用同一模块缓存读取运行时、插件管理器、TPM，避免 ESM/CJS 双实例。
+- 已有账号的工作目录会刷新面板适配器及受管理的 TypeScript 启动脚本；不覆盖该账号的 `plugins/`、`assets/`、`config.json` 与会话。增加回归测试覆盖旧启动脚本更新和用户插件保留。
+- 操作账号、目标对话改为卡片式复选列表，显示选中范围、搜索、群头像、加载和空状态；任务表单可刷新当前账号已加载的 TeleBox 命令，并解释无命令或读取失败。
+- 删除专用群聊管理页面、侧边栏入口、账号快捷入口、路由和对应群资料/退出 API。聊天中心继续提供普通群会话，工作台继续使用 `dialogs?kind=groups` 查询共有群。
+- 离线验证：真实 Node 24 工作进程加载后用替身 `connect()` 抛出 `OFFLINE_CONNECT_SENTINEL`，错误进入“连接 Telegram”阶段，不再出现 `Directory import`；上游运行时/TPM/插件管理器模块解析通过，TeleBox TypeScript 检查通过。前端类型检查、417 项测试与构建通过；Python 4 项针对性测试和 Ruff 通过。Python `TestClient` 仍在本沙箱阻塞；未使用真实 Telegram 凭据、未发消息，Docker 及插件远程安装需要服务器验收。
+- 上一轮 PR #14 已于 2026-10-03 合并到 `main`（合并提交 `033936f`）。本次修复以该提交为基线，使用 `fix/telebox-esm-workbench` 独立分支；需在服务器用此分支重建镜像后观察真实 TeleBox 授权及插件加载。
+- 已创建 [PR #15：修复 TeleBox 启动错误并优化账号工作台](https://github.com/hikling/TG-SignPulse-Private/pull/15)，目标为受保护的 `main`，暂未合并。首次远端提交 `2c522da` 的 Git 树与本地暂存树 `eb0b5db` 完全一致；本段后续进度记录将在同一分支追加。

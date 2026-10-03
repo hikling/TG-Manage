@@ -2,7 +2,6 @@ import { request, requestBlob, fetchWithAuth, getAuthToken, MEDIUM_TIMEOUT_MS } 
 export interface Dialog { id: string; title: string; username?: string; type: string; unread_count: number; archived: boolean; last_message?: string; last_message_at?: string }
 export interface Message { id: number; chat_id: string; text: string; date: string; outgoing: boolean; sender_name: string; reply_to_message_id?: number; media_type?: string; has_media: boolean }
 export interface Page<T> { items: T[]; has_more: boolean; next_offset?: number; next_before_id?: number }
-export interface Group { id: string; title: string; description: string; members_count?: number; username?: string }
 export interface Bot { id: string; username: string; first_name: string; description: string; short_description: string; running: boolean }
 export const accountPath = (account: string) => `/communications/${encodeURIComponent(account)}`
 export const panelRequest = <T>(path: string, method = 'GET', data?: unknown) => request<T>(path, { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }, getAuthToken(), MEDIUM_TIMEOUT_MS)

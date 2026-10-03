@@ -406,7 +406,7 @@ const goTasks = (name: string) => {
       </div>
 
       <!-- Actions：竖排布局保留，语义走 ui-row-action -->
-      <div class="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800/40 grid grid-cols-5 gap-0.5">
+      <div class="mt-auto pt-3 border-t border-gray-100 dark:border-gray-800/40 grid grid-cols-4 gap-0.5">
         <button type="button" class="ui-row-action ui-row-action--stack" :disabled="checkingAccount === acc.name" :title="t('accounts.checkStatus')" @click="handleCheck(acc.name)">
           <span v-if="checkingAccount === acc.name" class="ui-spinner !w-3.5 !h-3.5 !border-2" />
           <Play v-else class="w-3.5 h-3.5" />
@@ -422,9 +422,6 @@ const goTasks = (name: string) => {
         </button>
         <button type="button" class="ui-row-action ui-row-action--stack" title="聊天中心" @click="router.push({ name: 'chats', query: { account: acc.name } })">
           <MessagesSquare class="w-3.5 h-3.5" /><span>聊天</span>
-        </button>
-        <button type="button" class="ui-row-action ui-row-action--stack" title="群聊管理" @click="router.push({ name: 'groups', query: { account: acc.name } })">
-          <Users class="w-3.5 h-3.5" /><span>群聊</span>
         </button>
         <button type="button" class="ui-row-action ui-row-action--stack" title="TeleBox" @click="router.push({ name: 'telebox', query: { account: acc.name } })">
           <Package class="w-3.5 h-3.5" /><span>TeleBox</span>

@@ -114,18 +114,30 @@ const props = defineProps<{
 }>()
 
 const commands = ref<{ plugin: string; command: string }[]>([])
+const commandError = ref('')
+const commandsLoading = ref(false)
+let commandGeneration = 0
 const commandOptions = computed(() => [
   { label: '选择已加载的插件命令', value: '' },
   ...commands.value.map(item => ({ label: `${item.plugin} · ${item.command}`, value: `${item.plugin}::${item.command}` })),
 ])
-watch(() => props.account, async account => {
+async function refreshCommands() {
+  const account = props.account
+  const generation = ++commandGeneration
   commands.value = []
+  commandError.value = ''
   if (!account) return
+  commandsLoading.value = true
   try {
     const data = await panelRequest<{ accounts: { account: string; commands: { plugin: string; command: string }[] }[] }>('/telebox')
-    if (props.account === account) commands.value = data.accounts.find(item => item.account === account)?.commands || []
-  } catch { /* The task editor remains usable when TeleBox is offline. */ }
-}, { immediate: true })
+    if (generation === commandGeneration) commands.value = data.accounts.find(item => item.account === account)?.commands || []
+  } catch {
+    if (generation === commandGeneration) commandError.value = '无法读取 TeleBox 命令，请稍后重试'
+  } finally {
+    if (generation === commandGeneration) commandsLoading.value = false
+  }
+}
+watch(() => props.account, () => { void refreshCommands() }, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'add'): void
@@ -257,6 +269,12 @@ const emit = defineEmits<{
 
             <div v-else-if="action.type === 'telebox_plugin'" class="space-y-1">
               <CustomSelect v-model="action.value" :options="commandOptions" aria-label="TeleBox 插件命令" />
+              <div class="flex items-center gap-2 text-[11px] panel-muted">
+                <span v-if="commandError" role="alert">{{ commandError }}</span>
+                <span v-else-if="commandsLoading" role="status">正在读取已加载的命令…</span>
+                <span v-else-if="!commands.length">该账号暂无已加载命令，请先启用 TeleBox 并检查插件状态。</span>
+                <button type="button" class="underline" :disabled="commandsLoading" @click="refreshCommands">刷新命令</button>
+              </div>
               <input v-model="action.teleboxArgs" class="ui-input !h-9 !text-xs !px-2 w-full" maxlength="500" aria-label="命令参数" placeholder="命令参数（可选）" />
               <p class="text-[11px] panel-muted">命令投递到该账号的 TeleBox；插件实际处理结果请查看 TeleBox 日志。</p>
             </div>

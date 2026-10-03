@@ -9,7 +9,7 @@ All new routes under `/api`, using existing Bearer auth.
 - POST `/communications/{account}/messages` `{chat_id,text,reply_to_message_id?}`; PUT/DELETE `/communications/{account}/messages/{message_id}` with `{chat_id,text?}`.
 - POST `/communications/{account}/media` multipart `chat_id,file,caption?,reply_to_message_id?`, max 20 MiB. GET `/communications/{account}/media/{message_id}?chat_id=` authenticated blob.
 - POST `/communications/{account}/dialogs/action` `{chat_id,action:read|archive|unarchive|pin|unpin|mute|unmute}`.
-- GET `/communications/{account}/groups` same dialog envelope; GET `.../groups/{chat_id}` detail `{id,title,description,members_count,username}`; PUT same `{title?,description?}`; POST `.../groups/{chat_id}/leave`.
+- The workbench filters `/communications/{account}/dialogs?kind=groups` for common group conversations; dedicated group management APIs are removed.
 - GET `/communications/proxies` `{items:[{account,proxy}]}`; PUT `/communications/{account}/proxy` `{proxy:string}` using existing account settings.
 - GET/POST `/bots` list `{items:[{id,username,first_name,description,short_description,running}]}` and create `{token}`; GET/PUT/DELETE `/bots/{id}`; PUT body `{first_name?,description?,short_description?}`; GET/PUT `/bots/{id}/commands` envelope `{commands:[{command,description}]}`.
 - `/telebox/{account}` GET status `{account,status,enabled,version,plugins:[{name,kind}],message?}`; POST `/telebox/{account}/start`, `/stop`, `/restart`; GET `/telebox/{account}/logs` `{items:[{time,level,message}]}`; POST `/telebox/{account}/plugins` `{action:install|uninstall|update|reload,name?}`. GET `/telebox` overview `{version,upstream_commit,accounts:[]}`.

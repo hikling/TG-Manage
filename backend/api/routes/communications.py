@@ -37,11 +37,6 @@ class DialogAction(ChatInput):
     action: Literal["read", "archive", "unarchive", "pin", "unpin", "mute", "unmute"]
 
 
-class GroupInput(BaseModel):
-    title: constr(strip_whitespace=True, min_length=1, max_length=128) | None = None
-    description: constr(max_length=255) | None = None
-
-
 class ProxyInput(BaseModel):
     proxy: constr(max_length=2048)
 
@@ -109,28 +104,6 @@ async def download(account: str, message_id: int, chat_id: str = Query(..., max_
         raise HTTPException(422, "消息 ID 无效")
     data = await service.download_media(account, chat_id, message_id)
     return Response(data, media_type="application/octet-stream", headers={"Content-Disposition": f'attachment; filename="telegram-{message_id}.bin"', "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
-
-
 @router.post("/{account}/dialogs/action")
 async def action(account: str, body: DialogAction):
     return await service.dialog_action(account, body.chat_id, body.action)
-
-
-@router.get("/{account}/groups")
-async def groups(account: str, query: str = Query("", max_length=200), offset: int = Query(0, ge=0, le=100000), limit: int = Query(50, ge=1, le=100), archived: bool = False):
-    return await service.dialogs(account, query, offset, limit, archived, "groups")
-
-
-@router.get("/{account}/groups/{chat_id}")
-async def group(account: str, chat_id: str):
-    return await service.group(account, chat_id)
-
-
-@router.put("/{account}/groups/{chat_id}")
-async def update_group(account: str, chat_id: str, body: GroupInput):
-    return await service.group(account, chat_id, body.dict(exclude_none=True))
-
-
-@router.post("/{account}/groups/{chat_id}/leave")
-async def leave_group(account: str, chat_id: str):
-    return await service.group(account, chat_id, leave=True)
