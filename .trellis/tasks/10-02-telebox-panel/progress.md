@@ -43,3 +43,12 @@
 - 移除 ConfigService 的全局 AI 模型读写/连通性服务与共享 Telegram API 凭据服务、默认共享凭据和旧解析兼容路径；历史配置文件保留为数据，导入时仍跳过。账号会话迁移工具改为逐账号读取已保存的 API 凭据，缺失时提示重登。
 - 完整/WebDAV/自动备份增加 `data/.app_secret_key` 和 `data/telebox/`，同时排除首次管理员设置码；补回归测试。更新功能介绍、任务、监听、架构、运维与备份文档中的旧功能描述。
 - 前端 `npm run typecheck`、`npm test -- --run`（415 项）及 `npm run build` 通过；后端 8 组针对性文件共 229 项及备份路径 3 项通过。改动文件 Ruff、Python compileall、`git diff --check` 通过。服务器 Docker 构建、真实 Telegram 和 TeleBox 插件远程安装仍未验证。保护的 `main` 未改动。
+
+## 服务器构建修复（2026-10-03）
+
+- 用户服务器确认：Compose 没有容器，构建在 TeleBox 的 `npm ci` 阶段报 `EUSAGE`，提示缺少锁文件。
+- 根因：本地 `telebox/package-lock.json` 存在，但上游 `.gitignore` 忽略它，之前上传未包含此文件。
+- 修复边界：提交现有且匹配 package.json 的锁文件；取消忽略；Dockerfile 显式复制 package.json 和 package-lock.json，让遗漏在 COPY 阶段立即暴露。保留 npm ci，不改用浮动版本安装。
+- 修复后从新 PR 分支或合并后的 main 更新，再执行 `bash scripts/install.sh`。无需删除 data/ 或修改密码、API 凭据。
+- 验证结果和 PR 地址将在完成检查后补充；本环境仍无 Docker，不宣称完整镜像构建通过。
+- 验证：新建空目录仅复制两个依赖文件，使用 Node 24 执行 `npm ci --include=dev --ignore-scripts --dry-run --offline --no-audit --no-fund` 成功（384 包）。锁文件版本 3、根依赖/开发依赖与 package.json 完全匹配，453 个锁定条目仅使用 registry.npmjs.org。此检查验证锁文件可用性，不编译原生模块；完整 Docker 构建由服务器重试验证。
