@@ -51,7 +51,7 @@ TeleBox 插件可能需要自己的外部服务配置；其插件清单在“拓
 服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行（本次修复合并前使用修复分支；合并后可以省略 `--branch`）：
 
 ```bash
-git clone --branch refactor/telebox-tasks-chat-switch https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch fix/chat-center-kitt-commands https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
 脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。

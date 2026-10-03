@@ -24,10 +24,10 @@ This is a modified version of [Silentely/TG-SignPulse](https://github.com/Silent
 ## Deploy from source
 
 ```bash
-git clone --branch refactor/telebox-tasks-chat-switch https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone --branch fix/chat-center-kitt-commands https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
 ```
 
-The private repository requires GitHub access. After this PR merges, omit `--branch refactor/telebox-tasks-chat-switch`. Docker Compose builds from source. The app secret is generated and persisted in `data/.app_secret_key`; the script prints a one-time setup token to set the admin password in the browser. For logins without TeleBox, set `SIGNPULSE_TG_API_ID/HASH` in a private server `.env` to avoid entering them in the account form.
+The private repository requires GitHub access. After this PR merges, omit `--branch fix/chat-center-kitt-commands`. Docker Compose builds from source. The app secret is generated and persisted in `data/.app_secret_key`; the script prints a one-time setup token to set the admin password in the browser. For logins without TeleBox, set `SIGNPULSE_TG_API_ID/HASH` in a private server `.env` to avoid entering them in the account form.
 
 Open `http://YOUR_SERVER_IP:8080`, enter the one-time setup token and choose an admin password. When adding an account, opt into TeleBox and enter that account's API ID/Hash, or leave it off to use the server credentials. Verify by code or QR; TeleBox starts automatically for opted-in accounts. Supply Telegram 2FA in the extension page if requested. Test sends and changes with your own test chat first.
 
