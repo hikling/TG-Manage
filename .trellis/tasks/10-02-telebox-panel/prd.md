@@ -5,10 +5,10 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 
 ## Requirements
 - Reference layout: white fixed sidebar, blue-grey background with subtle geometric lines, roomy rounded panels, light/dark themes, mobile drawer, account cards/list and privacy toggles.
-- Keep existing login, accounts, scheduling, logs, settings and authentication behavior.
-- Chat center across all account dialogs: private, bot, group and channel conversations, history pagination, text/media send, reply, edit/delete, archive/unarchive, read state and search. Channel conversations remain here without a separate channel administration area.
-- Account workbench: select account/targets, send messages and create timed tasks through the existing scheduler.
-- Proxy management with real APIs. Bot center with token registration, profile/commands and message management through Telegram Bot API.
+- Keep login, accounts, logs, settings and authentication behavior; replace legacy sign-task scheduling with the TeleBox task store and a separate workbench daily-message schedule.
+- The Chat Center menu remains visible. Its own switch defaults off and then reads only official 777000 verification messages. When on, show group conversations with history and supported message actions. Limit chat cache to 5 MiB and clear it when disabled or over limit; there is no separate channel or group administration page.
+- Account workbench: select account/targets, send immediately and create daily scheduled messages through the new task store.
+- Account-level proxy editing remains in Account Management; no separate proxy page or System Settings proxy card. Bot center uses real Telegram Bot API calls.
 - Vendor complete TeleBox source, preserve its license, plugin runtime, built-in commands, TPM and lifecycle. Integrate per-account runtime control and logs into the panel; each account has isolated persistent plugin/config/data paths.
 - Remove legacy Python plugin system, marketplace, debug/storage/editor UI, custom-plugin action and associated build/scripts/tests/docs. Existing legacy actions must fail visibly and never silently run a substitute.
 - Supplied Telegram credentials belong only in an ignored private backend environment file; no secrets in frontend, git, API output or logs.
@@ -17,7 +17,7 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 
 ## 2026-10-03 TeleBox-only task revision
 
-- Move per-account proxy controls into a collapsed System Settings section; remove the dedicated navigation/route.
+- Remove the dedicated proxy navigation/route; the proposed System Settings proxy section was subsequently withdrawn. Account Management retains per-account proxy editing.
 - Replace the active TG-SignPulse sign task form, action codes, keyword listener and scheduled sign execution with TeleBox plugin-command tasks. Adding a task first selects a TeleBox-enabled account, then reads that running account's loaded commands.
 - Keep account workbench immediate send and daily scheduled message features; daily messages use a small explicit schedule, independent of the removed sign-task action pipeline.
 - Existing sign task files/history remain on disk for recovery, but are never scheduled or offered as editable tasks. Do not silently transform old actions into TeleBox commands.
@@ -32,7 +32,7 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 - Target the user's protected `main` branch through a feature branch and pull request, leaving the merge to the user. Keep Markdown updated with changes, setup, requirements, checks and limitations.
 
 ## Acceptance
-- Existing account/task workflows continue working; new pages have actual authenticated APIs and actionable errors.
+- Account login, chat when enabled, workbench send/daily message and TeleBox command workflows use authenticated APIs and actionable errors; retired sign tasks are not executed.
 - No legacy plugin route or menu remains; only TeleBox plugin management exists.
 - TeleBox full source is traceable to a pinned upstream commit; native dependencies and runtime included in deployment.
 - Tests cover account boundaries, sensitive data filtering, history pagination, invalid inputs and runtime lifecycle.

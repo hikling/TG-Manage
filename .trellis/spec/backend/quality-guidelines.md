@@ -6,7 +6,7 @@ Python 支持 3.10–3.13；依赖及 Ruff 规则以 `pyproject.toml` 为准：`
 
 ```bash
 python3 -m ruff check backend tg_signer tests
-python3 -m pytest -q tests/test_api_error_codes.py
+python3 -m pytest -q tests/test_telebox_tasks.py tests/test_chat_center_settings.py
 ```
 
 检查时区、旧数据兼容和服务停止后的资源释放。没有登录过真实 Telegram 账号时不得把模拟测试表述为端到端验证。
