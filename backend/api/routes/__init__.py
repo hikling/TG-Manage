@@ -3,16 +3,13 @@ from fastapi import APIRouter
 from backend.api.routes import (
     accounts,
     auth,
-    batch,
     bots,
     communications,
     config,
-    events,
-    keyword_hits,
     logs,
     ops,
-    sign_tasks_v2,
     telebox,
+    telebox_tasks,
     user,
 )
 
@@ -23,13 +20,8 @@ router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
 router.include_router(communications.router, tags=["communications"])
 router.include_router(bots.router, tags=["bots"])
 router.include_router(telebox.router, tags=["telebox"])
-# 旧版 /api/tasks 已移除；请使用 /sign-tasks
-router.include_router(sign_tasks_v2.router, prefix="/sign-tasks", tags=["sign-tasks"])
+router.include_router(telebox_tasks.router, tags=["telebox-tasks"])
+# 旧 /sign-tasks 动作接口不再注册，历史文件保留供手工迁移。
 router.include_router(logs.router, prefix="/logs", tags=["logs"])
 router.include_router(config.router, prefix="/config", tags=["config"])
-router.include_router(events.router, prefix="/events", tags=["events"])
-router.include_router(batch.router, prefix="/batch", tags=["batch"])
 router.include_router(ops.router, prefix="/ops", tags=["ops"])
-router.include_router(
-    keyword_hits.router, prefix="/keyword-hits", tags=["keyword-hits"]
-)

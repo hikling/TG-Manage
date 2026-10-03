@@ -1,5 +1,5 @@
-# AI 模型功能迁移说明
+# 旧 AI 任务迁移
 
-此二改版已移除系统设置里的 AI 模型配置和 `/api/config/ai` 接口，也不再从任务编辑器提供新的 AI 动作。历史任务数据不会自动删除；请逐个检查旧 AI 动作并改为受支持的标准任务动作，或在“拓展插件”中按账号配置适用的 TeleBox 插件。TeleBox 插件的外部服务配置由该插件自身管理。
+本版本没有原 TG-SignPulse 的 AI 动作编排和全局 AI 密钥设置。旧任务文件不会自动运行，便携配置导入也不会恢复旧动作。要使用 AI 能力，请选择你信任的 TeleBox 插件，并遵照 [TeleBox 开发指南](https://github.com/TeleBoxOrg/TeleBox/blob/main/TELEBOX_DEVELOPMENT.md) 配置该插件自己的参数和生命周期。
 
-新部署无需 OpenAI API Key。旧版 `.openai_config.json` 不再通过面板读取或导入，升级前备份整个数据目录即可。
+升级前请备份完整数据目录。不要把旧任务 JSON 直接写入新的 `telebox-tasks.json`。

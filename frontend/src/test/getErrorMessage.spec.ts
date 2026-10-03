@@ -117,7 +117,7 @@ describe('getErrorMessage', () => {
       'Legacy /api/tasks has been removed; use /api/sign-tasks',
     ) as ApiError
     err.status = 410
-    expect(getErrorMessage(err)).toContain('sign-tasks')
+    expect(getErrorMessage(err)).toContain('TeleBox')
   })
 
   it('getLocalizedErrorMessage 使用 t 映射', () => {

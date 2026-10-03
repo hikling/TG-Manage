@@ -51,6 +51,7 @@ export const changeUsername = (token: string, newUsername: string, password: str
 // ─── 全局设置 ───
 
 export interface GlobalSettings {
+  chat_center_enabled?: boolean;
   sign_interval?: number | null;  // null 表示随机 1-120 秒
   log_retention_days?: number;    // 日志保留天数，默认 7
   data_dir?: string | null;
@@ -71,10 +72,6 @@ export interface GlobalSettings {
   telegram_bot_chat_id?: string | null;
   telegram_bot_message_thread_id?: number | null;
   timezone?: string;
-  sign_task_execution_timeout?: number | null;
-  sign_task_account_cooldown?: number | null;
-  sign_task_flow_retry_attempts?: number | null;
-  sign_task_history_max_age_days?: number | null;
   ai_vision_timeout?: number | null;
   ai_vision_retry_attempts?: number | null;
   ai_vision_reasoning_effort?: string | null;
@@ -93,11 +90,16 @@ export interface GlobalSettings {
 export const getGlobalSettings = (token: string) =>
   request<GlobalSettings>("/config/settings", {}, token);
 
-export const saveGlobalSettings = (token: string, settings: GlobalSettings) =>
-  request<{ success: boolean; message: string }>("/config/settings", {
+export const saveGlobalSettings = async (token: string, settings: GlobalSettings) => {
+  const result = await request<{ success: boolean; message: string }>("/config/settings", {
     method: "POST",
     body: JSON.stringify(settings),
   }, token);
+  if (result.success && typeof settings.chat_center_enabled === 'boolean') {
+    window.dispatchEvent(new CustomEvent('chat-center-changed', { detail: settings.chat_center_enabled }));
+  }
+  return result;
+};
 
 export const testBotNotification = (token: string, message?: string) =>
   request<{ success: boolean; message: string }>("/config/bot/test", {

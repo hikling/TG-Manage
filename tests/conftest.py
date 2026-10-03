@@ -34,13 +34,6 @@ from tests.fixtures.messages import (
     make_sign_success_message,
     make_text_message,
 )
-from tests.fixtures.tasks import (
-    SIGN_CONFIG_V3_BASIC,
-    SIGN_CONFIG_V3_MULTI_ACTION,
-    SIGN_CONFIG_V3_WITH_AI,
-    make_task_data,
-    make_task_data_list,
-)
 from tests.mocks.ai_service import MockAITools, MockOpenAIClient
 from tests.mocks.database import MockDBSession
 from tests.mocks.telegram import (
@@ -104,8 +97,6 @@ def no_external_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
 
     设置环境变量强制使用内存模式和超短超时。
     """
-    monkeypatch.setenv("SIGN_TASK_FORCE_IN_MEMORY", "1")
-    monkeypatch.setenv("SIGN_TASK_EXECUTION_TIMEOUT", "5")
     monkeypatch.setenv("AI_REQUEST_TIMEOUT", "5")
     # 测试中拉长内存检查间隔，避免干扰 lifespan 相关用例
     monkeypatch.setenv("MEMORY_CHECK_INTERVAL_S", "3600")
@@ -312,49 +303,6 @@ def sample_account_data() -> Dict[str, Any]:
 def sample_account_list() -> list:
     """示例账号列表"""
     return make_account_dict_list(3)
-
-
-@pytest.fixture
-def sample_task_data() -> Dict[str, Any]:
-    """示例任务数据字典"""
-    return make_task_data()
-
-
-@pytest.fixture
-def sample_task_list() -> list:
-    """示例任务列表"""
-    return make_task_data_list(3)
-
-
-@pytest.fixture
-def sample_sign_config_v3() -> Dict[str, Any]:
-    """示例 SignConfigV3 字典"""
-    return SIGN_CONFIG_V3_BASIC.copy()
-
-
-@pytest.fixture
-def sample_sign_config_multi_action() -> Dict[str, Any]:
-    """多动作 SignConfigV3 字典"""
-    return SIGN_CONFIG_V3_MULTI_ACTION.copy()
-
-
-@pytest.fixture
-def sample_sign_config_with_ai() -> Dict[str, Any]:
-    """带 AI 动作的 SignConfigV3 字典"""
-    return SIGN_CONFIG_V3_WITH_AI.copy()
-
-
-# ============================================================================
-# 临时配置文件 Fixtures
-# ============================================================================
-
-
-@pytest.fixture
-def temp_sign_config_file(tmp_path: Path, sample_sign_config_v3: Dict[str, Any]) -> Path:
-    """创建临时签到配置文件"""
-    config_dir = tmp_path / "signs" / "test_account" / "test_task"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    return create_temp_config_file(sample_sign_config_v3, config_dir, "config.json")
 
 
 @pytest.fixture

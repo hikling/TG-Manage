@@ -15,6 +15,13 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 
 ## 2026-10-03 revised requirements
 
+## 2026-10-03 TeleBox-only task revision
+
+- Move per-account proxy controls into a collapsed System Settings section; remove the dedicated navigation/route.
+- Replace the active TG-SignPulse sign task form, action codes, keyword listener and scheduled sign execution with TeleBox plugin-command tasks. Adding a task first selects a TeleBox-enabled account, then reads that running account's loaded commands.
+- Keep account workbench immediate send and daily scheduled message features; daily messages use a small explicit schedule, independent of the removed sign-task action pipeline.
+- Existing sign task files/history remain on disk for recovery, but are never scheduled or offered as editable tasks. Do not silently transform old actions into TeleBox commands.
+
 - Remove the dedicated group management page, navigation, account shortcut and group management API. Group conversations remain available in chat and workbench.
 
 - Remove all remaining original TG-SignPulse plugin UI, API, runtime references and plugin-specific task actions; TeleBox is the only plugin system. Historical task data remains readable for migration, with a clear error if it attempts an old action.

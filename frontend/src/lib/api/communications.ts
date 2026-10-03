@@ -7,7 +7,7 @@ export const accountPath = (account: string) => `/communications/${encodeURIComp
 export const panelRequest = <T>(path: string, method = 'GET', data?: unknown) => request<T>(path, { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }, getAuthToken(), MEDIUM_TIMEOUT_MS)
 export const listDialogs = (account: string, query = '', offset = 0, archived = false, kind = 'all') => panelRequest<Page<Dialog>>(`${accountPath(account)}/dialogs?${new URLSearchParams({ query, offset: String(offset), limit: '50', archived: String(archived), kind })}`)
 export const listMessages = (account: string, chat: string, before = 0) => panelRequest<Page<Message>>(`${accountPath(account)}/messages?${new URLSearchParams({chat_id: chat, before_id: String(before), limit: '50'})}`)
-export const chatAvatar = (account: string, chat: string) => requestBlob(`/sign-tasks/chats/${encodeURIComponent(account)}/avatar/${encodeURIComponent(chat)}`, {}, getAuthToken(), MEDIUM_TIMEOUT_MS)
+export const chatAvatar = (account: string, chat: string) => requestBlob(`${accountPath(account)}/avatar/${encodeURIComponent(chat)}`, {}, getAuthToken(), MEDIUM_TIMEOUT_MS)
 export const sendMessage = (account: string, chat_id: string, text: string, reply_to_message_id?: number) => panelRequest<Message>(`${accountPath(account)}/messages`, 'POST', {chat_id, text, reply_to_message_id})
 export const editMessage = (account: string, chat_id: string, id: number, text: string) => panelRequest(`${accountPath(account)}/messages/${id}`, 'PUT', {chat_id, text})
 export const deleteMessage = (account: string, chat_id: string, id: number) => panelRequest(`${accountPath(account)}/messages/${id}`, 'DELETE', {chat_id})

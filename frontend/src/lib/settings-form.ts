@@ -10,6 +10,7 @@ export type SettingsFormState = {
   proxy: string
   concurrency: number | ''
   deviceKeepaliveEnabled: boolean
+  chatCenterEnabled: boolean
   deviceKeepaliveIntervalDays: number | ''
   botEnabled: boolean
   botLoginNotify: boolean
@@ -68,6 +69,7 @@ export function buildGeneralPayload(s: SettingsFormState) {
     global_proxy: s.proxy || null,
     tg_global_concurrency: clampNumber(s.concurrency, 1, 10) ?? 1,
     device_keepalive_enabled: s.deviceKeepaliveEnabled,
+    chat_center_enabled: s.chatCenterEnabled,
     device_keepalive_interval_days: clampNumber(s.deviceKeepaliveIntervalDays, 1, 170) ?? 30,
     timezone: s.timezone,
   }
@@ -122,6 +124,7 @@ export function snapSection(
         proxy: s.proxy,
         concurrency: s.concurrency,
         deviceKeepaliveEnabled: s.deviceKeepaliveEnabled,
+        chatCenterEnabled: s.chatCenterEnabled,
         deviceKeepaliveIntervalDays: s.deviceKeepaliveIntervalDays,
         timezone: s.timezone,
       })
@@ -193,6 +196,7 @@ export function applyGlobalSettingsToForm(
     global_proxy?: string | null
     tg_global_concurrency?: number | null
     device_keepalive_enabled?: boolean
+    chat_center_enabled?: boolean
     device_keepalive_interval_days?: number
     telegram_bot_notify_enabled?: boolean
     telegram_bot_login_notify_enabled?: boolean
@@ -220,6 +224,7 @@ export function applyGlobalSettingsToForm(
   s.proxy = res.global_proxy || ''
   s.concurrency = res.tg_global_concurrency || 1
   s.deviceKeepaliveEnabled = res.device_keepalive_enabled !== false
+  s.chatCenterEnabled = res.chat_center_enabled === true
   s.deviceKeepaliveIntervalDays = res.device_keepalive_interval_days || 30
   s.botEnabled = res.telegram_bot_notify_enabled || false
   s.botLoginNotify = res.telegram_bot_login_notify_enabled || false

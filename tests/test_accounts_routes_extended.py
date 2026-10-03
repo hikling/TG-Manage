@@ -10,46 +10,6 @@ from backend.api.routes import accounts as accounts_mod
 from tests.test_api import _auth, _login, api_client, db  # noqa: F401
 
 
-class TestBuildHistoryLogItem:
-    """历史日志条目统一构造：兜底文案与字段归一。"""
-
-    def test_default_messages_and_fields(self):
-        item = accounts_mod._build_history_log_item(
-            {"task_name": "t1", "success": True, "time": "2026-08-01T00:00:00Z"},
-            0,
-        )
-        assert item["id"] == 1
-        assert item["task_name"] == "t1"
-        assert item["message"] == "执行成功"
-        assert item["summary"] == "任务: t1 成功"
-        assert item["created_at"] == "2026-08-01T00:00:00Z"
-
-    def test_failure_fallback_and_category(self):
-        item = accounts_mod._build_history_log_item(
-            {
-                "account_name": "acc1",
-                "task_name": "",
-                "success": False,
-                "message": "超时",
-                "time": "t",
-                "failure_category": "timeout",
-            },
-            5,
-        )
-        assert item["id"] == 6
-        assert item["task_name"] == "未知任务"
-        assert item["message"] == "超时"
-        assert item["failure_category"] == "timeout"
-
-    def test_account_name_override_wins(self):
-        item = accounts_mod._build_history_log_item(
-            {"account_name": "stored", "task_name": "t", "success": True, "time": "t"},
-            0,
-            account_name="explicit",
-        )
-        assert item["account_name"] == "explicit"
-
-
 def _svc() -> MagicMock:
     """构造带异步方法的 TelegramService Mock；各用例再按需配置返回值。"""
     svc = MagicMock()
@@ -394,169 +354,12 @@ class TestStatusCheckJobs:
         assert ok.status_code == 200 and ok.json() == {"ok": True, "job_id": "j1"}
 
 
-def _sign_svc(**overrides) -> MagicMock:
-    svc = MagicMock()
-    svc.get_recent_history_logs.return_value = []
-    svc.clear_all_history_logs.return_value = {"removed_entries": 0}
-    svc.get_account_history_logs.return_value = []
-    svc.clear_account_history_logs.return_value = {"removed_entries": 0}
-    for key, value in overrides.items():
-        getattr(svc, key).return_value = value
-    return svc
 
 
-def _patch_sign_svc(svc: MagicMock):
-    return patch(
-        "backend.services.sign_tasks.get_sign_task_service", return_value=svc
-    )
 
 
-class TestRecentLogs:
-    def test_recent_logs_mapping(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        history = [
-            {
-                "account_name": "a1",
-                "task_name": "签到A",
-                "success": True,
-                "time": "2026-07-31T01:00:00",
-                "last_target_message": "bot 回复",
-            },
-            {
-                "account_name": "a2",
-                "task_name": "签到B",
-                "success": False,
-                "time": "2026-07-31T02:00:00",
-                "message": "失败详情",
-                "failure_category": "session_invalid",
-            },
-        ]
-        with _patch_sign_svc(_sign_svc(get_recent_history_logs=history)):
-            resp = api_client.get("/api/accounts/logs/recent", headers=_auth(token))
-        assert resp.status_code == 200
-        body = resp.json()
-        assert [item["id"] for item in body] == [1, 2]
-        assert body[0]["message"] == "执行成功"
-        assert body[0]["summary"] == "任务: 签到A 成功"
-        assert body[0]["bot_message"] == "bot 回复"
-        assert body[1]["message"] == "失败详情"
-        assert body[1]["summary"] == "任务: 签到B 失败"
-        assert body[1]["created_at"] == "2026-07-31T02:00:00"
-        # 失败分类字段需透传（Dashboard 依赖它渲染失败标签）；缺失时回落 None
-        assert body[0]["failure_category"] is None
-        assert body[1]["failure_category"] == "session_invalid"
-
-    def test_recent_logs_limit_clamped(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _sign_svc()
-        with _patch_sign_svc(svc):
-            api_client.get(
-                "/api/accounts/logs/recent", params={"limit": 999}, headers=_auth(token)
-            )
-            api_client.get(
-                "/api/accounts/logs/recent", params={"limit": 0}, headers=_auth(token)
-            )
-        limits = [c.kwargs["limit"] for c in svc.get_recent_history_logs.call_args_list]
-        assert limits == [200, 1]
 
 
-class TestClearAndAccountLogs:
-    def test_clear_all_logs(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        with _patch_sign_svc(_sign_svc(clear_all_history_logs={"removed_entries": 5})):
-            resp = api_client.post("/api/accounts/logs/clear", headers=_auth(token))
-        assert resp.status_code == 200
-        assert resp.json()["cleared"] == 5
-
-    def test_clear_all_logs_error_500(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _sign_svc()
-        svc.clear_all_history_logs.side_effect = RuntimeError("io error")
-        with _patch_sign_svc(svc):
-            resp = api_client.post("/api/accounts/logs/clear", headers=_auth(token))
-        assert resp.status_code == 500
-        assert resp.json()["detail"] == "CLEAR_LOGS_FAILED"
-
-    def test_account_logs_mapping(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        history = [
-            {
-                "task_name": "每日签到",
-                "success": True,
-                "time": "2026-07-31T01:00:00",
-                "last_target_message": "ok",
-            },
-            {"success": False, "time": "", "failure_category": "timeout"},
-            {"task_name": "", "success": True, "time": ""},
-        ]
-        with _patch_sign_svc(_sign_svc(get_account_history_logs=history)):
-            resp = api_client.get("/api/accounts/a1/logs", headers=_auth(token))
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body[0]["message"] == "执行成功"
-        assert body[0]["summary"] == "任务: 每日签到 成功"
-        assert body[0]["bot_message"] == "ok"
-        # task_name 缺键或空串统一回落默认名；空 message 按成败兜底
-        assert body[1]["task_name"] == "未知任务"
-        assert body[1]["message"] == "执行失败"
-        assert body[1]["summary"] == "任务: 未知任务 失败"
-        assert body[2]["task_name"] == "未知任务"
-        assert body[2]["summary"] == "任务: 未知任务 成功"
-        # failure_category 经 AccountLogItem 透传；缺失回落 None
-        assert body[0]["failure_category"] is None
-        assert body[1]["failure_category"] == "timeout"
-        assert body[2]["failure_category"] is None
-
-    def test_clear_account_logs_not_found_404(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _svc()
-        svc.account_exists.return_value = False
-        with _patch_svc(svc):
-            resp = api_client.post(
-                "/api/accounts/ghost/logs/clear", headers=_auth(token)
-            )
-        assert resp.status_code == 404
-        assert resp.json()["detail"] == "ACCOUNT_NOT_FOUND"
-
-    def test_clear_account_logs_success(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        with _patch_svc(_svc()), _patch_sign_svc(
-            _sign_svc(clear_account_history_logs={"removed_entries": 2})
-        ):
-            resp = api_client.post(
-                "/api/accounts/a1/logs/clear", headers=_auth(token)
-            )
-        assert resp.status_code == 200
-        assert resp.json()["cleared"] == 2
-
-    def test_export_logs_content(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        history = [
-            {
-                "task_name": "签到A",
-                "success": True,
-                "time": "2026-07-31T01:00:00",
-                "message": "",
-            },
-            {
-                "task_name": "签到B",
-                "success": False,
-                "time": "2026-07-31T02:00:00",
-                "message": "timeout",
-            },
-        ]
-        with _patch_sign_svc(_sign_svc(get_account_history_logs=history)):
-            resp = api_client.get(
-                "/api/accounts/a1/logs/export", headers=_auth(token)
-            )
-        assert resp.status_code == 200
-        assert resp.headers["content-type"].startswith("text/plain")
-        assert "attachment" in resp.headers["content-disposition"]
-        text = resp.text
-        assert "账号日志: a1" in text
-        assert "任务: 签到A | 状态: 成功" in text
-        assert "任务: 签到B | 状态: 失败" in text
-        assert "消息: timeout" in text
 
 
 class TestDevicesAndOfficialMessages:
@@ -904,32 +707,7 @@ class TestErrorBranchesRound2:
             )
         assert resp.status_code == 500
 
-    def test_clear_account_logs_error_500(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _sign_svc()
-        svc.clear_account_history_logs.side_effect = RuntimeError("io error")
-        with _patch_svc(_svc()), _patch_sign_svc(svc):
-            resp = api_client.post(
-                "/api/accounts/a1/logs/clear", headers=_auth(token)
-            )
-        assert resp.status_code == 500
-        assert resp.json()["detail"] == "CLEAR_LOGS_FAILED"
 
-    def test_account_logs_limit_clamped(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        history = [
-            {"task_name": "t1", "success": True, "time": "2026-07-31T01:00:00"},
-            {"task_name": "t2", "success": False, "time": "2026-07-31T02:00:00"},
-        ]
-        with _patch_sign_svc(_sign_svc(get_account_history_logs=history)):
-            low = api_client.get(
-                "/api/accounts/a1/logs", params={"limit": 0}, headers=_auth(token)
-            )
-            high = api_client.get(
-                "/api/accounts/a1/logs", params={"limit": 999}, headers=_auth(token)
-            )
-        assert low.status_code == 200 and len(low.json()) == 1
-        assert high.status_code == 200 and len(high.json()) == 2
 
 
 class TestAvatarStaleCache:
@@ -981,64 +759,6 @@ class TestAvatarStaleCache:
         assert resp.content == b"\xff\xd8\xffnew"
 
 
-class TestChatAvatarCache:
-    """sign_tasks_v2 chat 头像：瞬时错误不写标记、明确无头像才写标记"""
-
-    def test_chat_avatar_error_does_not_write_marker(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _svc()
-        svc.download_chat_avatar = AsyncMock(side_effect=RuntimeError("flood wait"))
-        with patch(
-            "backend.services.telegram.get_telegram_service", return_value=svc
-        ):
-            resp = api_client.get(
-                "/api/sign-tasks/chats/acc/avatar/123", headers=_auth(token)
-            )
-        assert resp.status_code == 404
-        from backend.core.config import get_settings
-
-        marker = (
-            get_settings().resolve_workdir() / "avatars" / "chats" / "chat_123.no_avatar"
-        )
-        # 瞬时错误不得污染 7 天"无头像"缓存
-        assert not marker.exists()
-
-    def test_chat_avatar_no_avatar_writes_marker(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _svc()
-        svc.download_chat_avatar = AsyncMock(return_value=None)
-        with patch(
-            "backend.services.telegram.get_telegram_service", return_value=svc
-        ):
-            first = api_client.get(
-                "/api/sign-tasks/chats/acc/avatar/456", headers=_auth(token)
-            )
-            second = api_client.get(
-                "/api/sign-tasks/chats/acc/avatar/456", headers=_auth(token)
-            )
-        assert first.status_code == 404
-        assert second.status_code == 404
-        # 标记生效后第二次直接 404，不再调用下载
-        assert svc.download_chat_avatar.await_count == 1
-
-    def test_chat_avatar_download_then_cache_hit(self, api_client, db):  # noqa: F811
-        token = _login(api_client)
-        svc = _svc()
-        svc.download_chat_avatar = AsyncMock(return_value=b"\xff\xd8\xffchat")
-        with patch(
-            "backend.services.telegram.get_telegram_service", return_value=svc
-        ):
-            first = api_client.get(
-                "/api/sign-tasks/chats/acc/avatar/789", headers=_auth(token)
-            )
-            second = api_client.get(
-                "/api/sign-tasks/chats/acc/avatar/789", headers=_auth(token)
-            )
-        assert first.status_code == 200
-        assert first.content == b"\xff\xd8\xffchat"
-        assert second.status_code == 200
-        # 第二次命中磁盘缓存
-        assert svc.download_chat_avatar.await_count == 1
 
 
 class TestUpdateAccountRename:
@@ -1049,14 +769,8 @@ class TestUpdateAccountRename:
         new = {"name": "new_acc", "session_file": "f2", "exists": True, "size": 2}
         svc.list_accounts.side_effect = [[old], [new]]
         svc.rename_account = AsyncMock(return_value="new_acc")
-        # 改名会触发调度同步与关键词监听重启，测试中以替身隔离
+        # 改名会同步新的每日任务。
         monkeypatch.setattr("backend.scheduler.sync_jobs", AsyncMock())
-        monitor = MagicMock()
-        monitor.restart_from_tasks = AsyncMock()
-        monkeypatch.setattr(
-            "backend.services.keyword_monitor.get_keyword_monitor_service",
-            lambda: monitor,
-        )
         telebox = MagicMock()
         telebox.directory.return_value = tmp_path / "unused-telebox-target"
         telebox.stop = AsyncMock()
@@ -1116,11 +830,8 @@ class TestAccountNameValidation:
         """全部 {account_name} 路径端点对 ``..`` 穿越名返回 400 且不调用服务。"""
         token = _login(api_client)
         svc = _svc()
-        sign_svc = MagicMock()
         name = "%2e%2e"
-        with _patch_svc(svc), patch(
-            "backend.services.sign_tasks.get_sign_task_service", return_value=sign_svc
-        ):
+        with _patch_svc(svc):
             # 删除账号
             resp = api_client.delete(f"/api/accounts/{name}", headers=_auth(token))
             assert resp.status_code == 400
@@ -1163,7 +874,6 @@ class TestAccountNameValidation:
             # 日志查看 / 清空 / 导出
             resp = api_client.get(f"/api/accounts/{name}/logs", headers=_auth(token))
             assert resp.status_code == 400
-            sign_svc.get_account_history_logs.assert_not_called()
             resp = api_client.post(
                 f"/api/accounts/{name}/logs/clear", headers=_auth(token)
             )
@@ -1173,4 +883,3 @@ class TestAccountNameValidation:
                 f"/api/accounts/{name}/logs/export", headers=_auth(token)
             )
             assert resp.status_code == 400
-            sign_svc.get_account_history_logs.assert_not_called()

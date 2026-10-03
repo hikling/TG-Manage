@@ -1,158 +1,13 @@
-/** 旧版 ORM 账号/任务/任务日志类型已删除：面板统一使用 api.ts 的 AccountInfo / SignTask / SignTaskHistoryItem。
- *  保留 TokenResponse 及下方视图模型类型。 */
-
-export type TokenResponse = {
-  access_token: string;
-  token_type: string;
-};
-
-// ─── Dashboard 视图模型 ───
-export interface DashboardLog {
-  time: string;
-  account: string;
-  task: string;
-  status: 'success' | 'error';
-  text: string;
-  /** ISO 时间，用于日志深链 */
-  created_at?: string;
-  /** 失败分类（SSE / 历史） */
-  failure_category?: string;
-}
-
-// ─── Accounts 视图模型 ───
+/** Shared account and API error types. */
+export type TokenResponse = { access_token: string; token_type: string }
 export interface AccountUiItem {
-  id: string;
-  name: string;
-  remark?: string | null;
-  status: string;
-  message: string;
-  avatarUrl: string;
-  raw: import('./api').AccountInfo;
-}
-
-// ─── Tasks 视图模型 ───
-import type { Component } from 'vue';
-
-export interface TaskUiItem {
-  id: string;
-  name: string;
-  scheduleMode: string;
-  targetStr: string;
-  /** 目标会话总数（多 chat 时用于 +N 展示） */
-  targetCount: number;
-  /** 监听任务最近命中条数（可选，列表角标） */
-  hitCount?: number;
-  lastRunStr: string;
-  lastRunSuccess: boolean | null;
-  modeIcon: Component;
-  isListenMode: boolean;
-  enabled: boolean;
-  chatAvatarUrl: string;
-  chatName: string;
-  tags?: string[];
-  raw: import('./api').SignTask;
-}
-
-// ─── Logs 视图模型 ───
-export interface TaskLogUiItem {
-  id: number;
-  time: string;
-  created_at: string;
-  account: string;
-  task: string;
-  status: 'success' | 'error';
-  text: string;
-  flow_line_count: number;
-  failure_category?: string;
-}
-
-export interface LoginLogUiItem {
-  id: number;
-  time: string;
-  username: string;
-  ip: string;
-  status: 'success' | 'error';
-  text: string;
-}
-
-// ─── TaskForm 动作类型 ───
-export type TaskActionType =
-  | 'send_text'
-  | 'send_dice'
-  | 'click_text_button'
-  | 'vision_click'
-  | 'calc_send'
-  | 'vision_send'
-  | 'calc_click'
-  | 'bot_cmd'
-  | 'telebox_plugin'
-  | 'delay';
-
-export interface TaskActionItem {
-  id: number;
-  type: TaskActionType;
-  value: string;
-  aiPrompt: string;
-  commandPrefix?: string;
-  teleboxArgs?: string;
-  continue_on_error?: boolean;
-  skip_if_matched?: string;
-}
-
-// 后端原始 action 结构
-export interface RawTaskAction {
-  action: number;
-  text?: string;
-  dice?: string;
-  delay?: number;
-  ai_prompt?: string;
-  bot_username?: string;
-  command_prefix?: string;
-  telebox_plugin?: string;
-  telebox_command?: string;
-  telebox_args?: string;
-  keywords?: string[];
-  match_mode?: string;
-  push_channel?: string;
-  ignore_self?: boolean;
-  active_time_start?: string;
-  active_time_end?: string;
-  forward_chat_id?: string;
-  forward_message_thread_id?: string;
-  bark_url?: string;
-  custom_url?: string;
-  server_chan_send_key?: string;
-  continue_actions?: RawTaskAction[];
-  continue_on_error?: boolean;
-  skip_if_matched?: string;
-}
-
-// 构建 API 请求体时的中间类型
-export interface BuiltAction {
-  action: number;
-  text?: string;
-  dice?: string;
-  delay?: string;
-  ai_prompt?: string;
-  bot_username?: string;
-  command_prefix?: string;
-  telebox_plugin?: string;
-  telebox_command?: string;
-  telebox_args?: string;
-  keywords?: string[];
-  match_mode?: string;
-  push_channel?: string;
-  ignore_self?: boolean;
-  active_time_start?: string;
-  active_time_end?: string;
-  forward_chat_id?: string;
-  forward_message_thread_id?: string;
-  bark_url?: string;
-  custom_url?: string;
-  server_chan_send_key?: string;
-  continue_actions?: BuiltAction[];
-  continue_on_error?: boolean;
-  skip_if_matched?: string;
+  id: string
+  name: string
+  remark?: string | null
+  status: string
+  message: string
+  avatarUrl: string
+  raw: import('./api').AccountInfo
 }
 
 // ─── API 错误类型 ───
@@ -180,7 +35,7 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   LOGIN_LOG_NOT_FOUND: 'Login log not found',
   INVALID_DATE_FILTER: 'Invalid date filter',
   LEGACY_TASKS_READONLY:
-    'Legacy /api/tasks has been removed; use /api/sign-tasks',
+    '旧任务接口已移除，请使用 TeleBox 任务编排',
   TASK_NOT_FOUND: 'Task not found',
   ACCOUNT_NOT_FOUND: 'Account not found',
   RATE_LIMITED: 'Too many requests, please try later',

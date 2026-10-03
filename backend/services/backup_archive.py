@@ -18,6 +18,7 @@ DEFAULT_BACKUP_PATHS: Tuple[str, ...] = (
     ".signer",
     ".app_secret_key",
     "telebox",
+    "telebox-tasks.json",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",

@@ -344,7 +344,7 @@ class TeleBoxService:
 
     async def run_command(self, account: str, plugin: str, command: str, args: str = ""):
         account = self._account(account)
-        if not PLUGIN_NAME.fullmatch(plugin) or not re.fullmatch(r"[A-Za-z0-9_ -]{1,80}", command):
+        if not PLUGIN_NAME.fullmatch(plugin) or not re.fullmatch(r"[^\x00-\x1f\x7f]{1,80}", command):
             raise ValueError("TeleBox 插件或命令无效")
         if len(args) > 500 or "\n" in args or "\r" in args:
             raise ValueError("TeleBox 命令参数无效")

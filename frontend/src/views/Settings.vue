@@ -3,6 +3,7 @@ import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
 import DataManagementSettings from '../components/settings/DataManagementSettings.vue'
 import AboutSettings from '../components/settings/AboutSettings.vue'
+import ProxySettings from '../components/settings/ProxySettings.vue'
 import PageRetry from '../components/PageRetry.vue'
 import { useSettingsPage } from '../composables/useSettingsPage'
 
@@ -93,6 +94,10 @@ const {
     <div v-else class="space-y-6">
 
       <div class="settings-accordions">
+        <details class="settings-accordion">
+          <summary>代理管理 <span>按账号配置 Telegram 连接代理</span></summary>
+          <ProxySettings />
+        </details>
         <details class="settings-accordion">
           <summary>通用设置 <span>时区、运行与基础配置</span></summary>
           <GeneralSettings

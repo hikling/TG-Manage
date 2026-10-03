@@ -24,7 +24,7 @@ class TestApplyGlobalSettingsToEnv:
             "sign_task_execution_timeout": 300,
             "ai_vision_timeout": 30,
         })
-        assert os.environ["SIGN_TASK_EXECUTION_TIMEOUT"] == "300"
+        assert "SIGN_TASK_EXECUTION_TIMEOUT" not in os.environ
         assert "AI_VISION_TIMEOUT" not in os.environ
 
     def test_restart_restores_task_settings_only(self, isolated_env: Path, monkeypatch):
@@ -34,7 +34,7 @@ class TestApplyGlobalSettingsToEnv:
         service.save_global_settings({"sign_task_execution_timeout": 300})
         monkeypatch.delenv("SIGN_TASK_EXECUTION_TIMEOUT", raising=False)
         apply_global_settings_to_env(service.get_global_settings())
-        assert os.environ["SIGN_TASK_EXECUTION_TIMEOUT"] == "300"
+        assert "SIGN_TASK_EXECUTION_TIMEOUT" not in os.environ
 
 
 class TestGetGlobalProxy:

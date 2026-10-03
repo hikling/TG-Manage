@@ -78,3 +78,19 @@
 - 离线验证：真实 Node 24 工作进程加载后用替身 `connect()` 抛出 `OFFLINE_CONNECT_SENTINEL`，错误进入“连接 Telegram”阶段，不再出现 `Directory import`；上游运行时/TPM/插件管理器模块解析通过，TeleBox TypeScript 检查通过。前端类型检查、417 项测试与构建通过；Python 4 项针对性测试和 Ruff 通过。Python `TestClient` 仍在本沙箱阻塞；未使用真实 Telegram 凭据、未发消息，Docker 及插件远程安装需要服务器验收。
 - 上一轮 PR #14 已于 2026-10-03 合并到 `main`（合并提交 `033936f`）。本次修复以该提交为基线，使用 `fix/telebox-esm-workbench` 独立分支；需在服务器用此分支重建镜像后观察真实 TeleBox 授权及插件加载。
 - 已创建 [PR #15：修复 TeleBox 启动错误并优化账号工作台](https://github.com/hikling/TG-SignPulse-Private/pull/15)，目标为受保护的 `main`，暂未合并。首次远端提交 `2c522da` 的 Git 树与本地暂存树 `eb0b5db` 完全一致；本段后续进度记录将在同一分支追加。
+
+## TeleBox 专属任务体系（2026-10-03）
+
+变更边界：现有任务页面写入 `/sign-tasks` 的旧动作配置，`backend/scheduler` 自动同步并执行这些配置，关键词监听也从中恢复；工作台每日消息复用同一旧动作。因此仅换掉表单会继续执行旧任务。新任务应通过 `/telebox-tasks` 持久化为账号、插件、命令、参数和每日时间；调度器只从该存储注册插件命令和工作台每日消息。工作台立即发送仍走现有通信 API。代理的 API 保留，前端入口迁入系统设置。旧任务文件和历史日志保存在数据目录但不执行、不显示在新编排页。
+
+预计修改：`backend/services/telebox_tasks.py`、`backend/api/routes/telebox_tasks.py` 定义独立接口和存储；`backend/scheduler/__init__.py`、`backend/main.py` 停止旧作业并注册新作业；`frontend/src/views/Tasks.vue`、`Workbench.vue`、`Settings.vue` 及导航/API 类型调整交互；文档和测试验证账号边界、命令识别、旧任务停运与每日发送。登录/聊天、TeleBox 上游源码和原有数据文件不在此任务中改写。
+
+## TeleBox 专属任务与聊天中心开关收尾（2026-10-03）
+
+- 代理管理进入系统设置；旧任务页面、API、调度作业、关键词监听进程及 Python 服务移除，新任务存储只接受 TeleBox 运行时已加载的插件命令与工作台每日文字消息。便携配置导入跳过旧 `signs/monitors`，完整备份包含 `telebox-tasks.json`。
+- 按 TeleBox 插件管理器实际加载的 `listCommands/getPluginEntry` 识别命令，支持 Unicode 命令；使用运行时前缀向该账号收藏夹投递，由原生消息事件调用 `cmdHandlers`。原插件 `cronTasks` 生命周期由 TeleBox 自行管理。
+- 系统设置新增默认关闭的聊天中心开关；关闭时后端拒绝普通会话、消息、媒体及头像读取，账号管理的官方 `777000` 消息仍可读取。工作台在关闭状态接受手动目标 ID/用户名并保留立即发送和每日定时；开启时列出共有群。聊天页内存数据和磁盘头像缓存超过 5 MiB 清理，关闭时清空。
+- 本地验证：前端类型检查、250 项测试、生产构建通过；TeleBox TypeScript 检查通过；后端针对性测试通过，改动文件 Ruff 与 compileall 通过。完整 Python 测试在本环境的 FastAPI TestClient 阻塞，45 秒超时；真实 Telegram、Docker 与插件远程安装仍须服务器验证。
+
+- 收尾检查将旧 `tg_signer` CLI、签到/监听配置模型、动作运行时和对应测试夹具移除，保留账号登录依赖的 `core/client.py`；任务代码不再有旧动作入口。文档同步到本轮功能分支。
+- 工作台关闭聊天中心后可手动填写目标；读取共有群时达到 5 MiB 即丢弃结果，聊天头像响应禁用浏览器持久缓存。针对性后端 31 项、前端 250 项测试、TypeScript 检查及前端构建通过，Python 测试可完整收集 655 项。受限运行环境中的 FastAPI TestClient 完整测试及真实 Telegram / Docker 仍待服务器验证。

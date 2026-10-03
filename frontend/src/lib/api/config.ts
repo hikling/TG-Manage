@@ -2,7 +2,6 @@
  * 配置管理 API：任务配置列表、单任务/全量导入导出、预览、删除。
  */
 import { LONG_TIMEOUT_MS, request, requestText } from "./core";
-import type { SignTask } from "./sign-tasks";
 
 export const exportAllConfigs = (token: string) =>
   requestText("/config/export/all", {}, token, LONG_TIMEOUT_MS);
@@ -48,17 +47,3 @@ export const importConfigPreview = (token: string, configJson: string) =>
     token,
     LONG_TIMEOUT_MS,
   );
-
-export const cloneSignTask = (
-  token: string,
-  taskName: string,
-  newName: string,
-  accountName?: string,
-) =>
-  request<SignTask>(`/sign-tasks/${encodeURIComponent(taskName)}/clone`, {
-    method: "POST",
-    body: JSON.stringify({
-      new_name: newName,
-      account_name: accountName || undefined,
-    }),
-  }, token);

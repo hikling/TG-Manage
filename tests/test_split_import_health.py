@@ -16,16 +16,11 @@ CRITICAL_MODULES = [
     "backend.api.routes.accounts",
     "backend.api.routes.accounts_schemas",
     "backend.api.routes.logs",
-    "backend.api.routes.sign_tasks_v2",
-    "backend.services.sign_tasks",
+    "backend.api.routes.telebox_tasks",
+    "backend.services.telebox_tasks",
     "backend.services.telegram",
-    "backend.services.keyword_monitor",
-    "backend.services.keyword_monitor.runtime",
     "tg_signer.core",
     "tg_signer.core.client",
-    "tg_signer.core.runtime",
-    "tg_signer.cli.signer",
-    "tg_signer.cli.monitor",
 ]
 
 
@@ -34,38 +29,12 @@ def test_critical_module_imports(module_name: str):
     importlib.import_module(module_name)
 
 
-def test_accounts_extract_helper_is_bound_on_routes_module():
-    """回归：schemas 私有 helper 必须显式导入到 accounts 路由。"""
-    accounts = importlib.import_module("backend.api.routes.accounts")
-    schemas = importlib.import_module("backend.api.routes.accounts_schemas")
-
-    assert hasattr(accounts, "_extract_last_bot_message")
-    assert accounts._extract_last_bot_message is schemas._extract_last_bot_message
-    assert accounts._extract_last_bot_message({"last_target_message": "ok"}) == "ok"
-
-
-def test_core_package_reexports_runtime_identity():
-    """core 包级 re-export 必须与 runtime 真源保持同一对象。"""
-    runtime = importlib.import_module("tg_signer.core.runtime")
+def test_core_package_reexports_client_identity():
+    """账号客户端包级导出与实现保持同一对象。"""
     client = importlib.import_module("tg_signer.core.client")
     core = importlib.import_module("tg_signer.core")
-    monitor = importlib.import_module("tg_signer.core.monitor")
-
-    assert core.BaseUserWorker is runtime.BaseUserWorker
-    assert core.UserSigner is runtime.UserSigner
-    assert core.UserMonitor is monitor.UserMonitor
     assert core.Client is client.Client
-
-
-def test_keyword_monitor_private_helpers_injected():
-    """rules 私有函数经 injection 后须可在 runtime 命名空间访问。"""
-    runtime = importlib.import_module("backend.services.keyword_monitor.runtime")
-    rules = importlib.import_module("backend.services.keyword_monitor.rules")
-
-    assert hasattr(runtime, "_extract_tg_start_links")
-    assert runtime._extract_tg_start_links is rules._extract_tg_start_links
-    assert hasattr(runtime, "_parse_keywords")
-    assert hasattr(runtime, "_message_text")
+    assert core.get_client is client.get_client
 
 
 def test_backend_and_tg_signer_package_walk_imports():

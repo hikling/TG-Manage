@@ -16,7 +16,6 @@ const router = createRouter({
         { path: 'workbench', name: 'workbench', component: () => import('../views/Workbench.vue') },
         { path: 'chats', name: 'chats', component: () => import('../views/Chats.vue') },
         { path: 'bots', name: 'bots', component: () => import('../views/Bots.vue') },
-        { path: 'proxies', name: 'proxies', component: () => import('../views/Proxies.vue') },
         { path: 'telebox', name: 'telebox', component: () => import('../views/TeleBox.vue') },
         { path: 'tasks', name: 'tasks', component: () => import('../views/Tasks.vue') },
         { path: 'logs', name: 'logs', component: () => import('../views/Logs.vue') },
