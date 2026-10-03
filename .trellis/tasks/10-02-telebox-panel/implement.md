@@ -48,3 +48,16 @@ Static validation: all six modified Markdown files have balanced code fences and
 - [x] Run focused backend/frontend tests and static validation. Publish a feature branch and PR against protected main; do not merge.
 
 Live Docker build, Telegram account authorization, Bot API and remote TeleBox plugin installation remain deployment acceptance checks. The task stays in progress until those can be checked in the owner's environment.
+
+## Current implementation checklist (2026-10-03, merged PR #17)
+
+- [x] Keep Chat Center in the sidebar and move its on/off switch into the page; off reads only 777000, on shows group dialogs. Enforce a 5 MiB chat/avatar cache limit and clear when disabled.
+- [x] Remove the dedicated group management page and System Settings proxy card; retain per-account proxy editing in Account Management. Keep General, Bot Notification and Data Management collapsed on initial render.
+- [x] Repair TeleBox ESM dependency loading and surface its failure stage; support the optional TeleBox choice at login with account credentials or configured server defaults.
+- [x] Report loaded command origin from the worker; filter both UI and backend to KITT and installed plugin commands. Reject an unavailable command on save and execution.
+- [x] Remove plugin daily execution time and panel plugin scheduler jobs; keep TeleBox native `cronTasks` and Workbench daily messages. Preserve retired task data without executing its actions.
+- [x] Present account and target selectors with avatars/search, and expose task delivery and worker logs without treating delivery as plugin completion.
+- [x] Verify TeleBox TypeScript typecheck, frontend typecheck, 250 Vitest tests and production build, plus 29 focused backend tests; changed-file Ruff and whitespace checks passed for the PR snapshot.
+- [ ] Validate a full Docker build, real Telegram authorization, KITT/installed plugin discovery and execution, official-message-only mode and scheduled Workbench delivery on the owner's server. Keep this task `in_progress` until those checks finish.
+
+Earlier sections record the implementation sequence and test counts at those points in time. This checklist describes the behavior merged through PR #17.

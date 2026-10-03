@@ -7,4 +7,4 @@
 - `lib/api/core.ts` 实现鉴权、超时和统一请求，`lib/api/*.ts` 按业务域定义接口，`lib/api.ts` 导出公共入口；`lib/types.ts` 放共用类型；`locales/` 是中英文文案；`style.css` 包含全局面板样式。
 - `src/test/*.spec.ts` 是 Vitest 单元和组件测试。
 
-例如 `views/Chats.vue` 调 `lib/api/communications.ts`，`composables/usePanelAccount.ts` 取得账号选择，`stores/accounts.ts` 缓存账号列表。新功能优先按现有域扩展，别在组件中复制 `fetch` 鉴权逻辑；独立频道管理页已从路由删除，频道会话仍可在聊天中心展示。
+例如 `views/Chats.vue` 调 `lib/api/communications.ts`，`composables/usePanelAccount.ts` 取得账号选择，`stores/accounts.ts` 缓存账号列表。新功能优先按现有域扩展，别在组件中复制 `fetch` 鉴权逻辑。聊天中心入口常驻，关闭时仅获取 777000 官方验证码，开启时展示群组对话；独立频道和群管理页已从路由删除。任务编排由 `views/Tasks.vue` 对接 `lib/api/telebox-tasks.ts`，只显示 KITT 与已安装插件的已加载命令。
