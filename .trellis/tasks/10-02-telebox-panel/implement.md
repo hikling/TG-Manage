@@ -39,10 +39,12 @@ Static validation: all six modified Markdown files have balanced code fences and
 
 ## User revisions (2026-10-03)
 
-- [ ] Inventory and remove remaining legacy plugin surfaces and task action branches while preserving actionable migration errors.
-- [ ] Add first-run administrator setup without a generated/printed password; retain existing installations safely.
-- [ ] Require and securely persist per-account Telegram API ID/Hash from both phone and QR login; update every client consumer and TeleBox.
-- [ ] Remove global AI model and Telegram API settings/UI/routes; keep unrelated settings and task history intact.
-- [ ] Show per-account installed TeleBox plugins in the extension area and support allowed controls.
-- [ ] Implement one-command server setup, update README/quick start/Compose and an ongoing Markdown change log.
-- [ ] Run focused backend/frontend tests and static validation. Publish a feature branch and draft PR against protected main; do not merge.
+- [x] Inventory and remove remaining legacy plugin surfaces and task action branches while preserving actionable migration errors.
+- [x] Add first-run administrator setup without a generated/printed password; retain existing installations safely.
+- [x] Require and securely persist per-account Telegram API ID/Hash from both phone and QR login; update every client consumer and TeleBox.
+- [x] Remove global AI model and Telegram API settings/UI/routes/services; keep unrelated settings and task history intact.
+- [x] Show per-account installed TeleBox plugins in the extension area and support allowed controls.
+- [x] Implement one-command server setup, update README/quick start/Compose and an ongoing Markdown change log.
+- [x] Run focused backend/frontend tests and static validation. Publish a feature branch and PR against protected main; do not merge.
+
+Live Docker build, Telegram account authorization, Bot API and remote TeleBox plugin installation remain deployment acceptance checks. The task stays in progress until those can be checked in the owner's environment.

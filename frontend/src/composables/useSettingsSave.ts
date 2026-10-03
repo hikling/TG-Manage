@@ -1,27 +1,23 @@
 /**
  * 设置页：通用配置、备份与通知的分块保存。
  */
-import { ref, type Ref } from 'vue'
+import { ref } from 'vue'
 import {
   saveGlobalSettings,
   runDeviceKeepalive,
   testBotNotification,
 } from '../lib/api'
 import { withToken } from '../lib/api/core'
-import type { AiFormState, SettingsSection, TgFormState } from '../lib/settings-form'
+import type { SettingsSection } from '../lib/settings-form'
 import { resolveApiErrorMessage } from '../lib/notify'
 import { setPanelTimezone } from '../lib/datetime'
 import { useI18n } from './useI18n'
 import { useToast } from './useToast'
 
 export function useSettingsSave(options: {
-  tgConfig: Ref<TgFormState>
-  aiConfig: Ref<AiFormState>
-  aiKeyDecryptFailed: Ref<boolean>
   buildGeneralPayload: () => Record<string, unknown>
   buildBotPayload: () => Record<string, unknown>
   buildAdvancedPayload: () => Record<string, unknown>
-  buildAiRuntimePayload: () => Record<string, unknown>
   buildBackupPayload: () => Record<string, unknown>
   markSectionClean: (section: SettingsSection) => void
   afterBotTokenSaved: () => void

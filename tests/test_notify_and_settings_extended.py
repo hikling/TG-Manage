@@ -266,6 +266,23 @@ class TestBackupPrune:
         create_backup_tarball(data, dest, paths=("ok.txt", "../etc/passwd", "/etc/passwd"))
         assert dest.exists() and dest.stat().st_size > 0
 
+    def test_default_backup_keeps_secret_and_telebox_data(self, tmp_path: Path):
+        import tarfile
+
+        from backend.services.backup_archive import create_backup_tarball
+
+        data = tmp_path / "data"
+        (data / "telebox" / "account").mkdir(parents=True)
+        (data / ".app_secret_key").write_text("persisted-key", encoding="utf-8")
+        (data / "telebox" / "account" / "plugin.txt").write_text("saved")
+
+        archive = create_backup_tarball(data, tmp_path / "backup.tar.gz")
+        with tarfile.open(archive, "r:gz") as tar:
+            names = tar.getnames()
+        assert ".app_secret_key" in names
+        assert "telebox/account/plugin.txt" in names
+        assert ".admin_setup_token" not in names
+
     def test_run_auto_backup_empty_data(self, tmp_path: Path):
         from backend.services.backup_archive import run_auto_backup
 

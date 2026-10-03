@@ -21,16 +21,10 @@ const routeLeaveGuard = vi.hoisted(() => ({
 
 const api = vi.hoisted(() => ({
   getGlobalSettings: vi.fn(),
-  getTelegramConfig: vi.fn(),
-  getAIConfig: vi.fn(),
   getRuntimeStatus: vi.fn(),
   getMemoryStats: vi.fn(),
   // save/backup/version deps used via nested composables
   saveGlobalSettings: vi.fn(),
-  saveTelegramConfig: vi.fn(),
-  resetTelegramConfig: vi.fn(),
-  saveAIConfig: vi.fn(),
-  testAIConnection: vi.fn(),
   runDeviceKeepalive: vi.fn(),
   testBotNotification: vi.fn(),
   getBackupStatus: vi.fn(),
@@ -91,17 +85,6 @@ describe('useSettingsPage (mount + dirty)', () => {
       timezone: 'UTC',
       telegram_bot_message_thread_id: 9,
     })
-    api.getTelegramConfig.mockResolvedValue({
-      is_custom: true,
-      api_id: '123',
-      api_hash: 'hash',
-    })
-    api.getAIConfig.mockResolvedValue({
-      has_config: true,
-      base_url: 'https://ai',
-      model: 'm1',
-      api_key_decrypt_failed: false,
-    })
     api.getBackupStatus.mockResolvedValue({ last: 'ok' })
     api.getRuntimeStatus.mockResolvedValue({ uptime: 1 })
     api.getMemoryStats.mockResolvedValue({ rss: 1 })
@@ -124,8 +107,6 @@ describe('useSettingsPage (mount + dirty)', () => {
     expect(result.settings.value.botThreadId).toBe('9')
     expect(result.botTokenSet.value).toBe(true)
     expect(result.webdavPasswordSet.value).toBe(true)
-    expect(api.getTelegramConfig).not.toHaveBeenCalled()
-    expect(api.getAIConfig).not.toHaveBeenCalled()
     expect(result.runtimeStatus.value).toEqual({ uptime: 1 })
     expect(result.memoryStats.value).toEqual({ rss: 1 })
     expect(result.backupStatus.value).toEqual({ last: 'ok' })

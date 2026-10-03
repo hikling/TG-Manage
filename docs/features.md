@@ -1,87 +1,16 @@
 # 功能介绍
 
-TG-SignPulse 是 Telegram 多账号自动化管理面板，把签到、消息交互、关键词监听和 AI 辅助验证收敛到同一套 Web 控制台。
+本二改版从私有仓库源码构建，包含 Telegram 多账号管理、聊天中心、任务编排和按账号隔离的 TeleBox 插件。运行要求与一行搭建命令见 [README](../README.md)。
 
-## 核心能力
+| 模块 | 当前功能 |
+| --- | --- |
+| 账号管理 | 手机验证码或二维码登录，每次输入该账号的 Telegram API ID/Hash；状态检测、代理与设备保活。 |
+| 聊天中心 | 按账号浏览私聊、机器人、群组和频道会话；查看历史、搜索、收发消息与附件、已读和归档。频道会话在这里管理，没有独立频道管理页。 |
+| 账号工作台与任务编排 | 选择账号和共享群聊执行消息操作，创建定时任务、关键词监听，查看运行状态和日志。 |
+| 群聊与机器人 | 群聊信息与操作；Bot Token 接入及机器人资料、命令和消息管理。 |
+| 拓展插件 | 内置 TeleBox 源码及 TPM；为每个账号启动独立会话，查看已安装/内置插件、日志并管理插件。原 Python 插件体系已移除。 |
+| 运维 | 面板认证、首次设置管理员密码、日志、配置导入导出、本地与 WebDAV 备份。 |
 
-### 账号管理
+旧任务中的 Python 插件动作和 AI 动作不会自动变成 TeleBox 插件。新任务编辑器不提供这些动作；升级前备份并逐条检查历史任务。旧 AI 与共享 Telegram API 设置不再由面板管理，说明见 [迁移指南](guide/ai.md) 和 [配置参考](reference/configuration.md)。
 
-- 验证码登录 / 扫码登录
-- 代理与会话模式（file / string）
-- 设备管理、设备保活、官方消息查看
-- 批量状态检查
-
-详见 [账号管理](/guide/accounts)。
-
-### 任务编排（sign-tasks）
-
-- 固定 Cron 或时间段执行
-- 多账号共享同一套动作流程
-- 发送文本、骰子、点按钮、AI 识图/计算、关键词监听等动作
-- 批量启用/停用/触发
-- 失败分类与历史日志
-
-> 面板与 API 请使用 **`/api/sign-tasks`**。旧版 ORM `/api/tasks` 已移除。
-
-详见 [任务编排](/guide/tasks)。
-
-### AI 验证
-
-- 图片 OCR / 选按钮
-- 计算题回复
-- 计算后点击
-- OpenAI 兼容接口（含本地 LLM）
-
-详见 [AI 动作](/guide/ai)。
-
-### 关键词监听
-
-- exact / contains / regex
-- 命中后推送、转发、继续动作
-- 多实例可配置监听分片
-
-详见 [关键词监听](/guide/keyword-monitor)。
-
-### 通知与设置
-
-- 签到间隔、任务超时/冷却/流程重试、AI 视觉参数可在面板「系统设置」覆盖
-- Bot 测试发送、任务成功通知（全局 + 任务级开关）、静默时段
-- 监听推送支持 Server酱（任务表单通道）
-
-### 运维与可观测
-
-- `/healthz`、`/readyz`（含调度锁、旧 API 只读状态）
-- 版本信息与更新检查（Settings / 侧栏；`/api/ops/version`）
-- Dashboard SSE 实时日志
-- 任务 WebSocket 日志（含运行 phase：等锁 / 冷却 / 执行中）
-- 任务运行状态：`GET /api/sign-tasks/runs/active`、`/run/status`、`/run/cancel`（`state` + `phase` + `failure_category`）
-- Dashboard 活跃运行摘要与失败分类聚合（可点筛选日志 / 会话失效跳转账号）
-- 任务列表：冷却倒计时、多账号 phase、停止运行、账号失效提示
-- 配置/数据备份导出；可选定时自动备份（本地 / WebDAV）
-- WebDAV：测试连接、列出远端、流式下载、自动备份失败 Bot 通知
-- 配置导入预览（dry-run）
-- 任务克隆与内置模板（文本/按钮/时段/骰子/关键词监听；预填动作后须选会话）
-- 系统设置未保存提示与「保存全部」
-- 旧任务 ORM 残留盘点：`tools/check_legacy_tasks.py`
-
-详见 [WebDAV 备份与恢复](/guide/backup-webdav)、[运维手册](/reference/ops)。
-
-## 适合场景
-
-- 多账号机器人签到、日常打卡
-- 验证码、诗句填空、数学题、按钮验证
-- 群组/频道长期监听与通知
-- VPS / Docker 长期托管
-
-## 不适合 / 注意
-
-- 多副本**共享同一 Telegram session 文件**（易损坏会话）
-- 把面板直接裸奔在公网且无 HTTPS / 访问控制
-- 依赖已移除的旧 `/api/tasks` 接口
-
-## 下一步
-
-- [快速开始](/guide/quick-start)
-- [WebDAV 备份与恢复](/guide/backup-webdav)
-- [Docker 部署](/deploy/docker)
-- [配置参考](/reference/configuration)
+真实 Telegram 登录、Bot API 操作、TeleBox 独立授权及远程插件安装需要在部署环境用自己的测试账号验证。

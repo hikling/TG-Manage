@@ -20,7 +20,7 @@
 - [x] Compose 无需传入密钥/管理员密码/共享 Telegram API；新增 `scripts/install.sh` 一次构建并显示首次设置码。
 - [x] README 中英文、快速开始、Docker、配置参考、账号、认证、FAQ、AI 迁移说明与 Trellis 进度同步到新搭建方式；旧全局设置从 JSON 导入/导出排除。
 - [x] 首次安装与账号加密存储增加针对性测试；修正 Docker 入口脚本重启后将密钥文件权限放宽的问题。
-- [x] 私有仓库 `hikling/TG-SignPulse-Private` 创建功能分支 `feat/telebox-only-onboarding` 与 [PR #12](https://github.com/hikling/TG-SignPulse-Private/pull/12)，目标是受保护的 `main`；未合并。分支比较显示领先 1 个提交、落后 0 个提交。
+- [x] 私有仓库 `hikling/TG-SignPulse-Private` 创建功能分支 `feat/telebox-only-onboarding` 与 [PR #12](https://github.com/hikling/TG-SignPulse-Private/pull/12)，目标是受保护的 `main`；未合并。
 
 ## 核查发现
 
@@ -36,3 +36,10 @@
 - Ruff 对本轮改动的后端与测试文件通过，`git diff --check`、`bash -n scripts/install.sh`、`sh -n docker/entrypoint.sh`、Python compileall 通过；TeleBox `npx tsc --noEmit` 通过。
 - 当前沙箱没有 Docker CLI；FastAPI `TestClient` 在该沙箱中连最小 FastAPI 应用也会阻塞，因此依赖它的路由集成测试无法在此运行。真实 Telegram 登录、TeleBox 独立会话、插件远程安装和 Docker 构建须在目标服务器验证；本轮未发送 Telegram 消息。
 - PR 已提供完整代码和验证记录，服务器上的 Docker 构建、Telegram 授权及 TeleBox 插件操作仍需仓库所有者在合并前核查；合并步骤保留给仓库所有者。
+
+## 继续完善（2026-10-03）
+
+- 清除设置页组合式函数、表单快照和保存请求里的旧 AI/共享 Telegram 凭据状态；全量保存只包含仍可见的通用、通知和备份设置，不再带隐藏的 AI 参数。
+- 移除 ConfigService 的全局 AI 模型读写/连通性服务与共享 Telegram API 凭据服务、默认共享凭据和旧解析兼容路径；历史配置文件保留为数据，导入时仍跳过。账号会话迁移工具改为逐账号读取已保存的 API 凭据，缺失时提示重登。
+- 完整/WebDAV/自动备份增加 `data/.app_secret_key` 和 `data/telebox/`，同时排除首次管理员设置码；补回归测试。更新功能介绍、任务、监听、架构、运维与备份文档中的旧功能描述。
+- 前端 `npm run typecheck`、`npm test -- --run`（415 项）及 `npm run build` 通过；后端 8 组针对性文件共 229 项及备份路径 3 项通过。改动文件 Ruff、Python compileall、`git diff --check` 通过。服务器 Docker 构建、真实 Telegram 和 TeleBox 插件远程安装仍未验证。保护的 `main` 未改动。

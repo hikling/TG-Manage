@@ -20,7 +20,6 @@ import { devLog } from '../lib/devLog'
 import {
   applyGlobalSettingsToForm,
   buildAdvancedPayload as buildAdvancedPayloadOf,
-  buildAiRuntimePayload as buildAiRuntimePayloadOf,
   buildBackupPayload as buildBackupPayloadOf,
   buildBotPayload as buildBotPayloadOf,
   buildGeneralPayload as buildGeneralPayloadOf,
@@ -29,8 +28,6 @@ import {
   snapAllSections,
   type SettingsSection,
   type SettingsFormState,
-  type TgFormState,
-  type AiFormState,
 } from '../lib/settings-form'
 import { useSettingsVersionCheck } from './useSettingsVersionCheck'
 import { useSettingsBackup } from './useSettingsBackup'
@@ -60,13 +57,6 @@ export function useSettingsPage() {
     botChatId: '',
     botThreadId: '',
     timezone: 'Asia/Hong_Kong',
-    execTimeout: '' as string | number,
-    accountCooldown: '' as string | number,
-    flowRetry: '' as string | number,
-    historyMaxAge: '' as string | number,
-    aiVisionTimeout: '' as string | number,
-    aiVisionRetry: '' as string | number,
-    aiVisionReasoningEffort: '',
     autoBackupEnabled: false,
     autoBackupInterval: 24,
     autoBackupKeep: 3,
@@ -102,19 +92,6 @@ export function useSettingsPage() {
     { label: 'UTC', value: 'UTC' },
   ]
 
-  const tgConfig = ref<TgFormState>({
-    api_id: '',
-    api_hash: ''
-  })
-
-  const aiConfig = ref<AiFormState>({
-    base_url: '',
-    model: '',
-    api_key: ''
-  })
-  /** 服务端 AI Key 解密失败标记（APP_SECRET_KEY 不匹配） */
-  const aiKeyDecryptFailed = ref(false)
-
   const runtimeStatus = ref<RuntimeStatus | null>(null)
   const memoryStats = ref<MemoryStatsResponse | null>(null)
   const pageLoading = ref(true)
@@ -131,9 +108,6 @@ export function useSettingsPage() {
   }
   /** 密钥字段显隐（默认隐藏） */
   const revealSecrets = ref({
-    tgApiId: false,
-    tgApiHash: false,
-    aiKey: false,
     botToken: false,
   })
 
@@ -141,7 +115,7 @@ export function useSettingsPage() {
   const sectionBaseline = ref<Record<SettingsSection, string> | null>(null)
 
   const currentSectionSnaps = () =>
-    snapAllSections(settings.value, tgConfig.value, aiConfig.value)
+    snapAllSections(settings.value)
 
   const markAllClean = () => {
     sectionBaseline.value = currentSectionSnaps()
@@ -171,8 +145,6 @@ export function useSettingsPage() {
       bot: t('settings.botNotify'),
       // advanced 段仅含备份/WebDAV（数据管理）
       advanced: t('settings.dataManagement'),
-      tg: t('settings.tgApi'),
-      ai: t('settings.aiConfig'),
     }),
   )
 
@@ -205,7 +177,6 @@ export function useSettingsPage() {
   const buildGeneralPayload = () => buildGeneralPayloadOf(settings.value)
   const buildBotPayload = () => buildBotPayloadOf(settings.value)
   const buildAdvancedPayload = () => buildAdvancedPayloadOf(settings.value)
-  const buildAiRuntimePayload = () => buildAiRuntimePayloadOf(settings.value)
   const buildBackupPayload = () => buildBackupPayloadOf(settings.value)
 
   const {
@@ -246,13 +217,9 @@ export function useSettingsPage() {
     saveAllSettings,
     testBot,
   } = useSettingsSave({
-    tgConfig,
-    aiConfig,
-    aiKeyDecryptFailed,
     buildGeneralPayload,
     buildBotPayload,
     buildAdvancedPayload,
-    buildAiRuntimePayload,
     buildBackupPayload,
     markSectionClean,
     afterBotTokenSaved,
@@ -324,7 +291,7 @@ export function useSettingsPage() {
   })
 
 
-  const toggleReveal = (key: 'tgApiId' | 'tgApiHash' | 'aiKey' | 'botToken') => {
+  const toggleReveal = (key: 'botToken') => {
     revealSecrets.value = {
       ...revealSecrets.value,
       [key]: !revealSecrets.value[key],
@@ -335,9 +302,6 @@ export function useSettingsPage() {
     t,
     settings,
     timezoneOptions,
-    tgConfig,
-    aiConfig,
-    aiKeyDecryptFailed,
     loading,
     dataLoading,
     backupLoading,

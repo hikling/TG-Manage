@@ -24,7 +24,7 @@
 | 账号与聊天 | 账号管理支持手机验证码/二维码登录、状态检测、代理等；聊天中心按账号查看私聊、机器人、群组和频道会话，搜索/翻页、收发文字与附件、回复、编辑/删除消息、已读及归档等。 |
 | 账号工作台 | 选择账号与目标群聊执行消息操作，并通过原有调度体系创建定时任务。 |
 | 群聊、机器人、代理 | 独立页面提供群聊信息、Bot Token 接入及资料/命令/消息管理、账号代理管理。Bot Token 在服务端加密存储。 |
-| 任务编排 | 保留签到、定时消息、关键词监听和任务运行记录；全局 AI 模型与 Telegram API 配置入口已移除。 |
+| 任务编排 | 保留签到、定时消息、关键词监听和任务运行记录；全局 AI 模型与 Telegram API 配置入口及旧配置服务已移除。 |
 | 内置 TeleBox | 保留 TeleBox 0.2.9 的上游源码、内置插件和 TPM；面板按账号启动/停止/重启独立 Node 进程，查看状态和日志、执行插件操作。上游固定提交见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。 |
 | 清理旧功能 | 移除原 Python 自定义插件系统、插件市场/调试入口及其“自定义插件动作”；移除独立频道管理页。频道会话仍在聊天中心。旧任务数据不自动删除，包含旧插件动作的任务要人工检查并迁移。 |
 | 开发流程 | 接入 Trellis 的任务记录、后端/前端规范、Codex 技能与 hooks；搭建过程见 [bootstrap 记录](.trellis/tasks/00-bootstrap-guidelines/progress.md)。 |
@@ -143,7 +143,7 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 
 ## 数据、升级与备份
 
-- Compose 将宿主机 `./data` 挂载到容器 `/data`。主库、账号会话、签到数据、日志和 TeleBox 状态均依赖此目录；迁移服务器时应备份整个 `data/`（包括 `.app_secret_key`）。
+- Compose 将宿主机 `./data` 挂载到容器 `/data`。主库、账号会话、签到数据、日志和 TeleBox 状态均依赖此目录；迁移服务器时应备份整个 `data/`（包括 `.app_secret_key`）。面板的完整/WebDAV/自动备份现在也包含加密根密钥与 TeleBox 账号数据，备份文件包含可恢复敏感凭据，须限制访问。
 - 更新前停服务、备份 `data/`，再从**这个私有仓库**获取新代码并执行 `docker compose up -d --build`。不要从上游镜像覆盖本二改版本。
 - 恢复时先还原完整数据目录（含密钥文件），再启动；账号是否需要重新登录取决于 Telegram session 的实际有效性。不要向公共仓库上传备份包。
 - Dockerfile 在 Python 镜像内嵌入 Node 24 与 TeleBox 依赖；前端使用 Node 22 单独构建。Compose 开启只读根文件系统、`/tmp` 临时卷和 2 GiB 内存限额，`data/` 必须可写。更多见 [Docker 部署指南](docs/deploy/docker.md)。
@@ -160,7 +160,7 @@ cd frontend && npm run typecheck && npm test && npm run build
 cd ../telebox && npx tsc --noEmit
 ```
 
-此前实现阶段通过了前端类型检查/构建、425 个前端测试、针对性的 Python 测试及 TeleBox TypeScript 检查。**尚未在此工作区使用真实 Telegram 账号验证**验证码/扫码、TeleBox 独立授权、Bot API、TPM 远程安装及完整 Docker 构建；这些需要在你自己的测试账号和部署环境中分别验证。功能表说明的是代码实现范围，不代表真实账号端到端验收通过。
+本轮清理后通过前端类型检查、415 个前端测试、229 个针对性 Python 测试；TeleBox TypeScript 检查已在前一轮通过。完整 Docker 构建与**真实 Telegram 账号**的验证码/扫码、TeleBox 独立授权、Bot API、TPM 远程安装仍需在你的部署环境验证。功能表说明的是代码实现范围，不代表真实账号端到端验收通过。
 
 - TeleBox 需要额外账号会话和内存，运行多个账号时调高宿主机资源及 Compose 内存限额。
 - 旧插件任务保留原数据，但对应动作不会继续运行；迁移前先备份。

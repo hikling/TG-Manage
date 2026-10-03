@@ -521,18 +521,3 @@ async def refresh_account_chats(
 
     except Exception as e:
         raise e
-
-
-def __getattr__(name: str):
-    """延迟 re-export 兼容：resolve_telegram_api_credentials 旧导入路径。
-
-    模块级导入 telegram.credentials 会与 telegram/accounts → 本模块
-    （is_invalid_session_error）形成导入环，故改为按需解析。
-    """
-    if name == "resolve_telegram_api_credentials":
-        from backend.services.telegram.credentials import (
-            resolve_telegram_api_credentials,
-        )
-
-        return resolve_telegram_api_credentials
-    raise AttributeError(name)

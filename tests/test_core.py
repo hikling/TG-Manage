@@ -17,6 +17,8 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from tg_signer.compat import ChatType
 from tg_signer.core import (
     _CLIENT_INSTANCES,
@@ -174,31 +176,13 @@ class TestReadableChat:
 
 
 class TestGetApiConfig:
-    """get_api_config 从环境变量或默认值读取 API 配置"""
+    """旧共享凭据入口不再提供默认值或环境变量兜底。"""
 
-    def test_default_values(self, monkeypatch):
-        monkeypatch.delenv("TG_API_ID", raising=False)
-        monkeypatch.delenv("TG_API_HASH", raising=False)
-        api_id, api_hash = get_api_config()
-        assert api_id == 611335
-        assert api_hash == "d524b414d21f4d37f08684c1df41ac9c"
-
-    def test_env_override(self, monkeypatch):
+    def test_global_config_is_rejected(self, monkeypatch):
         monkeypatch.setenv("TG_API_ID", "99999")
-        monkeypatch.setenv("TG_API_HASH", "custom-hash")
-        api_id, api_hash = get_api_config()
-        assert api_id == 99999
-        assert api_hash == "custom-hash"
-
-    def test_invalid_api_id_falls_back(self, monkeypatch):
-        monkeypatch.setenv("TG_API_ID", "not-a-number")
-        api_id, _ = get_api_config()
-        assert api_id == 611335
-
-    def test_empty_api_hash_falls_back(self, monkeypatch):
-        monkeypatch.setenv("TG_API_HASH", "   ")
-        _, api_hash = get_api_config()
-        assert api_hash == "d524b414d21f4d37f08684c1df41ac9c"
+        monkeypatch.setenv("TG_API_HASH", "f" * 32)
+        with pytest.raises(ValueError, match="按账号保存"):
+            get_api_config()
 
 
 # ============================================================================
@@ -687,13 +671,17 @@ class TestGetClientFunction:
             if k not in self._keys_before:
                 _CLIENT_INSTANCES.pop(k, None)
 
-    def test_uses_env_api_config_as_fallback(self, monkeypatch):
-        """未传 api_id/api_hash 时从环境变量读取"""
+    def test_uses_account_credentials(self, monkeypatch):
+        """未显式传入凭据时使用当前账号保存的凭据。"""
         monkeypatch.setenv("TG_API_ID", "11111")
         monkeypatch.setenv("TG_API_HASH", "env-hash")
+        monkeypatch.setattr(
+            "backend.utils.tg_session.get_account_api_credentials",
+            lambda name: (22222, "a" * 32),
+        )
         client = get_client(name="env_fallback_test", workdir="/tmp/env_fallback")
-        assert client.api_id == 11111
-        assert client.api_hash == "env-hash"
+        assert client.api_id == 22222
+        assert client.api_hash == "a" * 32
 
     def test_explicit_api_overrides_env(self, monkeypatch):
         """显式传入的 api_id/api_hash 优先于环境变量"""
