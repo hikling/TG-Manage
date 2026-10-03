@@ -38,3 +38,10 @@ Rebuild TG-SignPulse using the supplied screenshot layout and real account chat 
 - Tests cover account boundaries, sensitive data filtering, history pagination, invalid inputs and runtime lifecycle.
 - Frontend typecheck/build/tests and targeted backend tests pass. Desktop/mobile light/dark screenshots reviewed.
 - Any operation needing actual Telegram authorization is reported unverified unless a real session is supplied; no unsolicited messages sent.
+
+## 2026-10-03 chat and task revisions
+
+- The Chat Center entry is always visible. Its own on/off control persists the setting. When off, the page shows only Telegram's official 777000 verification messages; when on, it shows ordinary conversations.
+- Remove the separate per-account Proxy Management card from System Settings. Account-level proxy editing remains in Account Management.
+- Add Task offers only loaded KITT commands and commands originating from newly installed per-account TeleBox plugins. Other bundled commands do not appear or run through this task list.
+- Plugin tasks do not have a daily execution time. TeleBox owns plugin cron scheduling; existing saved plugin tasks stop receiving panel scheduler jobs. Workbench daily message timing remains available.

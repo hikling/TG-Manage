@@ -62,12 +62,6 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
       <span v-if="loading" class="text-xs text-gray-500 shrink-0">{{ t('common.saving') }}</span>
     </div>
     <div class="space-y-5">
-      <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60">
-        <div class="flex items-center justify-between gap-3">
-          <div><label class="text-xs text-gray-700 dark:text-gray-200 block">是否开启聊天中心</label><p class="text-[10px] text-gray-500 mt-1">关闭时面板只读取 Telegram 官方验证码消息；开启后聊天缓存限制为 5 MB。</p></div>
-          <button type="button" class="ui-switch" role="switch" aria-label="是否开启聊天中心" :aria-checked="modelValue.chatCenterEnabled" :class="modelValue.chatCenterEnabled ? 'ui-switch-on' : ''" @click="update('chatCenterEnabled', !modelValue.chatCenterEnabled)"><span class="ui-switch-knob" /></button>
-        </div>
-      </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="settings-log-retention">{{ t('settings.logRetention') }}</label>
         <input id="settings-log-retention" :value="modelValue.logDays" @input="onNumberInput('logDays', $event)" type="number" :placeholder="t('settings.logRetentionPlaceholder')" class="ui-input">

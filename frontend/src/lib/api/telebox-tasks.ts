@@ -1,6 +1,6 @@
 import { panelRequest } from './communications'
 
-export interface TeleBoxCommand { plugin: string; command: string }
+export interface TeleBoxCommand { plugin: string; command: string; source: 'builtin' | 'installed' }
 export interface TeleBoxAccount {
   account: string
   status: string
@@ -13,7 +13,7 @@ export interface TeleBoxTask {
   name: string
   kind: 'plugin' | 'message'
   accounts: string[]
-  time: string
+  time: string | null
   enabled: boolean
   plugin?: string | null
   command?: string | null

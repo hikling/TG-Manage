@@ -48,7 +48,6 @@ function baseSettings(over: Partial<SettingsFormState> = {}): SettingsFormState 
     proxy: '',
     concurrency: 1,
     deviceKeepaliveEnabled: true,
-  chatCenterEnabled: false,
     deviceKeepaliveIntervalDays: 30,
     botEnabled: false,
     botLoginNotify: false,

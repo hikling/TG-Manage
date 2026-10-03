@@ -18,7 +18,7 @@ class TaskInput(BaseModel):
     name: constr(strip_whitespace=True, min_length=1, max_length=80)
     kind: Literal["plugin", "message"]
     accounts: list[constr(strip_whitespace=True, min_length=1, max_length=128)] = Field(..., min_items=1, max_items=20)
-    time: constr(regex=r"^\d{2}:\d{2}$")
+    time: constr(regex=r"^\d{2}:\d{2}$") | None = None
     enabled: bool = True
     plugin: constr(regex=r"^[A-Za-z0-9_-]{1,80}$") | None = None
     command: constr(min_length=1, max_length=80, regex=r"^[^\x00-\x1f\x7f]+$") | None = None
@@ -28,12 +28,14 @@ class TaskInput(BaseModel):
 
     @validator("time")
     def valid_time(cls, value):
-        datetime.strptime(value, "%H:%M")
+        if value is not None:
+            datetime.strptime(value, "%H:%M")
         return value
 
     @root_validator
     def valid_task(cls, values):
         if values.get("kind") == "plugin":
+            values["time"] = None
             if not values.get("plugin") or not values.get("command"):
                 raise ValueError("请选择 TeleBox 已加载的插件命令")
             if values.get("chats") or values.get("text"):
@@ -41,7 +43,7 @@ class TaskInput(BaseModel):
             if "\n" in values.get("args", "") or "\r" in values.get("args", ""):
                 raise ValueError("命令参数不允许换行")
         elif values.get("kind") == "message":
-            if not values.get("chats") or not values.get("text", "").strip():
+            if not values.get("time") or not values.get("chats") or not values.get("text", "").strip():
                 raise ValueError("每日消息任务须选择对话并填写消息")
             if values.get("plugin") or values.get("command"):
                 raise ValueError("每日消息任务不能附带插件动作")

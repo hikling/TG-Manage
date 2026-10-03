@@ -18,6 +18,13 @@ from backend.services import communications
 from backend.services.telebox import get_telebox_service, redact
 
 
+def eligible_commands(status: dict) -> list[dict]:
+    """Offer KITT and commands from account-installed TeleBox plugins only."""
+    return [item for item in status.get("commands", [])
+            if item.get("source") == "installed" or
+            (item.get("source") == "builtin" and item.get("plugin") == "kitt")]
+
+
 class TeleBoxTaskService:
     def __init__(self, path: Path | None = None):
         self.path = path or get_settings().data_dir / "telebox-tasks.json"
@@ -74,7 +81,7 @@ class TeleBoxTaskService:
     def available(account: str) -> dict:
         status = get_telebox_service().status(account)
         return {"account": account, "status": status["status"], "enabled": status["enabled"],
-                "commands": status["commands"], "plugins": status["plugins"]}
+                "commands": eligible_commands(status), "plugins": status["plugins"]}
 
     def _validate(self, item: dict):
         telebox = get_telebox_service()
@@ -87,8 +94,9 @@ class TeleBoxTaskService:
                 status = telebox.status(item["accounts"][0])
                 if status["status"] != "running" or not status["enabled"]:
                     raise ValueError("请先启动此账号的 TeleBox，再选择插件命令")
-                if {"plugin": item["plugin"], "command": item["command"]} not in status["commands"]:
-                    raise ValueError("此账号没有加载所选 TeleBox 插件命令，请刷新插件")
+                if not any(command["plugin"] == item["plugin"] and command["command"] == item["command"]
+                           for command in eligible_commands(status)):
+                    raise ValueError("仅支持 KITT 或该账号新安装插件的已加载命令")
         else:
             for chat_id in item["chats"]:
                 communications.peer_id(chat_id)
@@ -143,6 +151,10 @@ class TeleBoxTaskService:
             task = self.get(identifier)
             try:
                 if task["kind"] == "plugin":
+                    status = get_telebox_service().status(task["accounts"][0])
+                    if not any(command["plugin"] == task["plugin"] and command["command"] == task["command"]
+                               for command in eligible_commands(status)):
+                        raise ValueError("仅支持 KITT 或该账号新安装插件的已加载命令")
                     await get_telebox_service().run_command(
                         task["accounts"][0], task["plugin"], task["command"], task.get("args", ""),
                     )

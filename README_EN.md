@@ -7,9 +7,9 @@ This is a modified version of [Silentely/TG-SignPulse](https://github.com/Silent
 | Area | Current implementation |
 | --- | --- |
 | UI | Screenshot inspired sidebar, account cards, responsive layouts, light and dark themes. |
-| Chats | Optional chat center, disabled by default. When off, only official Telegram verification messages are retrieved. When on, dialogs, messages and avatars are displayed, with a 5 MB cache limit. |
+| Chats | Sidebar entry always visible. Its own switch defaults off, showing only official Telegram verification messages; when on, group dialogs, messages and avatars are displayed, with a 5 MB cache limit. |
 | Workbench | Immediate sends and daily scheduled messages, with manual target entry while chat center is off. |
-| Administration | Proxy management under system settings; Bot API registration/profile/commands/messages. |
+| Administration | Account proxies stay in account details; the separate proxy management card is removed. Bot API registration/profile/commands/messages remains. |
 | TeleBox | Complete upstream 0.2.9 source pinned to the commit in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json); separate worker, data directory, status, logs and plugin controls per account. |
 | Migration | The former Python task scheduler, actions and keyword monitor have been removed from the panel. TeleBox tasks select loaded commands per account; legacy task data is not executed or migrated automatically. |
 | Development | Trellis specifications and task notes under [`.trellis/`](.trellis/), with Codex skills/hooks. |

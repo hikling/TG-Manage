@@ -6,7 +6,7 @@
 
 - `backend/api/routes/communications.py` 声明 `/communications` 路由、Bearer 认证和 `MessageInput`；实际对话操作交给 `backend/services/communications.py`。
 - `backend/api/routes/telebox.py` 与 `backend/services/telebox.py` 分开管理请求和每账号进程；原版 TypeScript 代码保留在 `telebox/`。
-- 签到配置不是 ORM 任务表：`backend/services/sign_tasks.py` 是门面，CRUD/运行/历史分散在 `sign_task_*` 模块，底层任务配置为文件。
+- 插件任务保存在 `backend/services/telebox_tasks.py` 的独立 JSON 存储中；已加载命令的来源由 TeleBox worker 上报，面板只接受 KITT 和该账号安装插件的命令。面板调度器只注册工作台每日消息，插件自己的定时由 TeleBox `cronTasks` 管理。
 
 新增 API 要在 `backend/api/routes/__init__.py` 注册，确认 `backend/main.py` 的 `/api` 前缀。避免把 Telegram 连接、文件读写或调度状态直接塞进路由函数；也不要恢复已移除的 Python 插件目录与频道管理专页。
 

@@ -30,7 +30,7 @@ features:
     details: 选择账号和目标对话，立即发送或创建每日定时消息。
   - icon: 🧩
     title: TeleBox 插件任务
-    details: 识别账号运行时已加载的命令，按时区每日投递并查看运行日志。
+    details: 识别账号运行时的 KITT 与新安装插件命令，手动执行并查看运行日志。
   - icon: 💬
     title: 按需开启聊天中心
     details: 默认仅读取 Telegram 官方验证码；开启后查看普通会话，聊天缓存限制为 5 MB。
