@@ -2,7 +2,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAuthToken } from '../lib/api/core'
-import { getGlobalSettings } from '../lib/api/settings'
 import { getAppVersion } from '../lib/api'
 import {
   LayoutDashboard,
@@ -33,8 +32,6 @@ const { locale, toggleLanguage, t } = useI18n()
 const isMobileMenuOpen = ref(false)
 const showProfileModal = ref(false)
 const sidebarVersion = ref('')
-const chatCenterEnabled = ref(false)
-const onChatCenterChanged = (event: Event) => { chatCenterEnabled.value = (event as CustomEvent<boolean>).detail === true }
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
 
@@ -90,15 +87,12 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
-  window.addEventListener('chat-center-changed', onChatCenterChanged)
-  void getGlobalSettings(getAuthToken()).then(value => { chatCenterEnabled.value = value.chat_center_enabled === true }).catch(() => {})
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
   void loadSidebarVersion()
   scheduleViewWarmup()
 })
 onUnmounted(() => {
-  window.removeEventListener('chat-center-changed', onChatCenterChanged)
   window.removeEventListener('keydown', onKeydown)
   mobileQuery.removeEventListener('change', onViewportChange)
   if (menuScrollLocked) {
@@ -141,7 +135,7 @@ const navigation = computed(() => [
   { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
   { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts' },
   { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台' },
-  ...(chatCenterEnabled.value ? [{ id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心' }] : []),
+  { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心' },
   { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心' },
   { id: 'telebox', name: 'telebox', icon: Package, labelKey: '拓展插件' },
   { id: 'tasks', name: 'tasks', icon: Zap, labelKey: 'nav.tasks' },

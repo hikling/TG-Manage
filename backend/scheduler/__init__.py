@@ -230,7 +230,7 @@ async def _run_telebox_task(identifier: str) -> None:
 
 
 async def sync_jobs() -> None:
-    """Register only TeleBox commands and workbench daily messages."""
+    """Register workbench daily messages; TeleBox owns plugin scheduling."""
     if scheduler is None:
         return
     from backend.scheduler.instance_lock import has_scheduler_lock
@@ -241,7 +241,7 @@ async def sync_jobs() -> None:
     desired = set()
     if has_scheduler_lock():
         for task in get_telebox_task_service().list():
-            if not task["enabled"]:
+            if not task["enabled"] or task["kind"] != "message":
                 continue
             identifier = task["id"]
             job_id = f"tb-{identifier}"

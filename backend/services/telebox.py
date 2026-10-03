@@ -114,6 +114,9 @@ class TeleBoxService:
         # Refresh managed integration code on existing account directories too.
         # Upstream plugins, user plugins and account config remain account-local.
         shutil.copytree(self.source / "panel", directory / "panel", dirs_exist_ok=True)
+        # Command origin is provided by the managed plugin loader; refresh it
+        # for accounts created before the panel added source-aware filtering.
+        shutil.copy2(self.source / "src/utils/pluginManager.ts", directory / "src/utils/pluginManager.ts")
         for script in ("esbuild-register.cjs", "esbuild-esm-loader.mjs", "cjs-helpers.js"):
             shutil.copy2(self.source / "scripts" / script, directory / "scripts" / script)
         for folder in ["home", "cache", "temp"]:
@@ -351,7 +354,8 @@ class TeleBoxService:
         worker = self.workers.get(account)
         if not worker or worker["status"] != "running":
             raise ValueError("此账号 TeleBox 未运行")
-        if {"plugin": plugin, "command": command} not in worker.get("commands", []):
+        if not any(item.get("plugin") == plugin and item.get("command") == command
+                   for item in worker.get("commands", [])):
             raise ValueError("此账号没有加载所选 TeleBox 插件命令")
         identifier = uuid.uuid4().hex
         future = asyncio.get_running_loop().create_future()

@@ -79,6 +79,7 @@ async function emitCommands() {
   const manager = require("../src/utils/pluginManager");
   emit({ event: "commands", items: manager.listCommands().map((command: string) => ({
     command, plugin: manager.getPluginEntry(command)?.plugin.name || "",
+    source: manager.getPluginEntry(command)?.source || "builtin",
   })) });
 }
 async function runPlugin(input: any) {

@@ -14,7 +14,7 @@ from backend.services import telebox_tasks
 
 def payload(kind="plugin"):
     return TaskInput(
-        name="每日测试", kind=kind, accounts=["one"], time="09:10",
+        name="每日测试", kind=kind, accounts=["one"], time="09:10" if kind == "message" else None,
         plugin="ping" if kind == "plugin" else None,
         command="ping" if kind == "plugin" else None,
         chats=["-100123"] if kind == "message" else [],
@@ -26,6 +26,7 @@ def test_task_input_rejects_old_actions_and_invalid_time():
     unicode_task = TaskInput(name="unicode", kind="plugin", accounts=["one"], time="09:00",
                              plugin="custom", command="签到")
     assert unicode_task.command == "签到"
+    assert unicode_task.time is None
     with pytest.raises(ValidationError):
         TaskInput(name="old", kind="legacy", accounts=["one"], time="09:00")
     with pytest.raises(ValidationError):
@@ -38,7 +39,7 @@ def test_task_input_rejects_old_actions_and_invalid_time():
 
 @pytest.mark.asyncio
 async def test_store_command_discovery_run_and_daily_message(monkeypatch, tmp_path):
-    commands = [{"plugin": "ping", "command": "ping"}]
+    commands = [{"plugin": "ping", "command": "ping", "source": "installed"}]
     calls = []
 
     class FakeTeleBox:
@@ -49,7 +50,8 @@ async def test_store_command_discovery_run_and_daily_message(monkeypatch, tmp_pa
 
         def status(self, account):
             self._account(account)
-            return {"status": "running", "enabled": True, "commands": commands, "plugins": []}
+            return {"status": "running", "enabled": True, "commands": commands,
+                    "plugins": [{"name": "ping", "kind": "installed"}]}
 
         async def run_command(self, account, plugin, command, args):
             calls.append((account, plugin, command, args))
@@ -79,7 +81,8 @@ async def test_scheduler_replaces_legacy_jobs_with_telebox_jobs(monkeypatch):
         timezone = "UTC"
 
         def __init__(self):
-            self.jobs = {"sign-old": SimpleNamespace(id="sign-old")}
+            self.jobs = {"sign-old": SimpleNamespace(id="sign-old"),
+                         "tb-previous-plugin": SimpleNamespace(id="tb-previous-plugin")}
 
         def get_jobs(self):
             return list(self.jobs.values())
@@ -95,7 +98,8 @@ async def test_scheduler_replaces_legacy_jobs_with_telebox_jobs(monkeypatch):
     monkeypatch.setattr(scheduler_module, "_sync_auto_backup_job", lambda: None)
     monkeypatch.setattr("backend.scheduler.instance_lock.has_scheduler_lock", lambda: True)
     monkeypatch.setattr(telebox_tasks, "get_telebox_task_service", lambda: SimpleNamespace(list=lambda: [
-        {"id": "new", "enabled": True, "time": "09:10"},
+        {"id": "new", "kind": "message", "enabled": True, "time": "09:10"},
+        {"id": "plugin", "kind": "plugin", "enabled": True, "time": "09:10"},
     ]))
     await scheduler_module.sync_jobs()
     assert set(instance.jobs) == {"tb-new"}
@@ -108,9 +112,22 @@ def test_task_rejects_missing_loaded_plugin(monkeypatch, tmp_path):
     })
     monkeypatch.setattr(telebox_tasks, "get_telebox_service", lambda: fake)
     service = telebox_tasks.TeleBoxTaskService(tmp_path / "jobs.json")
-    with pytest.raises(ValueError, match="没有加载"):
+    with pytest.raises(ValueError, match="仅支持 KITT"):
         service.create(payload())
     assert service.list() == []
+
+
+def test_only_kitt_and_installed_commands_are_available(monkeypatch):
+    commands = [{"plugin": "kitt", "command": "kitt", "source": "builtin"},
+                {"plugin": "custom", "command": "go", "source": "installed"},
+                {"plugin": "ping", "command": "ping", "source": "builtin"}]
+    fake = SimpleNamespace(status=lambda _: {"status": "running", "enabled": True,
+                           "commands": commands,
+                           "plugins": [{"name": "kitt", "kind": "builtin"},
+                                       {"name": "ping", "kind": "builtin"},
+                                       {"name": "custom", "kind": "installed"}]})
+    monkeypatch.setattr(telebox_tasks, "get_telebox_service", lambda: fake)
+    assert telebox_tasks.TeleBoxTaskService.available("one")["commands"] == commands[:2]
 
 
 def test_message_chat_validation(monkeypatch, tmp_path):

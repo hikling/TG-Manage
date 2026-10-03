@@ -32,6 +32,7 @@ type PluginEntry = {
   original?: string;
   aliasFinal?: string;
   plugin: Plugin;
+  source: "builtin" | "installed";
 };
 
 const validPlugins: Plugin[] = [];
@@ -167,6 +168,7 @@ function dynamicRequireWithDeps(filePath: string) {
 }
 
 async function setPlugins(basePath: string) {
+  const source = basePath === USER_PLUGIN_PATH ? "installed" : "builtin";
   const files = fs
     .readdirSync(basePath)
     .filter((file) => file.endsWith(".ts"));
@@ -190,7 +192,7 @@ async function setPlugins(basePath: string) {
       const cmds = Object.keys(plugin.cmdHandlers);
 
       for (const cmd of cmds) {
-        plugins.set(cmd, { plugin });
+        plugins.set(cmd, { plugin, source });
 
         const relatedAliases = aliasList.filter(
           (rec) => rec.final === cmd || rec.final.startsWith(cmd + " ")
@@ -199,6 +201,7 @@ async function setPlugins(basePath: string) {
         for (const rec of relatedAliases) {
           plugins.set(rec.original, {
             plugin,
+            source,
             original: cmd,
             aliasFinal: rec.final,
           });

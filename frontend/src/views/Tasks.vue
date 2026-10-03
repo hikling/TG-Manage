@@ -24,12 +24,14 @@ const editing = ref<string | null>(null)
 const account = ref('')
 const command = ref('')
 const name = ref('')
-const time = ref('09:00')
 const args = ref('')
 const current = computed(() => accounts.value.find(item => item.account === account.value))
 const commands = computed(() => current.value?.commands ?? [])
 const accountOptions = computed(() => accounts.value.filter(item => item.enabled))
-const commandOptions = computed(() => commands.value.filter(item => /^[A-Za-z0-9_-]{1,80}$/.test(item.plugin) && item.command.length <= 80 && !/[\x00-\x1f\x7f]/.test(item.command)))
+const commandOptions = computed(() => {
+  return commands.value.filter(item => (item.source === 'installed' || (item.source === 'builtin' && item.plugin === 'kitt')) &&
+    /^[A-Za-z0-9_-]{1,80}$/.test(item.plugin) && item.command.length <= 80 && !/[\x00-\x1f\x7f]/.test(item.command))
+})
 
 async function load() {
   loading.value = true
@@ -52,7 +54,6 @@ async function openCreate() {
   command.value = ''
   name.value = ''
   args.value = ''
-  time.value = '09:00'
   adding.value = true
 }
 
@@ -64,7 +65,6 @@ async function openEdit(task: TeleBoxTask) {
   account.value = task.accounts[0] || ''
   command.value = String(commandOptions.value.findIndex(item => item.plugin === task.plugin && item.command === task.command))
   name.value = task.name
-  time.value = task.time
   args.value = task.args
   adding.value = true
 }
@@ -80,7 +80,7 @@ async function submit() {
   busy.value = true; error.value = ''; notice.value = ''
   const payload: TaskInput = {
     name: name.value.trim(), kind: 'plugin', accounts: [account.value],
-    time: time.value, enabled: editing.value ? tasks.value.find(task => task.id === editing.value)?.enabled ?? true : true,
+    time: null, enabled: editing.value ? tasks.value.find(task => task.id === editing.value)?.enabled ?? true : true,
     plugin: selected.plugin, command: selected.command, args: args.value.trim(), chats: [], text: '',
   }
   try {
@@ -142,10 +142,10 @@ onMounted(() => void load())
         <label>运行账号<select v-model="account" class="panel-input mt-2" :disabled="busy" @change="command = ''"><option v-for="item in accountOptions" :key="item.account" :value="item.account">{{ item.account }} · {{ item.status }}</option></select></label>
         <p v-if="current?.status !== 'running'" class="panel-error">此账号的 TeleBox 尚未运行，请到拓展插件检查启动状态。</p>
         <label>插件命令<select v-model="command" class="panel-input mt-2" required :disabled="busy || current?.status !== 'running'"><option value="" disabled>选择当前账号已加载的命令</option><option v-for="(item, index) in commandOptions" :key="item.plugin + ':' + item.command" :value="String(index)">{{ item.plugin }} · {{ item.command }}</option></select></label>
-        <p v-if="current?.status === 'running' && !commandOptions.length" class="panel-muted">该账号暂无可用命令。安装或重载插件后点击“添加任务”重新识别。</p>
-        <div class="panel-columns"><label>任务名称<input v-model="name" class="panel-input mt-2" required maxlength="80" :disabled="busy" placeholder="例如：每日插件检查" /></label><label>每日执行时间（系统设置时区）<input v-model="time" type="time" class="panel-input mt-2" required :disabled="busy" /></label></div>
+        <p v-if="current?.status === 'running' && !commandOptions.length" class="panel-muted">该账号暂无 KITT 或新安装插件的可用命令。安装或重载插件后点击“添加任务”重新识别。</p>
+        <label>任务名称<input v-model="name" class="panel-input mt-2" required maxlength="80" :disabled="busy" placeholder="例如：插件指令" /></label>
         <label>命令参数（可选）<input v-model="args" class="panel-input mt-2" maxlength="500" :disabled="busy" placeholder="按插件命令格式填写" /></label>
-        <p class="panel-muted text-sm">到点后使用该账号的 TeleBox 会话投递命令。投递和插件执行是两个阶段，插件输出请查看 TeleBox 日志。</p>
+        <p class="panel-muted text-sm">保存后可手动执行命令；插件自行管理的定时规则由 TeleBox 运行。插件输出请查看 TeleBox 日志。</p>
         <div class="panel-row"><button class="panel-button primary" :disabled="busy || current?.status !== 'running' || !commandOptions.length">{{ busy ? '保存中…' : '保存任务' }}</button></div>
       </form>
     </section>
@@ -153,7 +153,7 @@ onMounted(() => void load())
     <section class="panel-card panel-stack"><div class="panel-row"><h3>任务列表</h3><span class="panel-badge">{{ tasks.length }} 项</span></div>
       <p v-if="loading" class="panel-empty" role="status">正在读取任务…</p><p v-else-if="!tasks.length" class="panel-empty">暂无任务。点击“添加任务”选择已加载的插件命令。</p>
       <article v-for="task in tasks" :key="task.id" class="workbench-option flex-wrap">
-        <span class="workbench-step"><Clock3 :size="17" /></span><div class="flex-1 min-w-40"><strong class="block">{{ task.name }}</strong><p class="panel-muted text-sm">{{ task.accounts.join('、') }} · 每日 {{ task.time }} · {{ task.kind === 'plugin' ? task.plugin + ' / ' + task.command : task.chats.length + ' 个群会话' }}</p></div><span class="panel-badge">{{ task.enabled ? '已启用' : '已暂停' }}</span>
+        <span class="workbench-step"><Clock3 :size="17" /></span><div class="flex-1 min-w-40"><strong class="block">{{ task.name }}</strong><p class="panel-muted text-sm">{{ task.accounts.join('、') }} · {{ task.kind === 'plugin' ? task.plugin + ' / ' + task.command + ' · 手动执行' : '每日 ' + task.time + ' · ' + task.chats.length + ' 个群会话' }}</p></div><span class="panel-badge">{{ task.enabled ? '已启用' : '已暂停' }}</span>
         <div class="panel-row"><button v-if="task.kind === 'plugin'" class="panel-button" :disabled="busy" @click="openEdit(task)">编辑</button><button class="panel-button" :disabled="busy" @click="toggle(task)"><Pause v-if="task.enabled" :size="15" /><Play v-else :size="15" />{{ task.enabled ? '暂停' : '启用' }}</button><button class="panel-button" :disabled="busy" @click="run(task)">执行一次</button><button class="panel-button danger" :disabled="busy" :aria-label="'删除 ' + task.name" @click="remove(task)"><Trash2 :size="15" /></button></div>
       </article>
     </section>

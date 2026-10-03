@@ -6,12 +6,12 @@
 
 1. 在账号管理登录账号并启用 TeleBox，完成该账号的独立会话授权。
 2. 在「拓展插件」安装需要的插件，等待状态变为「运行中」。
-3. 在「任务编排」点击「添加任务」。面板读取该账号运行时已经加载的命令及其所属插件；选择账号、插件命令、参数、名称和每日时间。
-4. 保存后按系统设置中的时区执行。手动「执行一次」也会使用同一条路径。
+3. 在「任务编排」点击「添加任务」。面板读取该账号运行时已经加载的命令及其所属插件；选择账号、插件命令、参数和名称。只显示 KITT 与当前账号新安装插件的已加载命令，保存后可手动执行。
+4. 保存后点击「执行一次」可投递命令；需要插件定时运行时，在 TeleBox 插件中定义 `cronTasks`。
 
-插件的 `cmdHandlers` 是 TeleBox 的命令入口；面板从运行中的 `pluginManager.listCommands()` 和 `getPluginEntry()` 获取命令及插件对应关系。调度到点时，适配器使用该账号 TeleBox 自身的会话，按照运行时 `getPrefixes()` 的前缀向「收藏夹」投递命令，交给原有消息事件处理。它不会调用旧 Python 动作指令。投递成功表示命令已被接受发送，插件内部执行结果在「拓展插件」或「日志」中查看。插件卸载、重载或账号停用后，后续执行会重新校验当前已加载的命令。
+插件的 `cmdHandlers` 是 TeleBox 的命令入口；面板从运行中的 `pluginManager.listCommands()` 和 `getPluginEntry()` 获取命令及插件对应关系。手动执行时，适配器使用该账号 TeleBox 自身的会话，按照运行时 `getPrefixes()` 的前缀向「收藏夹」投递命令，交给原有消息事件处理。它不会调用旧 Python 动作指令。投递成功表示命令已被接受发送，插件内部执行结果在「拓展插件」或「日志」中查看。插件卸载、重载或账号停用后，后续执行会重新校验当前已加载的命令。
 
-TeleBox 插件自身定义的 `cronTasks` 仍由 TeleBox 原生 `cronManager` 管理；面板新增的每日插件命令由面板调度投递。插件开发请参照 [TeleBox 开发指南](https://github.com/TeleBoxOrg/TeleBox/blob/main/TELEBOX_DEVELOPMENT.md)，尤其是 `cmdHandlers`、`listenMessageHandler` 和 `cronTasks` 的生命周期约定。
+TeleBox 插件自身定义的 `cronTasks` 仍由 TeleBox 原生 `cronManager` 管理；面板不再定时投递插件命令，已有插件任务的旧每日时间也不会继续生效。插件开发请参照 [TeleBox 开发指南](https://github.com/TeleBoxOrg/TeleBox/blob/main/TELEBOX_DEVELOPMENT.md)，尤其是 `cmdHandlers`、`listenMessageHandler` 和 `cronTasks` 的生命周期约定。
 
 ## 账号工作台每日消息
 
