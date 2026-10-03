@@ -66,3 +66,15 @@ docker compose up -d --build
 | 旧自定义插件任务失败 | 旧 Python 插件体系已移除；备份后手工改用现有任务动作或 TeleBox 插件。 |
 
 真实 Telegram 授权、Bot API、TPM 安装和完整 Docker 构建尚需在目标环境逐项验证，不应把离线测试当作上线验收。
+
+### TeleBox 构建提示 npm ci 缺少锁文件
+
+若 `docker compose ps -a` 没有容器，安装时 TeleBox 阶段报 `npm error code EUSAGE` 并提示需要 `package-lock.json`，镜像尚未构建完成，网页服务也没有启动。这时先修复构建，无需先安装 UFW。
+
+本版本应提交 `telebox/package-lock.json`，且 Dockerfile 显式复制两个依赖文件。更新包含此修复的代码后，在原项目目录执行：
+
+```bash
+bash scripts/install.sh
+```
+
+不要删除 `data/`。若再次报错，保留构建末尾的错误信息；本机 `http://127.0.0.1:8080/` 可访问后再排查公网 TCP 8080 的安全组和防火墙。
