@@ -17,6 +17,8 @@ services:
       - LOG_LEVEL=INFO
       - APP_LEGACY_TASKS_READONLY=1
       - APP_SCHEDULER_LOCK=1
+      - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
+      - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
       # - ENABLE_API_DOCS=false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]

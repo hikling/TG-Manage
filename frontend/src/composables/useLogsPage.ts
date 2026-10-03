@@ -22,6 +22,7 @@ import type { TaskLogUiItem, LoginLogUiItem } from '../lib/types'
 import { notifyApiError } from '../lib/notify'
 import { failureCategoryLabel as mapFailureCategoryLabel } from '../lib/run-status'
 import { formatLogTime } from '../lib/datetime'
+import { panelRequest } from '../lib/api/communications'
 
 export function useLogsPage() {
   const { t } = useI18n()
@@ -39,7 +40,8 @@ export function useLogsPage() {
     return detail
   }
 
-  const activeTab = ref<'tasks' | 'login'>('tasks')
+  const activeTab = ref<'tasks' | 'login' | 'telebox'>('tasks')
+  const teleboxLogs = ref<{ account: string; time: string; level: string; message: string }[]>([])
   const filterTask = ref('')
   const filterAccount = ref('')
   const filterDate = ref('')
@@ -214,6 +216,21 @@ export function useLogsPage() {
     try {
       if (activeTab.value === 'tasks') {
         await loadTaskLogs()
+      } else if (activeTab.value === 'telebox') {
+        try {
+          const overview = await panelRequest<{ accounts: { account: string }[] }>('/telebox')
+          const names = overview.accounts.map(item => item.account).filter(name => !filterAccount.value || filterAccount.value === name)
+          const responses = await Promise.all(names.map(async account => {
+            const data = await panelRequest<{ items: { time: string; level: string; message: string }[] }>(`/telebox/${encodeURIComponent(account)}/logs`)
+            return data.items.map(item => ({ ...item, account }))
+          }))
+          if (generation === loadGeneration) {
+            teleboxLogs.value = responses.flat().filter(item => !filterDate.value || item.time.startsWith(filterDate.value)).sort((a, b) => b.time.localeCompare(a.time))
+            loadFailed.value = false
+          }
+        } catch {
+          if (generation === loadGeneration) { teleboxLogs.value = []; loadFailed.value = true }
+        }
       } else {
         await loadLoginLogs()
       }
@@ -396,6 +413,7 @@ export function useLogsPage() {
     logDetail,
     detailLoading,
     loginLogs,
+    teleboxLogs,
     logs,
     accountOptions,
     statusOptions,

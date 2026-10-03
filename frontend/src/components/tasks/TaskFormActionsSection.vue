@@ -2,7 +2,7 @@
 /**
  * 任务表单：动作序列编辑区块（支持拖拽排序、高级管道容错与宏变量注入）。
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import {
   Plus,
   Trash2,
@@ -15,6 +15,7 @@ import {
 import CustomSelect from '../CustomSelect.vue'
 import type { TaskActionItem } from '../../lib/types'
 import { useI18n } from '../../composables/useI18n'
+import { panelRequest } from '../../lib/api/communications'
 
 const { t } = useI18n()
 
@@ -103,12 +104,28 @@ const onDiceSelect = (action: TaskActionItem, val: string | number) => {
   }
 }
 
-defineProps<{
+const props = defineProps<{
   actions: TaskActionItem[]
+  account: string
+  allowTelebox: boolean
   /** 步骤编号展示：listen 为 04，定时为 03 */
   stepNum: string
   /** 监听后续动作目前由后端白名单执行，不支持自定义插件。 */
 }>()
+
+const commands = ref<{ plugin: string; command: string }[]>([])
+const commandOptions = computed(() => [
+  { label: '选择已加载的插件命令', value: '' },
+  ...commands.value.map(item => ({ label: `${item.plugin} · ${item.command}`, value: `${item.plugin}::${item.command}` })),
+])
+watch(() => props.account, async account => {
+  commands.value = []
+  if (!account) return
+  try {
+    const data = await panelRequest<{ accounts: { account: string; commands: { plugin: string; command: string }[] }[] }>('/telebox')
+    if (props.account === account) commands.value = data.accounts.find(item => item.account === account)?.commands || []
+  } catch { /* The task editor remains usable when TeleBox is offline. */ }
+}, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'add'): void
@@ -157,6 +174,7 @@ const emit = defineEmits<{
                 { label: t('taskForm.clickButton'), value: 'click_text_button' },
                 { label: t('taskForm.sendDice'), value: 'send_dice' },
                 { label: t('taskForm.botCmd'), value: 'bot_cmd' },
+                ...(allowTelebox ? [{ label: 'TeleBox 插件', value: 'telebox_plugin' }] : []),
                 { label: t('taskForm.delay'), value: 'delay' },
               ]"
               className="w-full"
@@ -236,6 +254,12 @@ const emit = defineEmits<{
                 class="ui-input !h-9 !text-xs !px-2 mt-1 w-full"
               />
             </template>
+
+            <div v-else-if="action.type === 'telebox_plugin'" class="space-y-1">
+              <CustomSelect v-model="action.value" :options="commandOptions" aria-label="TeleBox 插件命令" />
+              <input v-model="action.teleboxArgs" class="ui-input !h-9 !text-xs !px-2 w-full" maxlength="500" aria-label="命令参数" placeholder="命令参数（可选）" />
+              <p class="text-[11px] panel-muted">命令投递到该账号的 TeleBox；插件实际处理结果请查看 TeleBox 日志。</p>
+            </div>
 
             <!-- AI 识图 / AI 计算 动作 -->
             <div

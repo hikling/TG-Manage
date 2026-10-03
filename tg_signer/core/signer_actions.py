@@ -7,8 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
-import os
 import random
 import time
 from datetime import datetime, timedelta
@@ -37,6 +35,7 @@ from tg_signer.config import (
     SendDiceAction,
     SendTextAction,
     SignChatV3,
+    TeleBoxCommandAction,
 )
 from tg_signer.core.client import (
     Client,
@@ -476,7 +475,6 @@ class SignerActionsMixin:
         if chat.message_thread_id is not None:
             kwargs["message_thread_id"] = chat.message_thread_id
         history_limit = read_positive_int_env("SIGN_TASK_HISTORY_LOOKBACK", 12, 3)
-        eff_timeout = timeout
         if isinstance(action, SendTextAction):
             # 必须在 send 前快照，否则 bot 若已秒回会漏检
             before_state = await self._chat_state_snapshot(
@@ -503,6 +501,15 @@ class SignerActionsMixin:
         elif isinstance(action, KeywordNotifyAction):
             self.log("关键词监听通知动作为后台常驻监听配置，当前运行时跳过")
             return True
+        elif isinstance(action, TeleBoxCommandAction):
+            from backend.services.telebox import get_telebox_service
+
+            result = await get_telebox_service().run_command(
+                self._account, action.telebox_plugin, action.telebox_command,
+                action.telebox_args,
+            )
+            self.log(f"TeleBox 插件命令已投递：{action.telebox_plugin} / {action.telebox_command}")
+            return result
         self.context.last_callback_answer = None
         start = time.perf_counter()
         last_message = None

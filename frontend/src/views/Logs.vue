@@ -25,6 +25,7 @@ const {
   logDetail,
   detailLoading,
   loginLogs,
+  teleboxLogs,
   logs,
   accountOptions,
   statusOptions,
@@ -60,6 +61,7 @@ const {
         >
           {{ t('logs.auditLogs') }}
         </button>
+        <button type="button" class="px-1 pb-2.5 text-sm font-medium border-b-2" :class="activeTab === 'telebox' ? 'border-sky-500 text-gray-900 dark:text-gray-100' : 'border-transparent text-gray-500'" @click="activeTab = 'telebox'">TeleBox 日志</button>
       </div>
 
       <div class="flex items-center gap-0.5 pb-1.5">
@@ -74,6 +76,7 @@ const {
           <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': pageLoading }" />
         </button>
         <button
+          v-if="activeTab !== 'telebox'"
           type="button"
           class="ui-icon-btn hover:!text-rose-600 dark:hover:!text-rose-400 hover:!bg-rose-50 dark:hover:!bg-rose-950/30 disabled:opacity-50"
           :title="t('logs.clear')"
@@ -104,6 +107,7 @@ const {
           <CustomSelect v-model="filterStatus" :options="statusOptions" :ariaLabel="t('logs.colStatus')" />
           <CustomSelect v-model="filterCategory" :options="categoryOptions" :ariaLabel="t('logs.colCategory')" />
         </template>
+        <CustomSelect v-if="activeTab === 'telebox'" v-model="filterAccount" :options="accountOptions" :ariaLabel="t('logs.colAccount')" />
         <DatePicker v-model="filterDate" />
       </div>
       <!-- 激活筛选 chip：失败分类 / 状态 / 账号 / 任务名 / 日期 可一键清 -->
@@ -179,6 +183,15 @@ const {
       </div>
 
       <!-- Task logs -->
+      <div v-else-if="activeTab === 'telebox'" class="space-y-3 text-sm">
+        <p class="panel-muted">显示当前进程中按账号隔离的最近运行记录；插件命令的投递和运行信息也在这里查看。</p>
+        <p v-if="!teleboxLogs.length" class="panel-empty">暂无 TeleBox 日志</p>
+        <div v-for="(entry, i) in teleboxLogs" :key="`${entry.account}-${entry.time}-${i}`" class="ui-list-row flex gap-3 p-3 rounded-lg">
+          <time class="panel-muted shrink-0">{{ new Date(entry.time).toLocaleString() }}</time>
+          <strong class="shrink-0">{{ entry.account }}</strong>
+          <span :class="entry.level === 'error' ? 'text-rose-600' : ''" class="break-words min-w-0">{{ entry.message }}</span>
+        </div>
+      </div>
       <div v-else-if="activeTab === 'tasks'" class="text-xs space-y-0">
         <div v-if="logs.length === 0" class="ui-empty !py-12">
           <FilterEmptyState

@@ -53,4 +53,18 @@
 - 验证结果和 PR 地址将在完成检查后补充；本环境仍无 Docker，不宣称完整镜像构建通过。
 - 验证：新建空目录仅复制两个依赖文件，使用 Node 24 执行 `npm ci --include=dev --ignore-scripts --dry-run --offline --no-audit --no-fund` 成功（384 包）。锁文件版本 3、根依赖/开发依赖与 package.json 完全匹配，453 个锁定条目仅使用 registry.npmjs.org。此检查验证锁文件可用性，不编译原生模块；完整 Docker 构建由服务器重试验证。
 
-- 修复已上传至 `fix/telebox-docker-lockfile`，创建 [PR #13](https://github.com/hikling/TG-SignPulse-Private/pull/13)。保护的 main 未改动；服务器在原目录执行 `git fetch origin && git switch fix/telebox-docker-lockfile && bash scripts/install.sh` 即可合并前验证。
+- 修复已上传至 `fix/telebox-docker-lockfile`，创建 [PR #13](https://github.com/hikling/TG-SignPulse-Private/pull/13)。保护的 main 未改动；远端锁文件内容已核对与本地一致。服务器在原目录执行 `git fetch origin && git switch fix/telebox-docker-lockfile && bash scripts/install.sh` 即可合并前验证。
+
+## 本轮五项改造（2026-10-03）
+
+- [x] TeleBox 初始化按依赖、连接、独立会话授权、插件、运行时记录失败阶段和脱敏错误；启动接口短暂等待即时失败，进程异常退出保留 failed 状态及消息，取消前端固定成功提示。截图仅有通用 `Error`，没有服务器异常详情，因此尚无法断言原始网络/授权根因；重试新版本时应检查新的阶段和日志。
+- [x] 账号登录时选择是否启用 TeleBox，成功后自动请求启停；关闭时登录表单免填 API，服务端读取私有 `SIGNPULSE_TG_API_ID/HASH`。Telegram 本身仍要求应用凭据，服务器未配置时会明确报错。
+- [x] 聊天中心复用现有带鉴权和本地缓存的 Telegram 头像接口；懒加载、资源释放、无头像占位，改善列表、标题、气泡及移动端排版。
+- [x] TeleBox 工作进程公布实际加载的插件命令；定时任务动作 10 按账号和命令校验后用 TeleBox 自身会话向“收藏夹”投递，任务记录投递结果，统一日志页增加 TeleBox 标签。插件异步处理结果不当作任务投递成功的证据。
+- [x] 系统设置的通用、机器人通知、数据管理改为原生 details 折叠区，点击展开。
+
+当前核查：截图中 TeleBox 在启动后立即报告通用 `Error` 并退出码 0，现有前端却固定提示“已启动授权流程”；原代码在初始化异常时吞掉具体失败阶段。未拿到服务器完整运行上下文，修复时保留有界、脱敏的诊断信息。无 TeleBox 的 Telegram 登录也仍需 API ID/Hash，这不是可省去的 Telegram 协议参数。
+
+验证（离线）：前端 `npm run typecheck`、417 项 Vitest、`npm run build` 通过；TeleBox `npx tsc --noEmit` 通过；后端任务桥接、账号隔离与任务执行相关 44 项测试通过。原 `test_sign_task_runner.py` 夹具缺少上一轮新增的账号 API 凭据，本轮补了模拟凭据后 29 项正常通过。FastAPI TestClient 在本运行环境会阻塞；Docker 和真实 Telegram 会话不可在此验证。README、账号/任务指南、Docker 部署说明同步写入搭建条件和改动。
+
+交付：远端 `main` 已合并上一轮 PR #12/#13。本轮 35 个文本文件与本地暂存文件树 SHA 一致，位于私有分支 `feat/telebox-login-chat-task-logs` 和 [PR #14](https://github.com/hikling/TG-SignPulse-Private/pull/14)；保护的 `main` 未改动。PR 已可审阅，服务器上的真实会话和 Docker 验收仍待完成，合并由仓库所有者决定。

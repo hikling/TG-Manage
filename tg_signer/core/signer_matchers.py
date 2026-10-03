@@ -29,6 +29,7 @@ from tg_signer.config import (
     SendDiceAction,
     SendTextAction,
     SignChatV3,
+    TeleBoxCommandAction,
 )
 
 
@@ -71,6 +72,8 @@ class SignerMatchersMixin:
             return "未知动作"
         if isinstance(action, SendTextAction):
             return f"发送文本消息：{self._normalize_log_text(action.text, 120)}"
+        if isinstance(action, TeleBoxCommandAction):
+            return f"TeleBox 插件命令：{action.telebox_plugin} / {action.telebox_command}"
         if isinstance(action, SendDiceAction):
             return f"发送骰子：{self._normalize_log_text(str(action.dice), 40)}"
         if isinstance(action, ClickKeyboardByTextAction):
@@ -701,4 +704,3 @@ class SignerMatchersMixin:
             return "next"
 
         return "none"
-

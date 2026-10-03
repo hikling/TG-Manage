@@ -6,8 +6,8 @@ import { MEDIUM_TIMEOUT_MS, request, requestBlob } from "./core";
 export interface LoginStartRequest {
   account_name: string;
   phone_number: string;
-  api_id: number;
-  api_hash: string;
+  api_id?: number;
+  api_hash?: string;
   proxy?: string;
 }
 
@@ -37,8 +37,8 @@ export interface LoginVerifyResponse {
 
 export interface QrLoginStartRequest {
   account_name: string;
-  api_id: number;
-  api_hash: string;
+  api_id?: number;
+  api_hash?: string;
   proxy?: string;
 }
 

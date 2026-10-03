@@ -603,6 +603,8 @@ onMounted(() => { loadAccounts() })
     <TaskFormActionsSection
       v-if="scheduleMode === 'scheduled' || listenerPushChannel === 'continue'"
       :actions="actions"
+      :account="selectedAccount"
+      :allow-telebox="scheduleMode === 'scheduled'"
       :step-num="scheduleMode === 'listen' ? '04' : '03'"
       @add="addAction"
       @remove="removeAction"

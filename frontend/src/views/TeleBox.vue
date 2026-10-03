@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { Puzzle, Play, Square, RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
+import { Puzzle, RefreshCw, Plus, Trash2 } from 'lucide-vue-next'
 import { panelRequest } from '../lib/api/communications'
 import { errorText } from '../composables/usePanelAccount'
 import { useConfirm } from '../composables/useConfirm'
@@ -35,17 +35,6 @@ async function load(silent = false) {
   } catch (err) { if (!silent) error.value = errorText(err) }
 }
 
-async function operate(action: 'start' | 'stop' | 'restart') {
-  if (!selected.value || busy.value) return
-  busy.value = true; error.value = ''; success.value = ''
-  try {
-    await panelRequest(`/telebox/${encodeURIComponent(selected.value)}/${action}`, 'POST')
-    await load(true)
-    success.value = action === 'start' ? '已启动授权流程，正在等待独立会话' : action === 'stop' ? '已停止运行' : '正在重新启动'
-  } catch (err) { error.value = errorText(err) }
-  finally { busy.value = false }
-}
-
 async function submitPassword() {
   if (!selected.value || !password.value) return
   busy.value = true; error.value = ''
@@ -77,7 +66,7 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
     <section class="panel-card">
       <p class="panel-eyebrow"><Puzzle :size="18" />账号自动化</p>
       <h2 class="panel-title">内置 TeleBox</h2>
-      <p class="panel-muted">每个 Telegram 账号单独授权和运行 TeleBox，内置命令、TPM 插件、账号数据各自隔离。</p>
+      <p class="panel-muted">在账号管理登录时选择启用 TeleBox，成功后自动启动。这里管理当前账号的 TPM 插件和查看运行日志。</p>
       <p class="panel-muted text-xs mt-3">TeleBox {{ version || '—' }} · 上游版本 {{ upstream ? upstream.slice(0, 10) : '—' }}</p>
     </section>
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
@@ -90,11 +79,7 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
       </select>
       <template v-if="selected">
         <p class="panel-muted">状态：{{ accounts.find(item => item.account === selected)?.status }} <span v-if="accounts.find(item => item.account === selected)?.message">· {{ accounts.find(item => item.account === selected)?.message }}</span></p>
-        <div class="panel-row">
-          <button class="panel-button primary" :disabled="busy" @click="operate('start')"><Play :size="17" />启动</button>
-          <button class="panel-button" :disabled="busy" @click="operate('restart')"><RefreshCw :size="17" />重启</button>
-          <button class="panel-button danger" :disabled="busy" @click="operate('stop')"><Square :size="17" />停止</button>
-        </div>
+        <p v-if="!accounts.find(item => item.account === selected)?.enabled" class="panel-muted">此账号未启用 TeleBox；请从账号管理重新登录并勾选启用。</p>
         <form v-if="accounts.find(item => item.account === selected)?.status === 'password_required'" class="panel-row" @submit.prevent="submitPassword">
           <input v-model="password" type="password" autocomplete="new-password" class="panel-input flex-1" placeholder="Telegram 两步验证密码" required />
           <button class="panel-button primary" :disabled="busy">确认授权</button>

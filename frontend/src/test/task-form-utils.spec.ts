@@ -227,3 +227,15 @@ describe('removed legacy plugins', () => {
     expect(raw).toEqual([{ action: 1, text: '/start' }, { action: 99 }])
   })
 })
+
+describe('TeleBox task action', () => {
+  it('keeps account plugin and command through edit roundtrip', () => {
+    const original = [{ action: 10, telebox_plugin: 'clock', telebox_command: 'check', telebox_args: 'today' }]
+    const items = parseActions(original)
+    expect(buildActions(items)).toEqual(original)
+  })
+
+  it('requires a selected installed command', () => {
+    expect(() => buildActions([{ id: 1, type: 'telebox_plugin', value: '', aiPrompt: '' }])).toThrow('请选择')
+  })
+})
