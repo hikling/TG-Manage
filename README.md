@@ -56,7 +56,7 @@ git clone --branch feat/telebox-only-onboarding https://github.com/hikling/TG-Si
 
 脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
 
-脚本调用 `docker compose up -d --build`；查看运行状态用 `docker compose ps`，日志用 `docker compose logs --tail=100 app`。首次构建 TeleBox 的原生模块可能较久。
+脚本调用 `docker compose up -d --build`；查看运行状态用 `docker compose ps`，日志用 `docker compose logs --tail=100 app`。首次构建 TeleBox 的原生模块可能较久。TeleBox 的 `package-lock.json` 必须随仓库提交；若构建报 `npm ci` 缺少锁文件，先更新包含锁文件修复的版本，参见 [构建排查](docs/deploy/docker.md#telebox-构建提示-npm-ci-缺少锁文件)。
 
 ### 停止与重启
 

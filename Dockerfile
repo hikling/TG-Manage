@@ -12,7 +12,7 @@ RUN npm run build
 FROM node:24-bookworm-slim AS telebox-builder
 WORKDIR /telebox
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ pkg-config libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev && rm -rf /var/lib/apt/lists/*
-COPY telebox/package*.json ./
+COPY telebox/package.json telebox/package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
 
 # Python runtime.
