@@ -10,3 +10,7 @@ python3 -m pytest -q tests/test_api_error_codes.py
 ```
 
 检查时区、旧数据兼容和服务停止后的资源释放。没有登录过真实 Telegram 账号时不得把模拟测试表述为端到端验证。
+
+## Docker 依赖锁文件
+
+Dockerfile 中使用 `npm ci` 的每个构建阶段必须同时提交 package.json 与 package-lock.json。不能依靠本地被忽略的锁文件；检查 `git ls-files` 和子目录 `.gitignore`。COPY 应显式写出两份文件，让缺失在构建前期暴露。新建临时目录复制这两份文件后执行 npm ci dry-run 可验证依赖图；这不能代替原生模块编译和完整镜像验收。
