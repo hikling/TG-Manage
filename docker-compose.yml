@@ -20,6 +20,8 @@ services:
       - TELEBOX_NODE_HEAP_MB=${TELEBOX_NODE_HEAP_MB:-128}
       - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
       - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
+      - TG_API_ID=${TG_API_ID:-}
+      - TG_API_HASH=${TG_API_HASH:-}
       # - ENABLE_API_DOCS=false
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3)"]

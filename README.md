@@ -42,7 +42,7 @@
 | TeleBox Node | 构建/运行阶段 Node 24 | 另外安装 Node 24.x，并用 `TELEBOX_NODE` 指定可执行文件 |
 | 资源 | 当前 `docker-compose.yml` 设置 2 GiB 容器内存与 2 CPU；构建时还需要额外内存和磁盘 | 每增加一个运行中的 TeleBox 账号都会启动一个独立 Node 进程；按账号数量预留内存 |
 | 网络与账号 | 能访问 Telegram、npm/PyPI（构建时）；至少一个可完成验证的 Telegram 账号 | 同左；受限网络需先配置 Telegram 代理 |
-| Telegram API | 启用 TeleBox 的账号登录时填写专属 API ID/Hash；不启用时从服务器私有 `.env` 读取 `SIGNPULSE_TG_API_ID/HASH` | 同左；Telegram 登录无论是否启用 TeleBox 都需要一组有效应用凭据 |
+| Telegram API | 普通账号可免填，兼容旧版内置应用凭据；启用 TeleBox 时填写专属 API ID/Hash | 同左；建议用自有凭据，避免多个账号共享公开应用的限额 |
 
 面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。
 
@@ -82,7 +82,7 @@ docker compose up -d --build  # 代码更新后重新构建
 ## 首次使用
 
 1. 首次打开网页，填入安装脚本输出的设置码，自行设置 `admin` 密码；完成后设置码失效。已有部署用原账号登录。建议启用面板 TOTP。
-2. 在“账号管理”选择是否启用 TeleBox。勾选时填写该账号 API ID/Hash；不勾选时使用服务器私有 `.env` 中的应用凭据，网页登录无需重复填写。两种方式都通过验证码或二维码授权 Telegram；缺少任何可用 API 凭据时登录会明确报错。
+2. 在“账号管理”选择是否启用 TeleBox。勾选时填写该账号 API ID/Hash；不勾选时可直接用验证码或二维码登录普通账号。普通登录按顺序选用服务器私有 `SIGNPULSE_TG_API_ID/HASH`、旧版 `TG_API_ID/HASH`、此前保存的 `.telegram_api.json`，最后使用旧版内置公开凭据。建议有较多账号时设置自有应用凭据，以减少共享应用的限额影响。
 3. 启用 TeleBox 的账号在登录成功后自动申请**独立的新 Telegram 会话**。在“账号管理”的账号卡片查看状态；如要求两步验证密码，在卡片上填写。可通过卡片菜单停止运行或退出 TeleBox 登录；后者会尝试撤销远端会话并清除本地独立授权。离线时仅能确认本地清除。
 4. 左侧“聊天中心”始终可进入，在页面内选择是否开启聊天。关闭时该页只读取 Telegram 官方验证码消息 `777000`；开启后显示群组对话。聊天缓存超过 5 MB 会强制清理。头像从 Telegram 读取；无照片时显示文字占位。发送、删除、编辑消息会触发真实 Telegram 请求。账号工作台可多选操作账号和共有群，立即发送消息。
 
@@ -111,7 +111,7 @@ cd telebox && npm ci --include=dev && cd ..
 
 `canvas`、`better-sqlite3` 等 Node 原生模块在 Linux 上可能需要 Python、C/C++ 工具链及 Cairo/Pango/JPEG/GIF 开发包；准确的 Debian 包清单在 [`Dockerfile`](Dockerfile) 的 `telebox-builder` 阶段。Node 版本必须与安装依赖时使用的 ABI 匹配。不要从 `telebox/` 单独再启动一个共用账号的服务进程。
 
-本地开发建议设置 `APP_DATA_DIR=./data`，也可不设置而使用程序默认数据目录。不启用 TeleBox 且希望登录时免填凭据，可在本地进程私有环境设置 `SIGNPULSE_TG_API_ID/HASH`；不要提交这些值。启动后端前执行：
+本地开发建议设置 `APP_DATA_DIR=./data`，也可不设置而使用程序默认数据目录。普通账号登录可免填应用凭据；如使用自有 `SIGNPULSE_TG_API_ID/HASH`，请只写在本地私有环境中，不要提交。启动后端前执行：
 
 ```bash
 export APP_DATA_DIR=./data
@@ -133,8 +133,9 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 
 | 变量 | 用途 | 当前默认/来源 |
 | --- | --- | --- |
-| `SIGNPULSE_TG_API_ID/HASH` | 不启用 TeleBox 时的服务器私有应用凭据；Compose 从未提交的 `.env` 注入 | 可选；若未配置，登录表单需提供一组 API 凭据 |
-| 账号 API ID/Hash | 启用 TeleBox 时在手机/扫码登录表单输入，登录成功后加密保存在账号记录 | 旧账号如未保存专属凭据需重登 |
+| `SIGNPULSE_TG_API_ID/HASH` | 普通账号可选的服务器私有应用凭据；Compose 从未提交的 `.env` 注入 | 优先于旧版配置和内置公开凭据 |
+| `TG_API_ID/HASH` | 旧部署的应用凭据；Compose 继续透传这组值 | 两个变量均设置时优先于旧版设置文件和内置凭据 |
+| 账号 API ID/Hash | 启用 TeleBox 时在手机/扫码登录表单输入，登录成功后加密保存在账号记录 | 旧账号没有加密凭据时，可继续使用服务器或旧版内置应用凭据 |
 | `APP_SECRET_KEY` | JWT、Bot Token、账号凭据加密根密钥 | 自动持久化在 `data/.app_secret_key`；备份并保持原值 |
 | 初次管理员密码 | 在网页首次设置，服务端一次性设置码见安装脚本输出 | 既有账号保持原密码 |
 | `APP_DATA_DIR` | SQLite、session、日志、TeleBox 持久数据目录 | Compose 为 `/data`；本地建议 `./data` |

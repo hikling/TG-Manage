@@ -391,7 +391,7 @@ onUnmounted(() => {
 
       <label class="flex items-center gap-3 rounded-xl border border-[var(--sp-border)] p-3 cursor-pointer">
         <input v-model="enableTelebox" type="checkbox" class="h-4 w-4" aria-label="启用 TeleBox">
-        <span><strong class="block text-sm">启用 TeleBox</strong><small class="panel-muted">登录成功后自动启动；关闭时使用服务器的 Telegram 应用凭据。</small></span>
+        <span><strong class="block text-sm">启用 TeleBox</strong><small class="panel-muted">登录成功后自动启动；关闭时可直接登录普通账号，无需填写 API 凭据。</small></span>
       </label>
       <!-- Common Fields -->
       <div v-if="enableTelebox" class="grid grid-cols-1 sm:grid-cols-2 gap-3">

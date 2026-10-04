@@ -8,6 +8,7 @@ import pytest
 
 from backend.api.routes import accounts
 from backend.services import telebox
+from backend.services.telegram import credentials
 
 
 def test_node_heap_limit_for_multi_account_host(monkeypatch):
@@ -18,16 +19,37 @@ def test_node_heap_limit_for_multi_account_host(monkeypatch):
         assert telebox.node_heap_limit_mb() == expected
 
 
-def test_login_credentials_choose_account_or_private_server_default(monkeypatch):
+def test_login_credentials_choose_account_server_legacy_and_builtin(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        credentials, "get_settings",
+        lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path),
+    )
+    monkeypatch.delenv("TG_API_ID", raising=False)
+    monkeypatch.delenv("TG_API_HASH", raising=False)
     monkeypatch.setenv("SIGNPULSE_TG_API_ID", "12345")
     monkeypatch.setenv("SIGNPULSE_TG_API_HASH", "a" * 32)
-    assert accounts._login_api_credentials(None, None) == ("12345", "a" * 32)
+    assert accounts._login_api_credentials(None, None) == (12345, "a" * 32)
     assert accounts._login_api_credentials(67890, "b" * 32) == (67890, "b" * 32)
     with pytest.raises(ValueError, match="同时填写"):
         accounts._login_api_credentials(67890, None)
     monkeypatch.delenv("SIGNPULSE_TG_API_ID")
     monkeypatch.delenv("SIGNPULSE_TG_API_HASH")
-    with pytest.raises(ValueError, match="服务器缺少"):
+    monkeypatch.setenv("TG_API_ID", "54321")
+    monkeypatch.setenv("TG_API_HASH", "c" * 32)
+    assert accounts._login_api_credentials(None, None) == (54321, "c" * 32)
+    monkeypatch.delenv("TG_API_ID")
+    monkeypatch.delenv("TG_API_HASH")
+    (tmp_path / ".telegram_api.json").write_text(
+        json.dumps({"api_id": "76543", "api_hash": "d" * 32})
+    )
+    assert accounts._login_api_credentials(None, None) == (76543, "d" * 32)
+    (tmp_path / ".telegram_api.json").unlink()
+    assert accounts._login_api_credentials(None, None) == (
+        credentials.LEGACY_DEFAULT_API_ID,
+        credentials.LEGACY_DEFAULT_API_HASH,
+    )
+    monkeypatch.setenv("SIGNPULSE_TG_API_ID", "12345")
+    with pytest.raises(ValueError, match="必须同时配置"):
         accounts._login_api_credentials(None, None)
 
 

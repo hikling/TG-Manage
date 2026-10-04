@@ -18,6 +18,10 @@ services:
       - APP_SCHEDULER_LOCK=1
       - TG_GLOBAL_CONCURRENCY=${TG_GLOBAL_CONCURRENCY:-2}
       - TELEBOX_NODE_HEAP_MB=${TELEBOX_NODE_HEAP_MB:-128}
+      - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
+      - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
+      - TG_API_ID=${TG_API_ID:-}
+      - TG_API_HASH=${TG_API_HASH:-}
       # 可选：Postgres
       # - APP_DATABASE_URL=postgresql+psycopg2://user:pass@db:5432/tg_signpulse
       # 可选：监听分片（多实例时）

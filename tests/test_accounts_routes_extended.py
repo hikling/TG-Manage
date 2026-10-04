@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.api.routes import accounts as accounts_mod
+from backend.services.telegram import credentials
 from tests.test_api import _auth, _login, api_client, db  # noqa: F401
 
 
@@ -61,6 +63,25 @@ def _patch_svc(svc: MagicMock):
 
 
 class TestLoginFlow:
+    @pytest.mark.parametrize(
+        ("endpoint", "payload", "method"),
+        [
+            ("/api/accounts/login/start", {"account_name": "plain_login", "phone_number": "+8613800000000"}, "start_login"),
+            ("/api/accounts/qr/start", {"account_name": "plain_qr"}, "start_qr_login"),
+        ],
+    )
+    def test_plain_login_without_telebox_or_api_credentials(self, api_client, db, monkeypatch, tmp_path, endpoint, payload, method):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        monkeypatch.setattr(credentials, "get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
+        for name in ("SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
+            monkeypatch.delenv(name, raising=False)
+        with _patch_svc(svc):
+            response = api_client.post(endpoint, json=payload, headers=_auth(token))
+        assert response.status_code == 200
+        assert getattr(svc, method).await_args.kwargs["api_id"] == credentials.LEGACY_DEFAULT_API_ID
+        assert getattr(svc, method).await_args.kwargs["api_hash"] == credentials.LEGACY_DEFAULT_API_HASH
+
     def test_start_success(self, api_client, db):  # noqa: F811
         token = _login(api_client)
         svc = _svc()
