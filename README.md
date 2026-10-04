@@ -26,7 +26,7 @@
 | 机器人、代理 | 机器人中心提供 Bot Token 接入及资料/命令/消息管理；账号代理可在账号资料中设置，系统设置不再有独立代理管理卡片。群会话保留在聊天中心与账号工作台，不提供单独的群聊管理。Bot Token 在服务端加密存储。 |
 | 日志 | 按账号查看 TeleBox 进程输出；插件自身定时由 TeleBox 管理。 |
 | 内置 TeleBox | 保留 TeleBox 0.2.9 的上游源码、内置插件和 TPM；登录账号时选择启用并自动请求独立会话，在账号管理查看状态并操作。上游固定提交见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。 |
-| 清理旧功能 | 移除原 Python 自定义插件系统、插件市场/调试入口及其“自定义插件动作”；移除独立频道管理页。聊天中心聚焦群组对话。旧任务数据不自动删除，包含旧插件动作的任务要人工检查并迁移。 |
+| 清理旧功能 | 移除面板的拓展插件、任务编排、每日消息调度及其专用接口和测试；原有持久数据不自动删除。 |
 | 开发流程 | 接入 Trellis 的任务记录、后端/前端规范、Codex 技能与 hooks；搭建过程见 [bootstrap 记录](.trellis/tasks/00-bootstrap-guidelines/progress.md)。 |
 
 **模块边界：**TeleBox 是另一套独立 Telegram 会话与插件运行时。退出 TeleBox 只清除其独立授权，不会退出账号管理中的主账号。不要把两个进程的 session 文件手工合并。
@@ -41,10 +41,10 @@
 | 前端 Node | 构建阶段 Node 22.23.1 | Node 22.23.1，见根目录 `.nvmrc` |
 | TeleBox Node | 构建/运行阶段 Node 24 | 另外安装 Node 24.x，并用 `TELEBOX_NODE` 指定可执行文件 |
 | 资源 | 当前 `docker-compose.yml` 设置 2 GiB 容器内存与 2 CPU；构建时还需要额外内存和磁盘 | 每增加一个运行中的 TeleBox 账号都会启动一个独立 Node 进程；按账号数量预留内存 |
-
-面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。
 | 网络与账号 | 能访问 Telegram、npm/PyPI（构建时）；至少一个可完成验证的 Telegram 账号 | 同左；受限网络需先配置 Telegram 代理 |
 | Telegram API | 启用 TeleBox 的账号登录时填写专属 API ID/Hash；不启用时从服务器私有 `.env` 读取 `SIGNPULSE_TG_API_ID/HASH` | 同左；Telegram 登录无论是否启用 TeleBox 都需要一组有效应用凭据 |
+
+面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。
 
 TeleBox 插件可能需要自己的外部服务配置；插件由 TeleBox 自身管理。
 
@@ -129,10 +129,10 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 | 账号 API ID/Hash | 启用 TeleBox 时在手机/扫码登录表单输入，登录成功后加密保存在账号记录 | 旧账号如未保存专属凭据需重登 |
 | `APP_SECRET_KEY` | JWT、Bot Token、账号凭据加密根密钥 | 自动持久化在 `data/.app_secret_key`；备份并保持原值 |
 | 初次管理员密码 | 在网页首次设置，服务端一次性设置码见安装脚本输出 | 既有账号保持原密码 |
-| `APP_DATA_DIR` | SQLite、session、任务、日志、TeleBox 持久数据目录 | Compose 为 `/data`；本地建议 `./data` |
+| `APP_DATA_DIR` | SQLite、session、日志、TeleBox 持久数据目录 | Compose 为 `/data`；本地建议 `./data` |
 | `PORT` | Docker 入口脚本监听端口 | Compose 为 `8080` |
 | `APP_PORT` | Python Settings 默认端口（直接用 uvicorn 启动时显式 `--port` 覆盖） | `3000` |
-| `TZ` / `APP_TIMEZONE` | 时区，任务显示和调度相关 | Compose 为 `Asia/Shanghai`；代码默认 `Asia/Hong_Kong` |
+| `TZ` / `APP_TIMEZONE` | 时区，时间显示和系统调度相关 | Compose 为 `Asia/Shanghai`；代码默认 `Asia/Hong_Kong` |
 | `TG_SESSION_MODE` | Telegram session 文件或 string 模式 | 默认 `file` |
 | `TG_PROXY` | Telegram 全局代理（也可在面板设置） | 未设置 |
 | `APP_DATABASE_URL` | 覆盖默认 SQLite，可配置 SQLAlchemy 数据库 URL | 默认 SQLite `data/db.sqlite` |
