@@ -46,6 +46,14 @@
 
 面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。
 
+### 2 核 2 GiB 运行 20 个账号
+
+`docker-compose.yml` 将 Telegram 操作并发默认限制为 2；这限制的是同时连接/执行的数量，并不限制已登录账号总数。可以先添加 20 个主账号，按需检测和使用；首次批量检测会逐个排队完成。保持 `TG_GLOBAL_CONCURRENCY=2`，不要为了账号总数把它改成 20。默认并发也会识别容器的 CPU 配额。
+
+TeleBox 与主账号分开计费资源：每个**运行中的** TeleBox 账号都有一个常驻 Node 进程和独立 Telegram 会话。128 MiB 只限制 V8 老生代，不限制整个进程的 RSS。2 GiB 是否容得下 20 个同时运行的 TeleBox，必须在你的服务器用实际账号和插件观察，无法凭账号数量或堆上限保证。只为确实需要 TeleBox 功能的账号启动它；若所有 20 个都需要常驻，应根据实际总内存和 OOM 记录增加内存或分散到多台服务器。
+
+上线后用 `docker stats --no-stream tg-signpulse` 查看容器内存/CPU，用 `docker inspect -f '{{.State.OOMKilled}}' tg-signpulse` 检查是否触发 OOM；分批启动 TeleBox，给系统和容器留出余量。不要调高堆上限来解决进程数量造成的内存不足。`docker-compose.panel.yml` 同样从本仓库源码构建，按 2 CPU / 2 GiB 配置。
+
 TeleBox 插件可能需要自己的外部服务配置；插件由 TeleBox 自身管理。
 
 ## Docker Compose 搭建（推荐）
@@ -138,6 +146,7 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 | `APP_DATABASE_URL` | 覆盖默认 SQLite，可配置 SQLAlchemy 数据库 URL | 默认 SQLite `data/db.sqlite` |
 | `APP_CORS_ALLOW_ORIGINS` | 分离部署的前端来源列表，逗号分隔 | 默认 localhost 开发来源 |
 | `LOG_LEVEL` | 服务日志等级 | Compose 为 `INFO` |
+| `TG_GLOBAL_CONCURRENCY` | Telegram 操作同时执行上限；与账号总数无关 | 2 核 Compose 默认 2，可在私有 `.env` 中调整 |
 | `TELEBOX_NODE` | 本地指定 Node 24 可执行文件；Docker 镜像内 Node 24 已就绪 | 默认查找 `node` |
 | `TELEBOX_NODE_HEAP_MB` | 每个 TeleBox Node 进程的 V8 老生代上限，限制在 64–512 MiB | 默认 128 MiB，非进程总内存上限 |
 | `ENABLE_API_DOCS` | 开启 Swagger/ReDoc/OpenAPI | 默认关闭 |

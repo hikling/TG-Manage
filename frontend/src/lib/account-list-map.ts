@@ -9,12 +9,19 @@ export type AccountMapLabels = {
   checking: string
 }
 
+/** The API uses `connected` for a valid Telegram session; `active` is kept for older data. */
+export function isAccountHealthy(acc: Pick<AccountInfo, 'status' | 'needs_relogin' | 'status_message'>): boolean {
+  return !acc.needs_relogin
+    && (acc.status === 'connected' || acc.status === 'active')
+    && !/(流量|额度)/.test(acc.status_message || '')
+}
+
 /** 服务端账号 → 列表行字段（不含头像 blob） */
 export function mapAccountInfoToUiItem(
   acc: AccountInfo,
   labels: AccountMapLabels,
 ): AccountUiItem {
-  let uiStatus = 'active'
+  let uiStatus = isAccountHealthy(acc) ? 'active' : 'empty'
   let message = ''
 
   if (acc.needs_relogin || acc.status === 'invalid') {

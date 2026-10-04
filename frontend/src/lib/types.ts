@@ -31,12 +31,8 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   NETWORK_ABORTED: 'Request cancelled',
   NETWORK_ERROR: 'Network error',
   ACCOUNT_SESSION_INVALID: 'Account session invalid, please re-login',
-  TASK_LOG_NOT_FOUND: 'Task log not found',
   LOGIN_LOG_NOT_FOUND: 'Login log not found',
   INVALID_DATE_FILTER: 'Invalid date filter',
-  LEGACY_TASKS_READONLY:
-    '旧任务接口已移除',
-  TASK_NOT_FOUND: 'Task not found',
   ACCOUNT_NOT_FOUND: 'Account not found',
   RATE_LIMITED: 'Too many requests, please try later',
   INVALID_USERNAME_OR_PASSWORD: 'Invalid username or password',
@@ -51,14 +47,7 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   JOB_NOT_CANCELABLE: 'Job cannot be cancelled (missing or already finished)',
   SESSION_PASSWORD_NEEDED: 'Two-step verification enabled; enter the 2FA password',
   PASSWORD_HASH_INVALID: 'Incorrect 2FA password',
-  TASK_EXPORT_FAILED: 'Failed to export task',
-  TASK_CONFIG_INVALID: 'Invalid task config',
-  TASK_IMPORT_FAILED: 'Failed to import task',
   CONFIG_EXPORT_FAILED: 'Failed to export configs',
-  TASK_DELETE_FAILED: 'Failed to delete task',
-  AI_CONFIG_READ_FAILED: 'Failed to read AI config',
-  AI_CONFIG_SAVE_FAILED: 'Failed to save AI config',
-  AI_CONFIG_DELETE_FAILED: 'Failed to delete AI config',
   SETTINGS_READ_FAILED: 'Failed to read settings',
   SETTINGS_SAVE_FAILED: 'Failed to save settings',
   TG_CONFIG_READ_FAILED: 'Failed to read Telegram config',
@@ -132,25 +121,6 @@ export function getErrorMessage(e: unknown, fallback = 'Unknown error'): string 
     return truncateErrorMessage(e.trim())
   }
 
-  // 410 旧接口只读：detail 常为长英文说明，压缩展示
-  if (e && typeof e === 'object') {
-    const status = (e as ApiError).status
-    const msg =
-      e instanceof Error
-        ? (e.message || '').trim()
-        : typeof (e as Record<string, unknown>).detail === 'string'
-          ? String((e as Record<string, unknown>).detail).trim()
-          : ''
-    if (
-      status === 410 ||
-      /legacy.*(read-?only|removed)|APP_LEGACY_TASKS_READONLY|LEGACY_EVENTS_LOGS_REMOVED/i.test(
-        msg,
-      )
-    ) {
-      return API_ERROR_CODE_MESSAGES.LEGACY_TASKS_READONLY
-    }
-  }
-
   if (e instanceof Error) {
     const msg = (e.message || '').trim()
     return msg ? truncateErrorMessage(msg) : fallback
@@ -207,12 +177,6 @@ export function getLocalizedErrorMessage(
   const code = getErrorCode(e)
   if (code) {
     const key = `apiErrors.${code}`
-    const localized = t(key)
-    if (localized && localized !== key) return localized
-  }
-  // 410 旧任务
-  if (e && typeof e === 'object' && (e as ApiError).status === 410) {
-    const key = 'apiErrors.LEGACY_TASKS_READONLY'
     const localized = t(key)
     if (localized && localized !== key) return localized
   }

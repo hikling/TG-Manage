@@ -234,20 +234,30 @@ button, a, summary, [role="button"] { cursor: pointer; }
 
 /* Account management. */
 .account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 18px; }
-.account-tile { min-height: 272px; padding: 24px; background: var(--sp-bg-elevated); transition: border-color .18s, box-shadow .18s, transform .18s; }
+.account-tile { min-height: 324px; padding: 24px; background: var(--sp-bg-elevated); transition: border-color .18s, box-shadow .18s, transform .18s; }
 .account-tile:hover { border-color: var(--sp-border-strong); box-shadow: var(--sp-shadow-md); transform: translateY(-2px); }
-.account-tile-top { align-items: center; gap: 14px; }
-.account-tile-avatar { width: 56px; height: 56px; border-radius: 16px; background: var(--sp-accent-soft); color: var(--sp-accent); font-size: 1.15rem; }
+.account-tile-top { position: relative; flex-direction: column; align-items: center; gap: 0; }
+.account-tile-avatar-frame {
+  position: relative; width: 104px; height: 104px; margin-top: 8px; border-radius: 50%;
+  background: var(--sp-accent-soft); border: 1px solid var(--sp-border-strong);
+  box-shadow: inset 0 -12px 22px color-mix(in srgb, var(--sp-accent) 11%, transparent);
+}
+.account-tile-avatar {
+  position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+  width: 80px; height: 80px; border: 4px solid var(--sp-bg-elevated); border-radius: 50%;
+  background: var(--sp-accent-soft); color: var(--sp-accent); font-size: 1.15rem;
+  box-shadow: 0 5px 15px rgb(16 46 53 / .12);
+}
 .dark .account-tile-avatar { background: #245248; color: #a0efda; }
-.account-tile-info { margin: 0; flex: 1; }
+.account-tile-info { width: 100%; padding-inline: 16px; margin: 10px 0 0; text-align: center; }
 .account-tile-info h2 { font-size: 1.12rem; letter-spacing: -.02em; }
 .account-tile-info p { font-size: .82rem; }
-.account-tile-info .account-tile-eyebrow { color: var(--sp-accent); font-size: .63rem; letter-spacing: .11em; font-weight: 750; margin: 0 0 4px; }
+.account-tile-actions { position: absolute; top: -4px; right: -4px; }
 .account-tile-divider { height: 1px; background: var(--sp-border); margin: 20px 0 14px; }
 .account-tile-signals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .account-tile-signals > div { display: flex; flex-direction: column; min-width: 0; }
 .account-signal-label { color: var(--sp-text-muted); font-size: .65rem; font-weight: 750; letter-spacing: .09em; }
-.account-tile-status { margin: 5px 0 0; padding: 0; font-size: .81rem; font-weight: 650; }
+.account-tile-status { min-width: 0; margin: 5px 0 0; padding: 0; font-size: .81rem; font-weight: 650; white-space: normal; overflow-wrap: anywhere; }
 .account-tile-password { margin-top: 16px; }
 .account-tile-password label { font-size: .78rem; font-weight: 600; }
 .account-tile-password > div { display: flex; gap: 8px; margin-top: 6px; }

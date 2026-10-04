@@ -7,6 +7,7 @@ import { useConfirm } from '../composables/useConfirm'
 import ChatAvatar from '../components/ChatAvatar.vue'
 import { getGlobalSettings } from '../lib/api/settings'
 import { getAuthToken } from '../lib/api/core'
+import { isAccountHealthy } from '../lib/account-list-map'
 
 const { store, account, error } = usePanelAccount()
 const { confirm } = useConfirm()
@@ -126,7 +127,7 @@ async function submit() {
           <label v-for="item in store.accounts" :key="item.name" class="workbench-option" :class="{ selected: selected.includes(item.name) }">
             <input type="checkbox" :checked="selected.includes(item.name)" :disabled="busy" @change="toggle(selected, item.name)" />
             <span class="workbench-account-avatar" aria-hidden="true">{{ item.name.slice(0, 2) }}</span>
-            <span class="workbench-option-content"><strong>{{ item.name }}</strong><small>{{ item.status === 'active' ? '已连接' : (item.status_message || '账号已登录') }}</small></span>
+            <span class="workbench-option-content"><strong>{{ item.name }}</strong><small>{{ isAccountHealthy(item) ? '已连接' : (item.status_message || '待检测') }}</small></span>
             <span class="workbench-check" aria-hidden="true"><Check :size="14" /></span>
           </label>
         </div>

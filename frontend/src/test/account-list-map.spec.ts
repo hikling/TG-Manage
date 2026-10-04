@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   filterAccountsByQuery,
+  isAccountHealthy,
   mapAccountInfoToUiItem,
 } from '../lib/account-list-map'
 import type { AccountInfo } from '../lib/api'
@@ -8,6 +9,17 @@ import type { AccountInfo } from '../lib/api'
 const labels = { loginExpired: '登录失效', checking: '检测中' }
 
 describe('account-list-map', () => {
+  it('recognizes connected sessions and keeps abnormal states visible', () => {
+    expect(isAccountHealthy({ status: 'connected' })).toBe(true)
+    expect(isAccountHealthy({ status: 'active' })).toBe(true)
+    expect(isAccountHealthy({ status: 'connected', needs_relogin: true })).toBe(false)
+    expect(isAccountHealthy({ status: 'connected', status_message: '额度不足' })).toBe(false)
+    expect(isAccountHealthy({ status: 'checking' })).toBe(false)
+    expect(isAccountHealthy({})).toBe(false)
+    expect(mapAccountInfoToUiItem({ name: 'ok', status: 'connected' } as AccountInfo, labels).status).toBe('active')
+    expect(mapAccountInfoToUiItem({ name: 'unknown' } as AccountInfo, labels).status).toBe('empty')
+  })
+
   it('maps invalid and checking statuses', () => {
     const invalid = mapAccountInfoToUiItem(
       { name: 'a', needs_relogin: true, status: 'invalid' } as AccountInfo,

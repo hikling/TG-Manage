@@ -39,8 +39,30 @@ def get_global_semaphore() -> asyncio.Semaphore:
     return _GLOBAL_SEMAPHORE
 
 
+def _effective_cpu_count() -> int:
+    """Honor CPU affinity and Docker's cgroup quota before choosing a default."""
+    count = os.cpu_count() or 4
+    try:
+        count = min(count, len(os.sched_getaffinity(0)))
+    except (AttributeError, OSError):
+        pass
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+        if quota != "max" and int(quota) > 0 and int(period) > 0:
+            count = min(count, (int(quota) + int(period) - 1) // int(period))
+    except (OSError, ValueError, IndexError):
+        try:
+            quota = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
+            period = int(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())
+            if quota > 0 and period > 0:
+                count = min(count, (quota + period - 1) // period)
+        except (OSError, ValueError):
+            pass
+    return max(1, count)
+
+
 def _resolve_concurrency_limit() -> int:
-    # Priority: env var > global settings > default 1
+    # Priority: env var > global settings > cgroup-aware CPU default.
     raw = (os.getenv("TG_GLOBAL_CONCURRENCY") or "").strip()
     if raw:
         try:
@@ -55,8 +77,7 @@ def _resolve_concurrency_limit() -> int:
             return max(int(val), 1)
     except Exception:
         pass
-    # 默认：根据 CPU 核心数动态计算，上限为 5
-    return min(os.cpu_count() or 4, 5)
+    return min(_effective_cpu_count(), 5)
 
 
 def update_global_semaphore(new_limit: int) -> None:

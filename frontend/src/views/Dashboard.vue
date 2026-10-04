@@ -5,14 +5,23 @@ import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, RefreshCw, Users } fr
 import { useAccountsStore } from '../stores/accounts'
 import { errorText } from '../composables/usePanelAccount'
 import { listTeleBoxAccounts, type TeleBoxAccount } from '../lib/api/telebox'
+import { isAccountHealthy } from '../lib/account-list-map'
+import type { AccountInfo } from '../lib/api'
 
 const store = useAccountsStore()
 const telebox = ref<TeleBoxAccount[]>([])
 const loading = ref(false)
 const error = ref('')
 const runningCount = computed(() => telebox.value.filter(item => item.status === 'running').length)
-const healthyCount = computed(() => store.accounts.filter(item => item.status === 'active').length)
-const attention = computed(() => store.accounts.filter(item => item.status !== 'active').slice(0, 8))
+const healthyCount = computed(() => store.accounts.filter(isAccountHealthy).length)
+const attention = computed(() => store.accounts.filter(item => !isAccountHealthy(item)).slice(0, 8))
+
+function attentionReason(item: AccountInfo): string {
+  if (item.status_message) return item.status_message
+  if (item.needs_relogin || item.status === 'invalid') return '需要重新登录'
+  if (item.status === 'checking') return '检测中'
+  return item.status === 'error' ? '状态异常' : '待检测'
+}
 
 async function load() {
   loading.value = true
@@ -49,7 +58,7 @@ onMounted(() => void load())
       <div class="dashboard-section-heading"><div><p class="panel-eyebrow">ACCOUNTS / 健康状态</p><h3 id="recent-activity-title">需要关注的账号</h3></div><RouterLink to="/accounts" class="panel-button">查看全部账号 <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>
       <div v-if="loading && !store.accounts.length" class="dashboard-activity-loading" role="status">正在读取账号状态…</div>
       <div v-else-if="!attention.length" class="dashboard-activity-empty"><CheckCircle2 :size="26" aria-hidden="true" /><strong>目前没有异常账号</strong><span>账号状态变化会在这里显示。</span></div>
-      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ item.status_message || item.status }}</span></li></ol>
+      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>
     </section>
   </div>
 </template>
