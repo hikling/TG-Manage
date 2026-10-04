@@ -6,6 +6,7 @@ from pydantic import BaseModel, constr
 
 from backend.core.auth import get_current_user
 from backend.services.telebox import get_telebox_service
+from backend.services.telebox_catalog import catalog as get_plugin_catalog
 
 router = APIRouter(prefix="/telebox", dependencies=[Depends(get_current_user)])
 
@@ -27,6 +28,14 @@ def _error(exc: ValueError) -> HTTPException:
 @router.get("")
 def overview():
     return get_telebox_service().overview()
+
+
+@router.get("/catalog")
+async def catalog():
+    try:
+        return await get_plugin_catalog()
+    except ValueError as exc:
+        raise HTTPException(503, str(exc)) from None
 
 
 @router.get("/{account}")

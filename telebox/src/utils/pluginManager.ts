@@ -37,6 +37,7 @@ type PluginEntry = {
 
 const validPlugins: Plugin[] = [];
 const plugins: Map<string, PluginEntry> = new Map();
+const automationPlugins: Array<{ name: string; source: "builtin" | "installed"; triggers: string[] }> = [];
 const loadedPluginFiles: Set<string> = new Set();
 let pluginLoadDepth = 0;
 
@@ -189,6 +190,11 @@ async function setPlugins(basePath: string) {
       }
 
       validPlugins.push(plugin);
+      const triggers: string[] = [];
+      if (typeof plugin.listenMessageHandler === "function") triggers.push("message");
+      if (Array.isArray(plugin.eventHandlers) && plugin.eventHandlers.length) triggers.push("event");
+      if (plugin.cronTasks && Object.keys(plugin.cronTasks).length) triggers.push("cron");
+      if (triggers.length) automationPlugins.push({ name: path.basename(file, ".ts"), source, triggers });
       const cmds = Object.keys(plugin.cmdHandlers);
 
       for (const cmd of cmds) {
@@ -221,6 +227,10 @@ function getPluginEntry(command: string): PluginEntry | undefined {
 
 function listCommands(): string[] {
   return Array.from(plugins.keys()).sort((a, b) => a.localeCompare(b));
+}
+
+function listAutomationPlugins() {
+  return automationPlugins.map((item) => ({ ...item, triggers: [...item.triggers] }));
 }
 
 function getCommandFromMessage(
@@ -509,6 +519,7 @@ async function unloadPluginsForRuntime(runtime: TeleBoxRuntime) {
   );
 
   validPlugins.length = 0;
+  automationPlugins.length = 0;
   plugins.clear();
   loadedPluginFiles.clear();
   purgeModuleCache(oldPluginFiles);
@@ -602,6 +613,7 @@ export {
   loadPluginsForRuntime,
   unloadPluginsForRuntime,
   listCommands,
+  listAutomationPlugins,
   getPluginEntry,
   dealCommandPluginWithMessage,
   getCommandFromMessage,

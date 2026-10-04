@@ -150,6 +150,7 @@ class TeleBoxService:
         return {"account": account, "status": worker["status"] if worker else "stopped", "enabled": enabled,
                 "version": self.metadata()["version"], "plugins": plugins,
                 "commands": worker.get("commands", []) if worker else [],
+                "automations": worker.get("automations", []) if worker and worker["status"] == "running" else [],
                 "message": worker.get("message", "") if worker else ""}
 
     def overview(self):
@@ -260,6 +261,22 @@ class TeleBoxService:
                 elif event.get("event") == "commands":
                     worker["commands"] = [item for item in event.get("items", [])
                                           if isinstance(item, dict) and PLUGIN_NAME.fullmatch(str(item.get("plugin", "")))]
+                elif event.get("event") == "automations":
+                    items = event.get("items")
+                    automations = []
+                    for item in (items[:200] if isinstance(items, list) else []):
+                        if not isinstance(item, dict):
+                            continue
+                        name, source, triggers = item.get("name"), item.get("source"), item.get("triggers")
+                        if (not isinstance(name, str) or not PLUGIN_NAME.fullmatch(name)
+                                or source not in {"builtin", "installed"}
+                                or not isinstance(triggers, list) or not triggers
+                                or not all(isinstance(trigger, str) and trigger in {"message", "event", "cron"}
+                                           for trigger in triggers)):
+                            continue
+                        automations.append({"name": name, "source": source,
+                                            "triggers": list(dict.fromkeys(triggers))})
+                    worker["automations"] = automations
                 elif event.get("event") == "state" and event.get("status") in {"running", "password_required", "failed"}:
                     worker["status"] = event["status"]
                 elif event.get("event") == "result":
@@ -283,6 +300,7 @@ class TeleBoxService:
         code = await worker["process"].wait()
         worker["status"] = "stopped" if worker.get("stopping") else "failed"
         worker["commands"] = []
+        worker["automations"] = []
         if not worker.get("stopping") and not worker.get("message"):
             worker["message"] = f"TeleBox 进程退出（代码 {code}），请查看运行日志"
         for future in worker["pending"].values():
