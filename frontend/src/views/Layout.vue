@@ -176,9 +176,9 @@ const handleNavClick = () => {
       :inert="sidebarHidden || undefined"
     >
       <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
-        <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">TG</div>
+        <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">SP</div>
         <div class="sidebar-label min-w-0 flex-1">
-          <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG 管理面板</div>
+          <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">SignPulse</div>
           <div class="text-[10px] text-gray-400 mt-1 tracking-wide truncate">
             <button
               v-if="sidebarVersion"
@@ -206,6 +206,7 @@ const handleNavClick = () => {
       </div>
 
       <nav class="flex-1 py-5 flex flex-col gap-1 px-3 overflow-y-auto custom-scrollbar" :aria-label="t('nav.mainNav')">
+        <p class="sidebar-label sidebar-section-title">WORKSPACE / 工作空间</p>
         <router-link 
           v-for="nav in navigation" 
           :key="nav.id"
@@ -252,9 +253,10 @@ const handleNavClick = () => {
           >
             <Menu class="w-5 h-5" />
           </button>
-          <h1 class="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 tracking-wide truncate">
-            {{ currentTitle }}
-          </h1>
+          <div class="min-w-0">
+            <p class="header-kicker">SIGNPULSE / WORKSPACE</p>
+            <h1 class="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 tracking-wide truncate">{{ currentTitle }}</h1>
+          </div>
         </div>
         <div class="flex items-center gap-1 sm:gap-1.5">
           <button
