@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Activity, Clock3, ExternalLink, MessageSquare, Pause, Play, RefreshCw, Trash2, Zap } from 'lucide-vue-next'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { Activity, Clock3, ExternalLink, MessageSquare, Pause, Play, RefreshCw, Search, Trash2, X, Zap } from 'lucide-vue-next'
 import { RouterLink, useRoute } from 'vue-router'
 import { useConfirm } from '../composables/useConfirm'
 import { errorText } from '../composables/usePanelAccount'
+import { panelRequest } from '../lib/api/communications'
 import {
   deleteTeleBoxTask, listTeleBoxAccounts, listTeleBoxTasks, runTeleBoxTask, updateTeleBoxTask,
   type TeleBoxAccount, type TeleBoxTask, type TeleBoxTaskRun, type TaskInput,
@@ -19,6 +20,19 @@ const error = ref('')
 const notice = ref('')
 const loading = ref(false)
 const busy = ref(false)
+type CatalogItem = { name: string; description: string }
+const showAdd = ref(false)
+const addAccount = ref('')
+const catalog = ref<CatalogItem[]>([])
+const catalogLoading = ref(false)
+const catalogError = ref('')
+const catalogStale = ref(false)
+const addError = ref('')
+const search = ref('')
+const visibleCount = ref(24)
+const installingName = ref('')
+const addButton = ref<HTMLButtonElement | null>(null)
+const searchInput = ref<HTMLInputElement | null>(null)
 let poller: ReturnType<typeof setInterval> | undefined
 
 const dailyTasks = computed(() => tasks.value.filter(item => item.kind === 'message'))
@@ -33,6 +47,15 @@ const automations = computed(() => accounts.value
 const filteredDailyTasks = computed(() => dailyTasks.value.filter(item =>
   !selectedAccount.value || item.accounts.includes(selectedAccount.value)))
 const selectedRuntime = computed(() => accounts.value.find(item => item.account === selectedAccount.value))
+const addRuntime = computed(() => accounts.value.find(item => item.account === addAccount.value))
+const installedNames = computed(() => new Set(addRuntime.value?.plugins
+  .filter(item => item.kind !== 'builtin').map(item => item.name) || []))
+const filteredCatalog = computed(() => {
+  const term = search.value.trim().toLocaleLowerCase()
+  return catalog.value.filter(item => !term || item.name.toLocaleLowerCase().includes(term) ||
+    item.description.toLocaleLowerCase().includes(term))
+})
+const shownCatalog = computed(() => filteredCatalog.value.slice(0, visibleCount.value))
 
 async function load(silent = false) {
   if (!silent) loading.value = true
@@ -48,6 +71,52 @@ async function load(silent = false) {
     error.value = ''
   } catch (cause) { if (!silent) error.value = errorText(cause) }
   finally { if (!silent) loading.value = false }
+}
+async function loadCatalog() {
+  catalogLoading.value = true; catalogError.value = ''
+  try {
+    const data = await panelRequest<{ items: CatalogItem[]; stale: boolean }>('/telebox/catalog')
+    catalog.value = data.items
+    catalogStale.value = data.stale
+  } catch (cause) { catalogError.value = errorText(cause) }
+  finally { catalogLoading.value = false }
+}
+function openAdd() {
+  if (showAdd.value) {
+    closeAdd()
+    return
+  }
+  addAccount.value = accounts.value.find(item => item.account === selectedAccount.value)?.account ||
+    accounts.value.find(item => item.enabled && item.status === 'running')?.account ||
+    accounts.value[0]?.account || ''
+  addError.value = ''
+  showAdd.value = true
+  if (!catalog.value.length) void loadCatalog()
+  void nextTick(() => searchInput.value?.focus())
+}
+function closeAdd() {
+  showAdd.value = false
+  void nextTick(() => addButton.value?.focus())
+}
+async function install(item: CatalogItem) {
+  const account = addAccount.value
+  if (!account || installingName.value || addRuntime.value?.status !== 'running') return
+  installingName.value = item.name; addError.value = ''; notice.value = ''
+  try {
+    const status = await panelRequest<TeleBoxAccount>(`/telebox/${encodeURIComponent(account)}/plugins`, 'POST',
+      { action: 'install', name: item.name })
+    accounts.value = accounts.value.map(current => current.account === account ? status : current)
+    await load(true)
+    const triggers = status.automations?.find(plugin => plugin.name === item.name && plugin.source === 'installed')?.triggers || []
+    if (triggers.length) {
+      selectedAccount.value = account
+      notice.value = `已为 ${account} 添加 ${item.name}，${triggerLabel(triggers)}已加载。`
+      closeAdd()
+    } else {
+      addError.value = `${item.name} 已安装，但未检测到已加载的消息监听、事件处理或定时规则，当前不能作为常驻任务。它可能只提供手动命令，请选择带自动触发器的插件。`
+    }
+  } catch (cause) { addError.value = errorText(cause) }
+  finally { installingName.value = '' }
 }
 function asInput(task: TeleBoxTask): TaskInput {
   const { id: _id, ...payload } = task
@@ -96,13 +165,46 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
           <p class="panel-muted">已加载插件的消息监听、事件和定时规则由 TeleBox 常驻运行；每日群消息由面板调度。</p>
         </div>
         <button type="button" class="panel-button" :disabled="loading" @click="load()"><RefreshCw :size="17" aria-hidden="true" />刷新</button>
-        <RouterLink class="panel-button primary" :to="{ name: 'telebox', query: selectedAccount ? { account: selectedAccount } : {} }">
+        <button ref="addButton" type="button" class="panel-button primary" aria-controls="task-add-panel" :aria-expanded="showAdd" :disabled="loading || !!installingName" @click="openAdd">
           <Zap :size="17" aria-hidden="true" />添加常驻任务
-        </RouterLink>
+        </button>
       </div>
     </header>
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
     <p v-if="notice" class="panel-success" role="status">{{ notice }}</p>
+    <section v-if="showAdd" id="task-add-panel" class="panel-card panel-stack" aria-labelledby="task-add-title">
+      <div class="panel-row">
+        <div class="flex-1 min-w-40"><p class="panel-eyebrow">NEW AUTOMATION</p><h3 id="task-add-title">添加常驻任务</h3></div>
+        <button type="button" class="panel-button" :disabled="!!installingName" @click="closeAdd"><X :size="16" aria-hidden="true" />关闭</button>
+      </div>
+      <p class="panel-muted text-sm">选择账号和插件，安装后由插件内置的消息、事件或定时条件自动触发。安装结果会在下方的常驻插件列表显示。</p>
+      <div class="task-add-fields">
+        <div><label for="task-add-account" class="font-semibold">运行账号</label>
+          <select id="task-add-account" v-model="addAccount" class="panel-input w-full mt-2" :disabled="!!installingName" @change="addError = ''">
+            <option v-for="item in accounts" :key="item.account" :value="item.account">{{ item.account }} · {{ item.status }}</option>
+          </select>
+        </div>
+        <div><label for="task-add-search" class="font-semibold">查找插件</label>
+          <div class="task-add-search mt-2"><Search :size="17" aria-hidden="true" /><input id="task-add-search" ref="searchInput" v-model="search" type="search" placeholder="搜索名称或功能" :disabled="!!installingName" @input="visibleCount = 24" /></div>
+        </div>
+      </div>
+      <p v-if="!accounts.length" class="panel-empty">请先在账号管理添加并启用 TeleBox 账号。</p>
+      <p v-else-if="addRuntime?.status !== 'running'" class="panel-error" role="status">当前账号的 TeleBox 未运行，请先启动后再添加常驻任务。</p>
+      <p v-if="addError" class="panel-error" role="alert">{{ addError }}</p>
+      <div class="panel-row"><strong>官方插件目录</strong><button type="button" class="panel-button" :disabled="catalogLoading || !!installingName" @click="loadCatalog"><RefreshCw :size="16" aria-hidden="true" />刷新目录</button></div>
+      <p v-if="catalogError" class="panel-error" role="alert">{{ catalogError }} <button type="button" class="underline" @click="loadCatalog">重试</button></p>
+      <p v-if="catalogStale" class="panel-muted text-sm" role="status">当前展示缓存目录，官方源暂时不可用。</p>
+      <p v-if="catalogLoading && !catalog.length" class="panel-empty" role="status">正在加载插件目录…</p>
+      <p v-else-if="!filteredCatalog.length && !catalogError" class="panel-empty">没有找到匹配的插件。</p>
+      <div v-else-if="shownCatalog.length" class="task-add-list">
+        <article v-for="item in shownCatalog" :key="item.name" class="workbench-option task-add-item">
+          <div class="flex-1 min-w-0"><strong class="block">{{ item.name }}</strong><p class="panel-muted text-sm">{{ item.description || '官方插件' }}</p></div>
+          <span v-if="installedNames.has(item.name)" class="panel-badge">{{ addRuntime?.automations?.some(plugin => plugin.name === item.name && plugin.source === 'installed') ? '已添加' : '已安装 · 未检测到自动触发' }}</span>
+          <button v-else type="button" class="panel-button primary" :disabled="!!installingName || addRuntime?.status !== 'running'" :aria-label="`为 ${addAccount} 添加 ${item.name} 常驻任务`" @click="install(item)">{{ installingName === item.name ? '正在安装…' : '添加' }}</button>
+        </article>
+        <button v-if="shownCatalog.length < filteredCatalog.length" type="button" class="panel-button w-full" @click="visibleCount += 24">显示更多（{{ filteredCatalog.length - shownCatalog.length }}）</button>
+      </div>
+    </section>
     <section class="panel-card panel-stack" aria-label="任务账号">
       <label for="task-account" class="font-semibold">运行账号</label>
       <select id="task-account" v-model="selectedAccount" class="panel-input" :disabled="loading">
@@ -115,7 +217,7 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
       <div class="panel-row"><h3>常驻插件</h3><span class="panel-badge">{{ automations.length }} 项</span></div>
       <p class="panel-muted text-sm">插件加载后由其自身的触发条件运行。只展示实际声明了消息监听、事件处理或 cron 的插件；安装仅有命令的插件不会自动执行命令。</p>
       <p v-if="loading" class="panel-empty" role="status">正在读取插件…</p>
-      <p v-else-if="!automations.length" class="panel-empty">暂无已加载的常驻插件。前往插件中心安装带监听或定时能力的插件。</p>
+      <p v-else-if="!automations.length" class="panel-empty">暂无已加载的常驻插件。点击“添加常驻任务”选择账号和插件。</p>
       <article v-for="item in automations" :key="item.account + ':' + item.name" class="workbench-option flex-wrap">
         <span class="workbench-step"><Activity :size="18" aria-hidden="true" /></span>
         <div class="flex-1 min-w-40">
@@ -162,3 +264,14 @@ onUnmounted(() => { if (poller) clearInterval(poller) })
     </section>
   </div>
 </template>
+
+<style scoped>
+.task-add-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.task-add-search { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 1px solid var(--sp-border-strong); border-radius: 10px; color: var(--sp-text-muted); background: var(--sp-bg-elevated); }
+.task-add-search:focus-within { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.task-add-search input { width: 100%; min-width: 0; outline: none; color: var(--sp-text); background: transparent; }
+.task-add-list { display: grid; gap: 8px; }
+.task-add-item { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.task-add-item .panel-button { flex: none; }
+@media (max-width: 640px) { .task-add-fields { grid-template-columns: 1fr; } .task-add-item .panel-button { width: 100%; } }
+</style>
