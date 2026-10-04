@@ -43,7 +43,7 @@
     "API_CREDENTIALS_REQUIRED": "api_id and api_hash are required",
     "API_ID_INVALID": "api_id must be a positive integer",
     "DATA_DIR_NOT_WRITABLE": "Data directory is not writable",
-    "LEGACY_TASKS_READONLY": "Legacy tasks have been removed; use TeleBox task orchestration",
+    "LEGACY_TASKS_READONLY": "Legacy task endpoints have been removed",
     "TASK_NOT_FOUND": "Task not found",
     "ACCOUNT_NOT_FOUND": "Account not found",
     "RATE_LIMITED": "Too many requests, please try later",

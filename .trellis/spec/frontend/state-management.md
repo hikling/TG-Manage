@@ -1,6 +1,6 @@
 # 前端状态管理
 
-Pinia 只维护跨页共享状态：`stores/auth.ts` 管令牌与退出，`stores/accounts.ts` 管账号列表、30 秒 TTL、并发请求合并和强制刷新。旧任务运行状态 store 已随签到任务体系删除；任务列表和运行记录通过 TeleBox 任务 API 读取。局部表单、筛选、选中会话和分页指针留在页面或 composable（如 `views/Chats.vue`）。服务端数据源始终是 API，前端缓存失效后重新请求。
+Pinia 只维护跨页共享状态：`stores/auth.ts` 管令牌与退出，`stores/accounts.ts` 管账号列表、30 秒 TTL、并发请求合并和强制刷新。面板任务接口和旧任务运行状态 store 已移除。TeleBox 进程状态由账号页通过 `lib/api/telebox.ts` 读取。局部表单、筛选、选中会话和分页指针留在页面或 composable（如 `views/Chats.vue`）。服务端数据源始终是 API，前端缓存失效后重新请求。
 
 ```ts
 // frontend/src/stores/accounts.ts

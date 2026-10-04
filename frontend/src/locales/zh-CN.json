@@ -43,7 +43,7 @@
     "API_CREDENTIALS_REQUIRED": "请填写 api_id 与 api_hash",
     "API_ID_INVALID": "api_id 必须是正整数",
     "DATA_DIR_NOT_WRITABLE": "数据目录不可写",
-    "LEGACY_TASKS_READONLY": "旧任务接口已移除，请使用 TeleBox 任务编排",
+    "LEGACY_TASKS_READONLY": "旧任务接口已移除",
     "TASK_NOT_FOUND": "任务不存在",
     "ACCOUNT_NOT_FOUND": "账号不存在",
     "RATE_LIMITED": "请求过于频繁，请稍后再试",
