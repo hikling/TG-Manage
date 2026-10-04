@@ -10,4 +10,4 @@ export * from "./accounts";
 export * from "./config";
 export * from "./settings";
 export * from "./ops";
-export * from "./telebox-tasks";
+export * from "./telebox";

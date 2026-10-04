@@ -894,12 +894,6 @@ class TelegramAccountsMixin:
             rename_account_entry(actual_account_name, new_account_name)
             self._rename_pending_login_records(actual_account_name, new_account_name)
 
-            from backend.services.telebox_tasks import get_telebox_task_service
-
-            get_telebox_task_service().rename_account(
-                actual_account_name, new_account_name
-            )
-
             self._accounts_cache = None
 
         async with first_lock:

@@ -216,48 +216,12 @@ def _sync_auto_backup_job() -> None:
         logger.exception("同步自动备份任务发生未知异常")
 
 
-async def _run_telebox_task(identifier: str) -> None:
-    from backend.services.telebox_tasks import get_telebox_task_service
-
-    try:
-        result = await get_telebox_task_service().run(identifier)
-        if not result["success"]:
-            logging.getLogger("backend.scheduler").warning(
-                "TeleBox task %s failed: %s", identifier, result["message"]
-            )
-    except Exception:
-        logging.getLogger("backend.scheduler").exception("TeleBox task %s failed", identifier)
-
-
 async def sync_jobs() -> None:
-    """Register workbench daily messages; TeleBox owns plugin scheduling."""
-    if scheduler is None:
-        return
-    from backend.scheduler.instance_lock import has_scheduler_lock
-    from backend.services.telebox_tasks import get_telebox_task_service
-
-    existing = {job.id for job in scheduler.get_jobs()
-                if str(job.id).startswith(("tb-", "sign-", "db-"))}
-    desired = set()
-    if has_scheduler_lock():
-        for task in get_telebox_task_service().list():
-            if not task["enabled"] or task["kind"] != "message":
-                continue
-            identifier = task["id"]
-            job_id = f"tb-{identifier}"
-            try:
-                hour, minute = map(int, task["time"].split(":"))
-                trigger = CronTrigger(hour=hour, minute=minute, timezone=scheduler.timezone)
-                scheduler.add_job(_run_telebox_task, trigger=trigger, id=job_id,
-                                  args=[identifier], replace_existing=True,
-                                  max_instances=1, coalesce=True)
-                desired.add(job_id)
-            except (ValueError, KeyError, RuntimeError):
-                logging.getLogger("backend.scheduler").exception(
-                    "TeleBox task %s could not be scheduled", identifier
-                )
-    for job_id in existing - desired:
-        scheduler.remove_job(job_id)
+    """Refresh system jobs; remove jobs from the retired task orchestration."""
+    if scheduler is not None:
+        for job in scheduler.get_jobs():
+            if str(job.id).startswith(("tb-", "sign-", "db-")):
+                scheduler.remove_job(job.id)
     _sync_auto_backup_job()
 
 

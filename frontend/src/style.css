@@ -1304,11 +1304,6 @@ textarea.ui-input {
 .workbench-select-actions button:disabled { opacity: .55; }
 .workbench-compose { display: flex; flex-direction: column; gap: 18px; }
 .workbench-compose .workbench-picker-header { margin-bottom: 0; }
-.workbench-mode { display: flex; flex-wrap: wrap; gap: 9px; }
-.workbench-mode legend { margin-bottom: 8px; font-size: .88rem; font-weight: 600; }
-.workbench-mode label { display: inline-flex; align-items: center; gap: 9px; padding: 10px 14px; border: 1px solid var(--sp-border); border-radius: 11px; cursor: pointer; }
-.workbench-mode label.selected { background: color-mix(in srgb, var(--sp-accent) 9%, var(--sp-bg-elevated)); border-color: var(--sp-accent); }
-.workbench-mode input { accent-color: var(--sp-accent); }
 .workbench-message-label { font-size: .88rem; font-weight: 600; }
 .workbench-message-label textarea { resize: vertical; font-weight: 400; }
 .workbench-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 16px; border-top: 1px solid var(--sp-border); }

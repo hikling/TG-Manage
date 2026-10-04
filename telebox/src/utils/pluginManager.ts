@@ -32,12 +32,10 @@ type PluginEntry = {
   original?: string;
   aliasFinal?: string;
   plugin: Plugin;
-  source: "builtin" | "installed";
 };
 
 const validPlugins: Plugin[] = [];
 const plugins: Map<string, PluginEntry> = new Map();
-const automationPlugins: Array<{ name: string; source: "builtin" | "installed"; triggers: string[] }> = [];
 const loadedPluginFiles: Set<string> = new Set();
 let pluginLoadDepth = 0;
 
@@ -169,7 +167,6 @@ function dynamicRequireWithDeps(filePath: string) {
 }
 
 async function setPlugins(basePath: string) {
-  const source = basePath === USER_PLUGIN_PATH ? "installed" : "builtin";
   const files = fs
     .readdirSync(basePath)
     .filter((file) => file.endsWith(".ts"));
@@ -190,15 +187,10 @@ async function setPlugins(basePath: string) {
       }
 
       validPlugins.push(plugin);
-      const triggers: string[] = [];
-      if (typeof plugin.listenMessageHandler === "function") triggers.push("message");
-      if (Array.isArray(plugin.eventHandlers) && plugin.eventHandlers.length) triggers.push("event");
-      if (plugin.cronTasks && Object.keys(plugin.cronTasks).length) triggers.push("cron");
-      if (triggers.length) automationPlugins.push({ name: path.basename(file, ".ts"), source, triggers });
       const cmds = Object.keys(plugin.cmdHandlers);
 
       for (const cmd of cmds) {
-        plugins.set(cmd, { plugin, source });
+        plugins.set(cmd, { plugin });
 
         const relatedAliases = aliasList.filter(
           (rec) => rec.final === cmd || rec.final.startsWith(cmd + " ")
@@ -207,7 +199,6 @@ async function setPlugins(basePath: string) {
         for (const rec of relatedAliases) {
           plugins.set(rec.original, {
             plugin,
-            source,
             original: cmd,
             aliasFinal: rec.final,
           });
@@ -227,10 +218,6 @@ function getPluginEntry(command: string): PluginEntry | undefined {
 
 function listCommands(): string[] {
   return Array.from(plugins.keys()).sort((a, b) => a.localeCompare(b));
-}
-
-function listAutomationPlugins() {
-  return automationPlugins.map((item) => ({ ...item, triggers: [...item.triggers] }));
 }
 
 function getCommandFromMessage(
@@ -519,7 +506,6 @@ async function unloadPluginsForRuntime(runtime: TeleBoxRuntime) {
   );
 
   validPlugins.length = 0;
-  automationPlugins.length = 0;
   plugins.clear();
   loadedPluginFiles.clear();
   purgeModuleCache(oldPluginFiles);
@@ -613,7 +599,6 @@ export {
   loadPluginsForRuntime,
   unloadPluginsForRuntime,
   listCommands,
-  listAutomationPlugins,
   getPluginEntry,
   dealCommandPluginWithMessage,
   getCommandFromMessage,

@@ -6,8 +6,7 @@ import { getAppVersion } from '../lib/api'
 import {
   LayoutDashboard,
   Users,
-  Workflow, MessagesSquare, Bot, Package,
-  Zap,
+  Workflow, MessagesSquare, Bot,
   Terminal,
   Settings,
   UserCircle,
@@ -106,7 +105,6 @@ onUnmounted(() => {
 const viewLoaders: Record<string, () => Promise<unknown>> = {
   dashboard: () => import('../views/Dashboard.vue'),
   accounts: () => import('../views/Accounts.vue'),
-  tasks: () => import('../views/Tasks.vue'),
   logs: () => import('../views/Logs.vue'),
   settings: () => import('../views/Settings.vue'),
 }
@@ -129,8 +127,6 @@ const navigation = computed(() => [
   { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台', color: 'violet' },
   { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心', color: 'green' },
   { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心', color: 'orange' },
-  { id: 'telebox', name: 'telebox', icon: Package, labelKey: '拓展插件', color: 'pink' },
-  { id: 'tasks', name: 'tasks', icon: Zap, labelKey: 'nav.tasks', color: 'yellow' },
   { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs', color: 'slate' },
   { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings', color: 'teal' },
 ])

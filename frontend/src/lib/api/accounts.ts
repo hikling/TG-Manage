@@ -268,23 +268,6 @@ export const submitQrPassword = (token: string, data: QrLoginPasswordRequest) =>
     body: JSON.stringify(data),
   }, token);
 
-// ─── 账号日志 ───
-
-export interface AccountLog {
-  id: number;
-  account_name: string;
-  task_name: string;
-  message: string;
-  summary?: string;
-  bot_message?: string;
-  success: boolean;
-  created_at: string;
-  failure_category?: string | null;
-}
-
-export const getRecentAccountLogs = (token: string, limit: number = 50) =>
-  request<AccountLog[]>(`/accounts/logs/recent?limit=${limit}`, {}, token);
-
 /**
  * 下载账号头像。复用 requestBlob 的鉴权与 401 跳转；失败时抛 ApiError，
  * 调用方按需 catch 回退到默认头像。

@@ -35,7 +35,7 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   LOGIN_LOG_NOT_FOUND: 'Login log not found',
   INVALID_DATE_FILTER: 'Invalid date filter',
   LEGACY_TASKS_READONLY:
-    '旧任务接口已移除，请使用 TeleBox 任务编排',
+    '旧任务接口已移除',
   TASK_NOT_FOUND: 'Task not found',
   ACCOUNT_NOT_FOUND: 'Account not found',
   RATE_LIMITED: 'Too many requests, please try later',
