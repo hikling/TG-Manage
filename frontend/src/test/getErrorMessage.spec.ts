@@ -112,14 +112,6 @@ describe('getErrorMessage', () => {
     expect(getErrorMessage(err)).toBe('Account session invalid, please re-login')
   })
 
-  it('410 旧任务移除映射', () => {
-    const err = new Error(
-      'Legacy /api/tasks has been removed; use /api/sign-tasks',
-    ) as ApiError
-    err.status = 410
-    expect(getErrorMessage(err)).toBe('旧任务接口已移除')
-  })
-
   it('getLocalizedErrorMessage 使用 t 映射', () => {
     const err = new Error('NETWORK_TIMEOUT') as ApiError
     err.code = 'NETWORK_TIMEOUT'

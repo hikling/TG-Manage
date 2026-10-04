@@ -827,7 +827,7 @@ class TestAccountNameValidation:
         svc.account_exists.assert_not_called()
 
     def test_all_account_endpoints_reject_traversal(self, api_client, db):  # noqa: F811
-        """全部 {account_name} 路径端点对 ``..`` 穿越名返回 400 且不调用服务。"""
+        """现有账号路由对 ``..`` 穿越名返回 400 且不调用服务。"""
         token = _login(api_client)
         svc = _svc()
         name = "%2e%2e"
@@ -870,16 +870,3 @@ class TestAccountNameValidation:
             )
             assert resp.status_code == 400
             svc.list_accounts.assert_not_called()
-
-            # 日志查看 / 清空 / 导出
-            resp = api_client.get(f"/api/accounts/{name}/logs", headers=_auth(token))
-            assert resp.status_code == 400
-            resp = api_client.post(
-                f"/api/accounts/{name}/logs/clear", headers=_auth(token)
-            )
-            assert resp.status_code == 400
-            svc.account_exists.assert_not_called()
-            resp = api_client.get(
-                f"/api/accounts/{name}/logs/export", headers=_auth(token)
-            )
-            assert resp.status_code == 400

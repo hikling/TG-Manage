@@ -1,40 +1,23 @@
-"""面板全局设置 → 环境变量回灌测试。
-
-覆盖场景：
-- 保存时同步到 env（原有行为）
-- 进程重启后从持久化设置重新回灌（新增：修复重启后 AI_VISION_* 等静默回退）
-- 无效值跳过、空值不清除已有 env
-"""
+"""Global settings: retired fields and proxy lookup."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from backend.services.config import ConfigService
-from backend.services.config_mixins import apply_global_settings_to_env
 
 
-class TestApplyGlobalSettingsToEnv:
-    def test_task_settings_sync_without_retired_ai_values(self, isolated_env: Path, monkeypatch):
-        import os
-
-        monkeypatch.delenv("SIGN_TASK_EXECUTION_TIMEOUT", raising=False)
-        monkeypatch.delenv("AI_VISION_TIMEOUT", raising=False)
-        apply_global_settings_to_env({
-            "sign_task_execution_timeout": 300,
-            "ai_vision_timeout": 30,
-        })
-        assert "SIGN_TASK_EXECUTION_TIMEOUT" not in os.environ
-        assert "AI_VISION_TIMEOUT" not in os.environ
-
-    def test_restart_restores_task_settings_only(self, isolated_env: Path, monkeypatch):
-        import os
-
-        service = ConfigService()
-        service.save_global_settings({"sign_task_execution_timeout": 300})
-        monkeypatch.delenv("SIGN_TASK_EXECUTION_TIMEOUT", raising=False)
-        apply_global_settings_to_env(service.get_global_settings())
-        assert "SIGN_TASK_EXECUTION_TIMEOUT" not in os.environ
+def test_retired_settings_are_dropped_on_save_and_load(isolated_env: Path):
+    service = ConfigService()
+    path = service._get_global_settings_file()
+    path.write_text('{"sign_interval": 45, "ai_vision_timeout": 30, "log_retention_days": 3}')
+    assert service.get_global_settings()["log_retention_days"] == 3
+    assert "sign_interval" not in service.get_global_settings()
+    assert "ai_vision_timeout" not in service.get_global_settings()
+    assert service.save_global_settings({"sign_task_execution_timeout": 300,
+                                         "telegram_bot_task_success_enabled": True})
+    assert "sign_task_execution_timeout" not in service.get_global_settings()
+    assert "telegram_bot_task_success_enabled" not in service.get_global_settings()
 
 
 class TestGetGlobalProxy:

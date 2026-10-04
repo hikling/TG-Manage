@@ -1,6 +1,8 @@
 name: Docker Image
 
 on:
+  pull_request:
+    branches: ["main"]
   push:
     branches: ["main", "dev"]
     tags: ["v*"]
@@ -48,21 +50,21 @@ jobs:
           python -m pip install -e ".[dev]" pytest-xdist pytest-timeout
 
       - name: Run pytest (parallel)
-        run: pytest tests/ -n auto --dist loadgroup -x -q --tb=short --no-header --ignore=tools --timeout=60 -o addopts=
+        run: pytest tests/ -n auto --dist loadgroup -q --tb=short --no-header --ignore=tools --timeout=60 -o addopts=
 
-      - name: Ruff check (核心新模块硬门槛)
+      - name: Ruff check (当前账号与运行模块)
         run: >
           ruff check
           backend/services/telegram
-          backend/services/keyword_monitor/rules.py
-          backend/services/keyword_monitor/__init__.py
-          backend/services/sign_task_failure.py
-          backend/services/sign_task_backend.py
-          backend/api/routes/batch.py
+          backend/services/telebox.py
+          backend/utils/tg_session.py
+          backend/api/routes/accounts.py
           backend/api/routes/ops.py
           backend/scheduler
           backend/core/pydantic_compat.py
-          tests/test_sign_batch_and_ops.py
+          tests/test_concurrency_default.py
+          tests/test_tg_session_store.py
+          tests/test_telebox_account.py
           tests/test_legacy_tasks_readonly.py
           tests/test_pydantic_compat_and_scale.py
           --quiet
@@ -92,6 +94,10 @@ jobs:
       - name: Unit tests
         working-directory: frontend
         run: npm test
+
+      - name: Production build
+        working-directory: frontend
+        run: npm run build
 
   # 镜像构建：
   # - main 分支推送：main + main-<sha>（稳定主干滚动镜像）

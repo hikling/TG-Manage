@@ -1252,8 +1252,7 @@ textarea.ui-input {
 }
 .account-tile--menu-open { z-index: 10; }
 .account-tile-top { display: flex; justify-content: space-between; align-items: flex-start; }
-.account-tile-avatar { width: 68px; height: 68px; overflow: hidden; border-radius: 50%; display: grid; place-items: center; flex: none; font-size: 1.05rem; font-weight: 700; background: #d9e5ff; color: #315b99; }
-.dark .account-tile-avatar { background: #354d77; color: #e6f0ff; }
+.account-tile-avatar { overflow: hidden; display: grid; place-items: center; flex: none; font-weight: 700; }
 .account-tile-actions { position: relative; }
 .account-more { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--sp-text-muted); }
 .account-more:hover, .account-more[aria-expanded="true"] { background: var(--sp-bg-muted); color: var(--sp-text); }

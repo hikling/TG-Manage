@@ -24,15 +24,11 @@ def _auth_headers() -> dict:
 
 
 class TestAdvancedSettingsApi:
-    def test_get_settings_includes_advanced_keys(self, client, db_session):
+    def test_get_settings_includes_advanced_keys(self, client, authenticated_admin):
         resp = client.get("/api/config/settings", headers=_auth_headers())
         assert resp.status_code == 200
         body = resp.json()
         for key in (
-            "ai_vision_timeout",
-            "ai_vision_retry_attempts",
-            "ai_vision_reasoning_effort",
-            "telegram_bot_task_success_enabled",
             "telegram_bot_quiet_hours_enabled",
             "telegram_bot_quiet_hours_start",
             "telegram_bot_quiet_hours_end",
@@ -48,7 +44,7 @@ class TestAdvancedSettingsApi:
         ):
             assert key in body, f"missing key {key}"
 
-    def test_legacy_task_settings_are_not_saved(self, client, db_session):
+    def test_legacy_task_settings_are_not_saved(self, client, authenticated_admin):
         resp = client.post(
             "/api/config/settings",
             json={
@@ -62,11 +58,12 @@ class TestAdvancedSettingsApi:
         got = client.get("/api/config/settings", headers=_auth_headers()).json()
         assert "sign_interval" not in got
         assert "sign_task_execution_timeout" not in got
-        assert got["ai_vision_timeout"] == 20
+        assert "ai_vision_timeout" not in got
+        assert "telegram_bot_task_success_enabled" not in got
 
 
 class TestBotTestApi:
-    def test_bot_test_requires_config(self, client, db_session):
+    def test_bot_test_requires_config(self, client, authenticated_admin):
         # 清空 token/chat
         client.post(
             "/api/config/settings",
@@ -79,7 +76,7 @@ class TestBotTestApi:
         assert body["success"] is False
         assert "配置" in body["message"] or "Token" in body["message"] or "token" in body["message"].lower()
 
-    def test_bot_test_success(self, client, db_session):
+    def test_bot_test_success(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -98,7 +95,7 @@ class TestBotTestApi:
         assert resp.json()["success"] is True
         m.assert_awaited()
 
-    def test_bot_test_whitespace_message_uses_default(self, client, db_session):
+    def test_bot_test_whitespace_message_uses_default(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -189,7 +186,7 @@ class TestQuietHours:
 
 
 class TestImportPreview:
-    def test_import_preview_no_write(self, client, db_session):
+    def test_import_preview_no_write(self, client, authenticated_admin):
         payload = {
             "signs": {"demo_task": {"name": "demo_task", "account_name": "a1"}},
             "monitors": {},
@@ -207,7 +204,7 @@ class TestImportPreview:
         assert "global" in body["settings_keys"]
         assert "errors" in body
 
-    def test_import_preview_invalid_json(self, client, db_session):
+    def test_import_preview_invalid_json(self, client, authenticated_admin):
         resp = client.post(
             "/api/config/import-preview",
             json={"config_json": "{not-json"},
@@ -218,7 +215,7 @@ class TestImportPreview:
         assert body["errors"]
         assert body["signs_count"] == 0
 
-    def test_import_preview_unauthenticated(self, client, db_session):
+    def test_import_preview_unauthenticated(self, client, authenticated_admin):
         resp = client.post(
             "/api/config/import-preview",
             json={"config_json": "{}"},
@@ -360,31 +357,7 @@ async def test_keyword_push_outside_quiet_hours():
         m.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_success_notification_respects_quiet_hours():
-    from backend.services.push_notifications import send_task_success_notification
-
-    cfg = {
-        "telegram_bot_notify_enabled": True,
-        "telegram_bot_task_success_enabled": True,
-        "telegram_bot_quiet_hours_enabled": True,
-        "telegram_bot_quiet_hours_start": "00:00",
-        "telegram_bot_quiet_hours_end": "23:59",
-        "timezone": "UTC",
-        "telegram_bot_token": "1:t",
-        "telegram_bot_chat_id": "1",
-    }
-    with patch(
-        "backend.services.push_notifications.send_telegram_bot_message",
-        new_callable=AsyncMock,
-    ) as m:
-        await send_task_success_notification(
-            cfg, account_name="a", task_name="t", message="ok"
-        )
-        m.assert_not_awaited()
-
-
-def test_global_settings_includes_timezone(client, db_session):
+def test_global_settings_includes_timezone(client, authenticated_admin):
     resp = client.get("/api/config/settings", headers=_auth_headers())
     assert resp.status_code == 200
     assert resp.json().get("timezone")
@@ -404,7 +377,7 @@ class TestWebdavBackupChain:
         yield
         config_mod._config_service = None
 
-    def test_webdav_settings_roundtrip(self, client, db_session):
+    def test_webdav_settings_roundtrip(self, client, authenticated_admin):
         resp = client.post(
             "/api/config/settings",
             json={
@@ -429,7 +402,7 @@ class TestWebdavBackupChain:
         stored = get_config_service().get_global_settings()
         assert stored["webdav_password"] == "secret"
 
-    def test_webdav_password_empty_keeps_existing(self, client, db_session):
+    def test_webdav_password_empty_keeps_existing(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -453,7 +426,7 @@ class TestWebdavBackupChain:
         assert get_config_service().get_global_settings()["webdav_password"] == "keep-me"
 
     def test_backup_export_uploads_when_webdav_configured(
-        self, client, db_session, isolated_env
+        self, client, authenticated_admin, isolated_env
     ):
         client.post(
             "/api/config/settings",
@@ -497,7 +470,7 @@ class TestWebdavBackupChain:
         assert call_kw["remote_dir"] == "tg-backups"
 
     def test_backup_export_requires_files_without_webdav(
-        self, client, db_session, isolated_env
+        self, client, authenticated_admin, isolated_env
     ):
         # 空数据目录且无 WebDAV → 400 无文件
         with patch(
@@ -510,7 +483,7 @@ class TestWebdavBackupChain:
             "detail", ""
         )
 
-    def test_webdav_test_endpoint_uses_saved_config(self, client, db_session):
+    def test_webdav_test_endpoint_uses_saved_config(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -598,7 +571,7 @@ class TestWebdavBackupChain:
         assert result["webdav"]["success"] is False
         assert list((data / "backups").glob("auto-*.tar.gz"))
 
-    def test_backup_export_rejects_missing_credentials(self, client, db_session):
+    def test_backup_export_rejects_missing_credentials(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -628,7 +601,7 @@ class TestWebdavBackupChain:
         assert resp.status_code == 400
         assert "用户名" in resp.json().get("detail", "")
 
-    def test_backup_status_includes_webdav_flags(self, client, db_session):
+    def test_backup_status_includes_webdav_flags(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -646,7 +619,7 @@ class TestWebdavBackupChain:
         assert body["auto_backup_enabled"] is True
         assert "local_auto_backups" in body
 
-    def test_bot_token_masked_on_get_and_empty_keeps(self, client, db_session):
+    def test_bot_token_masked_on_get_and_empty_keeps(self, client, authenticated_admin):
         unique_token = "123456:AAAsecret-bot-mask-test"
         resp = client.post(
             "/api/config/settings",
@@ -669,7 +642,7 @@ class TestWebdavBackupChain:
         stored = get_config_service().get_global_settings()["telegram_bot_token"]
         assert stored == unique_token
 
-    def test_export_masks_webdav_and_bot_secrets(self, client, db_session, isolated_env):
+    def test_export_masks_webdav_and_bot_secrets(self, client, authenticated_admin, isolated_env):
         client.post(
             "/api/config/settings",
             json={
@@ -693,7 +666,7 @@ class TestWebdavBackupChain:
         assert meta.get("webdav_password_masked") is True
         assert meta.get("telegram_bot_token_masked") is True
 
-    def test_list_webdav_files_endpoint(self, client, db_session):
+    def test_list_webdav_files_endpoint(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -730,7 +703,7 @@ class TestWebdavBackupChain:
         m.assert_called_once()
         assert m.call_args.kwargs["remote_dir"] == "bk"
 
-    def test_download_webdav_rejects_bad_name(self, client, db_session):
+    def test_download_webdav_rejects_bad_name(self, client, authenticated_admin):
         resp = client.get(
             "/api/ops/backup/webdav/download",
             params={"name": "../evil.tar.gz"},
@@ -738,7 +711,7 @@ class TestWebdavBackupChain:
         )
         assert resp.status_code == 400
 
-    def test_download_webdav_endpoint_streams(self, client, db_session, tmp_path):
+    def test_download_webdav_endpoint_streams(self, client, authenticated_admin, tmp_path):
         client.post(
             "/api/config/settings",
             json={

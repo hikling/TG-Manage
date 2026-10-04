@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 通用设置区块：日志保留、数据目录、代理、并发、签到间隔、设备保活、时区。
+ * 通用设置区块：日志保留、数据目录、代理、并发、设备保活、时区。
  * 父组件 Settings.vue 持有表单状态，本组件通过 v-model 双向同步并触发保存/立即保活事件。
  */
 import { Settings2 } from 'lucide-vue-next'
@@ -78,11 +78,6 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
       <div class="space-y-1.5">
         <label class="ui-label" for="settings-concurrency">{{ t('settings.concurrency') }}</label>
         <input id="settings-concurrency" :value="modelValue.concurrency" @input="onNumberInput('concurrency', $event)" type="number" min="1" max="10" :placeholder="t('settings.concurrencyPlaceholder')" class="ui-input">
-      </div>
-      <div class="space-y-1.5">
-        <label class="ui-label" for="settings-sign-interval">{{ t('settings.signInterval') }}</label>
-        <input id="settings-sign-interval" :value="modelValue.checkInterval" @input="onStringInput('checkInterval', $event)" type="number" min="0" max="3600" :placeholder="t('settings.signIntervalPlaceholder')" class="ui-input">
-        <p class="text-[10px] text-gray-500">{{ t('settings.signIntervalHint') }}</p>
       </div>
       <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
         <div class="flex items-center justify-between gap-3">

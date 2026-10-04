@@ -46,13 +46,12 @@ uvicorn backend.main:app --host 127.0.0.1 --port 8080
 
 1. 配置后端日志等级
 2. 确保数据目录存在
-3. 面板全局设置回灌环境变量（`apply_global_settings_to_env`，如 `AI_VISION_TIMEOUT`）
-4. 初始化 SQLAlchemy 引擎 + 建表
-5. 创建默认管理员（仅首次）
-6. 启动 APScheduler（`sync_on_startup=False`）
-7. 预导出 session string（避免任务期 SQLite 锁）
-8. 延迟任务：`sync_jobs` + 重启关键词监控 → 标记 `app.state.ready`
-9. 后台内存监控循环
+3. 初始化 SQLAlchemy 引擎 + 建表
+4. 创建默认管理员（仅首次）
+5. 启动 APScheduler（`sync_on_startup=False`）
+6. 预导出 session string（避免任务期 SQLite 锁）
+7. 延迟任务：`sync_jobs` + 重启关键词监控 → 标记 `app.state.ready`
+8. 后台内存监控循环
 
 关闭时：停调度器、释放 scheduler 实例锁、清理监控等。
 

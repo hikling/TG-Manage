@@ -42,7 +42,6 @@ import { useAuthStore } from '../stores/auth'
 
 function baseSettings(over: Partial<SettingsFormState> = {}): SettingsFormState {
   return {
-    checkInterval: '',
     logDays: 7,
     dataDir: '',
     proxy: '',
@@ -51,8 +50,6 @@ function baseSettings(over: Partial<SettingsFormState> = {}): SettingsFormState 
     deviceKeepaliveIntervalDays: 30,
     botEnabled: false,
     botLoginNotify: false,
-    botTaskFailure: false,
-    botTaskSuccess: false,
     quietEnabled: false,
     quietStart: '23:00',
     quietEnd: '07:00',

@@ -9,11 +9,23 @@ class TestResolveConcurrencyLimit:
     """_resolve_concurrency_limit 应正确处理优先级和默认值"""
 
     def test_env_var_takes_priority(self):
-        """环境变量 TG_GLOBAL_CONCURRENCY 优先级最高"""
+        """未在面板指定时使用环境变量。"""
         from backend.utils.tg_session import _resolve_concurrency_limit
 
-        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "10"}):
+        service = MagicMock()
+        service.get_global_settings.return_value = {"tg_global_concurrency": None}
+        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "10"}), \
+             patch("backend.services.config.get_config_service", return_value=service):
             assert _resolve_concurrency_limit() == 10
+
+    def test_explicit_setting_overrides_compose_default(self):
+        from backend.utils.tg_session import _resolve_concurrency_limit
+
+        service = MagicMock()
+        service.get_global_settings.return_value = {"tg_global_concurrency": 3}
+        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "2"}), \
+             patch("backend.services.config.get_config_service", return_value=service):
+            assert _resolve_concurrency_limit() == 3
 
     def test_env_var_invalid_falls_through(self):
         """环境变量无效值应降级到下一级"""
@@ -31,19 +43,26 @@ class TestResolveConcurrencyLimit:
         with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "0"}):
             assert _resolve_concurrency_limit() == 1
 
-    def test_dynamic_default_based_on_cpu(self):
-        """无环境变量且无保存配置时应返回 min(cpu_count, 5)"""
+    def test_dynamic_default_respects_container_cpu(self):
+        """无环境变量或保存配置时按容器 CPU 配额限制默认并发。"""
         from backend.utils.tg_session import _resolve_concurrency_limit
 
         mock_service = MagicMock()
         mock_service.get_global_settings.return_value = {}
         with patch.dict(os.environ, {}, clear=False), \
              patch("backend.utils.tg_session.os.getenv", side_effect=lambda k, *a: os.environ.get(k, "")), \
+             patch("backend.utils.tg_session._effective_cpu_count", return_value=2), \
              patch("backend.services.config.get_config_service", return_value=mock_service):
             result = _resolve_concurrency_limit()
-            cpu_count = os.cpu_count() or 4
-            expected = min(cpu_count, 5)
-            assert result == expected
+            assert result == 2
+
+    def test_cgroup_v2_quota_caps_host_cpu_count(self):
+        from backend.utils.tg_session import _effective_cpu_count
+
+        with patch("backend.utils.tg_session.os.cpu_count", return_value=32), \
+             patch("backend.utils.tg_session.os.sched_getaffinity", return_value=set(range(32))), \
+             patch("backend.utils.tg_session.Path.read_text", return_value="200000 100000"):
+            assert _effective_cpu_count() == 2
 
     def test_result_is_at_least_one(self):
         """任何情况下返回值应 >= 1"""

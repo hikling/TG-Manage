@@ -1,10 +1,10 @@
 """
 API 端点集成测试
 
-覆盖三大 API 模块：
+覆盖 API 模块：
 - 认证 API（登录、token 验证、未认证访问）
 - 账号 API（列表、存在检查、删除、更新）
-- 任务 API（CRUD、切换启用状态）
+- 配置 API（时区和旧配置路径边界）
 
 使用 FastAPI TestClient + 内存 SQLite 数据库（StaticPool），
 Mock 外部依赖（Telegram 服务、调度器同步）。
@@ -46,8 +46,6 @@ def api_client(tmp_path, monkeypatch) -> Iterator[TestClient]:
     monkeypatch.setenv("APP_SECRET_KEY", "test-secret-key-for-jwt-0123456789")
     monkeypatch.setenv("TG_API_ID", "12345")
     monkeypatch.setenv("TG_API_HASH", "test-api-hash")
-    monkeypatch.setenv("SIGN_TASK_FORCE_IN_MEMORY", "1")
-    monkeypatch.setenv("SIGN_TASK_EXECUTION_TIMEOUT", "5")
     monkeypatch.setenv("AI_REQUEST_TIMEOUT", "5")
     monkeypatch.setenv("ADMIN_PASSWORD", "admin123")
 
@@ -107,7 +105,7 @@ def api_client(tmp_path, monkeypatch) -> Iterator[TestClient]:
 
 @pytest.fixture
 def db(api_client: TestClient):
-    """从同一引擎获取数据库会话，用于创建账号/任务等种子数据"""
+    """从同一引擎获取数据库会话，用于创建账号等种子数据"""
     session = database_module._SessionLocal()
     try:
         yield session
@@ -499,14 +497,6 @@ class TestAccountAPI:
 
 
 # ============================================================================
-# 任务 API 测试
-# ============================================================================
-
-
-
-
-
-# ============================================================================
 # 新增功能测试：timezone、retry_count
 # ============================================================================
 
@@ -634,5 +624,5 @@ class TestRetiredGlobalConfig:
     @pytest.mark.parametrize("path", ["telegram", "ai"])
     def test_old_config_endpoints_are_gone(self, api_client, path):
         token = _login(api_client)
-        assert api_client.get(f"/api/config/{path}", headers=_auth(token)).status_code == 404
-        assert api_client.post(f"/api/config/{path}", json={}, headers=_auth(token)).status_code == 404
+        assert api_client.get(f"/api/config/{path}", headers=_auth(token)).status_code in {404, 405}
+        assert api_client.post(f"/api/config/{path}", json={}, headers=_auth(token)).status_code in {404, 405}

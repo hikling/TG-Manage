@@ -12,7 +12,6 @@ from backend.services.push_notifications import (
     send_auto_backup_failure_notification,
     send_keyword_push,
     send_login_notification,
-    send_task_success_notification,
     send_telegram_bot_message,
 )
 
@@ -225,7 +224,6 @@ class TestNotificationTimeLabels:
         settings = {
             "telegram_bot_notify_enabled": True,
             "telegram_bot_login_notify_enabled": True,
-            "telegram_bot_task_success_enabled": True,
             "telegram_bot_quiet_hours_enabled": False,
             "telegram_bot_token": "tok",
             "telegram_bot_chat_id": "chat",
@@ -246,23 +244,6 @@ class TestNotificationTimeLabels:
         )
         await send_login_notification(
             self._settings(), username="admin", ip_address="127.0.0.1"
-        )
-
-        assert "<b>时间 (UTC)</b>" in sent["text"]
-
-    @pytest.mark.asyncio()
-    async def test_success_notification_marks_time_as_utc(self, monkeypatch):
-        sent = {}
-
-        async def _fake_send(**kwargs):
-            sent.update(kwargs)
-
-        monkeypatch.setattr(
-            "backend.services.push_notifications.send_telegram_bot_message",
-            _fake_send,
-        )
-        await send_task_success_notification(
-            self._settings(), account_name="acc1", task_name="daily"
         )
 
         assert "<b>时间 (UTC)</b>" in sent["text"]

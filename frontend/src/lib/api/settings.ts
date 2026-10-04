@@ -52,7 +52,6 @@ export const changeUsername = (token: string, newUsername: string, password: str
 
 export interface GlobalSettings {
   chat_center_enabled?: boolean;
-  sign_interval?: number | null;  // null 表示随机 1-120 秒
   log_retention_days?: number;    // 日志保留天数，默认 7
   data_dir?: string | null;
   global_proxy?: string | null;
@@ -61,8 +60,6 @@ export interface GlobalSettings {
   device_keepalive_interval_days?: number;
   telegram_bot_notify_enabled?: boolean;
   telegram_bot_login_notify_enabled?: boolean;
-  telegram_bot_task_failure_enabled?: boolean;
-  telegram_bot_task_success_enabled?: boolean;
   telegram_bot_quiet_hours_enabled?: boolean;
   telegram_bot_quiet_hours_start?: string | null;
   telegram_bot_quiet_hours_end?: string | null;
@@ -72,9 +69,6 @@ export interface GlobalSettings {
   telegram_bot_chat_id?: string | null;
   telegram_bot_message_thread_id?: number | null;
   timezone?: string;
-  ai_vision_timeout?: number | null;
-  ai_vision_retry_attempts?: number | null;
-  ai_vision_reasoning_effort?: string | null;
   auto_backup_enabled?: boolean;
   auto_backup_interval_hours?: number | null;
   auto_backup_keep?: number | null;

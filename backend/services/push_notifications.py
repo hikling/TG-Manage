@@ -407,44 +407,6 @@ async def send_login_notification(
     )
 
 
-async def send_task_success_notification(
-    settings: Dict[str, Any],
-    *,
-    account_name: str,
-    task_name: str,
-    message: str = "",
-) -> None:
-    """任务成功时的 Bot 通知。"""
-    if not settings.get("telegram_bot_notify_enabled"):
-        return
-    if not settings.get("telegram_bot_task_success_enabled"):
-        return
-    if is_in_quiet_hours(settings):
-        return
-
-    bot_token, chat_id, thread_id = _bot_config(settings)
-    if not bot_token or not chat_id:
-        return
-
-    fields = [
-        ("时间 (UTC)", utc_now_iso_z_seconds()),
-        ("账号", account_name),
-        ("任务", task_name),
-        ("摘要", str(message)[:500] or "已完成"),
-    ]
-    text = build_html_notification(
-        title=f"✅ {account_name} · {task_name} 执行成功",
-        fields=fields,
-    )
-    await send_telegram_bot_message(
-        bot_token=bot_token,
-        chat_id=chat_id,
-        text=text,
-        message_thread_id=thread_id,
-        parse_mode="HTML",
-    )
-
-
 async def send_auto_backup_failure_notification(
     settings: Dict[str, Any],
     *,
@@ -453,8 +415,7 @@ async def send_auto_backup_failure_notification(
 ) -> None:
     """自动备份失败时的 Bot 通知（打包失败或 WebDAV 上传失败）。
 
-    仅依赖通知总开关 + 已配置 Token/Chat；不绑定任务失败开关
-    （备份是运维事件，与签到任务失败相互独立）。静默时段仍跳过。
+    仅依赖通知总开关 + 已配置 Token/Chat。静默时段仍跳过。
     """
     if not settings.get("telegram_bot_notify_enabled"):
         return

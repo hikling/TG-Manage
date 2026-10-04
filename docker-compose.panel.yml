@@ -1,10 +1,8 @@
-version: "3.9"
-
 # 面板生产/自建部署参考。密钥请用 .env 或 secrets 注入，勿提交真实密码。
 services:
   app:
     build: .
-    image: ghcr.io/silentely/tg-signpulse:latest
+    image: tg-signpulse-telebox:local
     container_name: tg-signer-panel
     environment:
       - APP_HOST=0.0.0.0
@@ -16,10 +14,10 @@ services:
       # 生产务必设置；不设则首次启动随机密码写入 data/.admin_bootstrap_password
       # - APP_SECRET_KEY=
       # - ADMIN_PASSWORD=
-      # 旧 ORM 任务默认只读（推荐保持 1）
-      - APP_LEGACY_TASKS_READONLY=1
       # 单实例保持 1；多 API 副本时仅写节点持锁
       - APP_SCHEDULER_LOCK=1
+      - TG_GLOBAL_CONCURRENCY=${TG_GLOBAL_CONCURRENCY:-2}
+      - TELEBOX_NODE_HEAP_MB=${TELEBOX_NODE_HEAP_MB:-128}
       # 可选：Postgres
       # - APP_DATABASE_URL=postgresql+psycopg2://user:pass@db:5432/tg_signpulse
       # 可选：监听分片（多实例时）
@@ -50,5 +48,5 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.0
+    mem_limit: 2g
+    cpus: 2.0

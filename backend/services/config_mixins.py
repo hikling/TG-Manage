@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -26,33 +25,13 @@ _logger = logging.getLogger("backend.config")
 # 2 秒窗口内复用，保存路径显式失效，兼顾响应实时性与磁盘 I/O
 GLOBAL_SETTINGS_CACHE_TTL = 2.0
 
-GLOBAL_SETTINGS_ENV_SYNC: Dict[str, str] = {}
-
-# 既有全局任务配置的历史值归一化；新面板不再暴露 AI 设置。
-_REASONING_EFFORT_VALUES = frozenset({"low", "medium", "high", "none"})
-
-
-def apply_global_settings_to_env(merged: Dict[str, Any]) -> None:
-    """将面板全局设置回灌到环境变量，供 tg_signer 等仍读 env 的路径使用。
-
-    保存时与进程启动时都会调用，保证面板配置在重启后依然生效
-    （env_sync 若仅发生在保存路径，重启后会静默回退到默认值）。
-    """
-    logger = _logger
-    for gkey, ekey in GLOBAL_SETTINGS_ENV_SYNC.items():
-        val = merged.get(gkey)
-        if val is None or str(val).strip() == "":
-            continue
-        try:
-            os.environ[ekey] = str(int(val))
-        except (TypeError, ValueError):
-            logger.debug("跳过无效 env 同步 %s=%r", ekey, val)
+def _is_retired_setting(key: str) -> bool:
+    """Ignore values left by the removed task runner and AI vision controls."""
+    return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_")) or key == "sign_interval"
 
 # 全局设置数值钳制表：字段名 -> (下限, 上限)；值为 None 的字段保持 None
 _GLOBAL_SETTING_INT_CLAMPS = {
     "device_keepalive_interval_days": (1, 170),
-    "ai_vision_timeout": (3, 120),
-    "ai_vision_retry_attempts": (1, 8),
     "auto_backup_interval_hours": (1, 168),
     "auto_backup_keep": (1, 30),
 }
@@ -67,7 +46,7 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """
     normalized = dict(settings)
     for key in list(normalized):
-        if key.startswith("sign_task_") or key == "sign_interval":
+        if _is_retired_setting(key):
             normalized.pop(key)
 
     for key, (low, high) in _GLOBAL_SETTING_INT_CLAMPS.items():
@@ -76,19 +55,6 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
             normalized[key] = (
                 None if value is None else max(low, min(int(value), high))
             )
-
-    # 思考度：小写归一，空值清空（None），非法值忽略保留旧值
-    if "ai_vision_reasoning_effort" in normalized:
-        raw = normalized["ai_vision_reasoning_effort"]
-        if raw is None or str(raw).strip() == "":
-            normalized["ai_vision_reasoning_effort"] = None
-        else:
-            value = str(raw).strip().lower()
-            if value in _REASONING_EFFORT_VALUES:
-                normalized["ai_vision_reasoning_effort"] = value
-            else:
-                _logger.debug("忽略非法 ai_vision_reasoning_effort=%r", raw)
-                normalized.pop("ai_vision_reasoning_effort")
 
     # Token 空串不修改；非空去空白（与原路由行为一致）
     if "telegram_bot_token" in normalized:
@@ -128,13 +94,16 @@ class ConfigExportMixin:
     def export_all_configs(self) -> str:
         settings = dict(self.get_global_settings())
         settings = {key: value for key, value in settings.items()
-                    if not key.startswith("sign_task_") and key != "sign_interval"}
+                    if not _is_retired_setting(key)}
+        masked = {key: bool(settings.get(key)) for key in ("webdav_password", "telegram_bot_token")}
         for key in ("webdav_password", "telegram_bot_token"):
             if settings.get(key):
                 settings[key] = "***MASKED***"
         return json.dumps({
             "_meta": {"format": "tg-signpulse-config-export", "version": 2,
                       "includes": ["settings"],
+                      "webdav_password_masked": masked["webdav_password"],
+                      "telegram_bot_token_masked": masked["telegram_bot_token"],
                       "excludes": ["sessions", "db.sqlite", "history", "account_login_state", "telebox-tasks.json"]},
             "settings": {"global": settings},
         }, ensure_ascii=False, indent=2)
@@ -175,7 +144,7 @@ class ConfigExportMixin:
                         values.pop(key, None)
                 # Removed task parameters in historical portable exports cannot return.
                 values = {key: value for key, value in values.items()
-                          if not key.startswith("sign_task_") and key != "sign_interval"}
+                          if not _is_retired_setting(key)}
                 if self.save_global_settings(values):
                     result["settings_imported"] = 1
                 else:
@@ -217,26 +186,20 @@ class GlobalSettingsMixin:
         override_data_dir = load_data_dir_override()
         default_settings = {
             "chat_center_enabled": False,
-            "sign_interval": None,  # None 表示使用随机 1-120 秒
             "log_retention_days": 7,
             "data_dir": str(override_data_dir) if override_data_dir else None,
             "global_proxy": None,
-            "tg_global_concurrency": None,  # None 表示使用动态默认 min(cpu_count, 5)
+            "tg_global_concurrency": None,  # None uses env or cgroup-aware CPU default
             "device_keepalive_enabled": True,
             "device_keepalive_interval_days": 30,
             "telegram_bot_notify_enabled": False,
             "telegram_bot_login_notify_enabled": False,
-            "telegram_bot_task_failure_enabled": True,
-            "telegram_bot_task_success_enabled": False,
             "telegram_bot_quiet_hours_enabled": False,
             "telegram_bot_quiet_hours_start": "23:00",
             "telegram_bot_quiet_hours_end": "07:00",
             "telegram_bot_token": None,
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
-            "ai_vision_timeout": None,
-            "ai_vision_retry_attempts": None,
-            "ai_vision_reasoning_effort": None,
             "auto_backup_enabled": False,
             "auto_backup_interval_hours": 24,
             "auto_backup_keep": 3,
@@ -250,6 +213,8 @@ class GlobalSettingsMixin:
         if settings is None or not isinstance(settings, dict):
             settings = dict(default_settings)
         else:
+            settings = {key: value for key, value in settings.items()
+                        if not _is_retired_setting(key)}
             # 合并默认设置
             for key, value in default_settings.items():
                 if key not in settings:
@@ -286,7 +251,7 @@ class GlobalSettingsMixin:
         merged = dict(self.get_global_settings())
         merged.update(settings)
         for key in list(merged):
-            if key.startswith("sign_task_") or key == "sign_interval":
+            if _is_retired_setting(key):
                 merged.pop(key)
 
         # 校验时区格式（防止导入配置等绕过路由层校验）
@@ -321,22 +286,18 @@ class GlobalSettingsMixin:
             from backend.services.avatar_cache import clear_chat_cache
             clear_chat_cache(get_settings().resolve_workdir() / "avatars" / "chats")
 
-        # Apply concurrency change at runtime
-        concurrency_val = merged.get("tg_global_concurrency")
-        if concurrency_val is not None:
+        # Apply the resolved limit as well when an explicit panel value is cleared.
+        if "tg_global_concurrency" in settings:
             try:
-                from backend.utils.tg_session import update_global_semaphore
-                update_global_semaphore(int(concurrency_val))
+                from backend.utils.tg_session import _resolve_concurrency_limit, update_global_semaphore
+                update_global_semaphore(_resolve_concurrency_limit())
             except Exception as exc:
                 # 已写盘成功但运行时未生效，必须可观测，避免面板显示与运行不一致
                 _logger.warning(
                     "应用 tg_global_concurrency=%s 到运行时信号量失败: %s",
-                    concurrency_val,
+                    merged.get("tg_global_concurrency"),
                     exc,
                 )
-
-        # 同步高级参数到环境变量，供 tg_signer 等仍读 env 的路径使用
-        apply_global_settings_to_env(merged)
 
         return True
 

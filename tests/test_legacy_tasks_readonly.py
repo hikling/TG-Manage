@@ -19,7 +19,7 @@ def _gone(status_code: int) -> bool:
     return status_code in {404, 405}
 
 
-def test_legacy_tasks_routes_gone(client, db_session):
+def test_legacy_tasks_routes_gone(client, authenticated_admin):
     headers = _auth()
     assert _gone(client.get("/api/tasks", headers=headers).status_code)
     assert _gone(client.get("/api/tasks/legacy-status", headers=headers).status_code)
@@ -39,13 +39,13 @@ def test_legacy_tasks_routes_gone(client, db_session):
     )
 
 
-def test_legacy_events_logs_gone(client, db_session):
+def test_legacy_events_logs_gone(client, authenticated_admin):
     """旧版 SSE /api/events/logs 已物理移除。"""
     resp = client.get("/api/events/logs", headers=_auth())
     assert _gone(resp.status_code)
 
 
-def test_readyz_includes_ops_fields(client, db_session):
+def test_readyz_includes_ops_fields(client, authenticated_admin):
     resp = client.get("/readyz")
     assert resp.status_code == 200
     body = resp.json()
@@ -60,7 +60,7 @@ def test_readyz_includes_ops_fields(client, db_session):
         assert body["scheduler_role"] == "replica"
 
 
-def test_runtime_status_requires_auth(client, db_session):
+def test_runtime_status_requires_auth(client, authenticated_admin):
     assert client.get("/api/ops/runtime-status").status_code == 401
     resp = client.get("/api/ops/runtime-status", headers=_auth())
     assert resp.status_code == 200

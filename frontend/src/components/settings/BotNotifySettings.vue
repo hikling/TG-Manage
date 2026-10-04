@@ -99,14 +99,6 @@ const onCheckbox = (key: keyof SettingsFormState, e: Event) => {
           <input :checked="modelValue.botLoginNotify" @change="onCheckbox('botLoginNotify', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">
           <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">{{ t('settings.loginFailNotify') }}</span>
         </label>
-        <label class="flex items-center gap-2 cursor-pointer group">
-          <input :checked="modelValue.botTaskFailure" @change="onCheckbox('botTaskFailure', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">
-          <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">{{ t('settings.taskFailNotify') }}</span>
-        </label>
-        <label class="flex items-center gap-2 cursor-pointer group">
-          <input :checked="modelValue.botTaskSuccess" @change="onCheckbox('botTaskSuccess', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">
-          <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">{{ t('settings.taskSuccessNotify') }}</span>
-        </label>
       </div>
       <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
         <div class="flex items-center justify-between gap-3">

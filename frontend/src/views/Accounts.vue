@@ -447,11 +447,13 @@ const goLogs = (name: string) => {
       <div v-else class="account-grid">
     <article v-for="acc in filteredAccounts" :key="acc.id" class="account-tile" :class="{ 'account-tile--menu-open': openActionsName === acc.name }">
       <div class="account-tile-top">
-        <div class="account-tile-avatar">
-          <img v-if="acc.avatarUrl" :src="acc.avatarUrl" :alt="acc.name" class="w-full h-full object-cover" loading="lazy" decoding="async" />
-          <span v-else>{{ acc.name.substring(0, 2) }}</span>
+        <div class="account-tile-avatar-frame" aria-hidden="true">
+          <div class="account-tile-avatar">
+            <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="76" height="76" loading="lazy" decoding="async" />
+            <span v-else>{{ acc.name.substring(0, 2) }}</span>
+          </div>
         </div>
-        <div class="account-tile-info"><p class="account-tile-eyebrow">TELEGRAM ACCOUNT</p><h2 :title="acc.name">{{ acc.name }}</h2><p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p></div>
+        <div class="account-tile-info"><h2 :title="acc.name">{{ acc.name }}</h2><p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p></div>
         <div class="account-tile-actions" @click.stop>
           <button type="button" class="account-more" :aria-label="`${acc.name} 操作`" :title="`${acc.name} 操作`" :aria-expanded="openActionsName === acc.name" aria-haspopup="true" @click="openActionsName = openActionsName === acc.name ? null : acc.name"><MoreVertical class="w-5 h-5" /></button>
           <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="`${acc.name} 操作`">
