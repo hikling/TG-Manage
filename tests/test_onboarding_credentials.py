@@ -13,6 +13,7 @@ from starlette.requests import Request
 from backend.api.routes import auth
 from backend.models.user import User
 from backend.services import users
+from backend.services.telegram import credentials
 from backend.utils import tg_session
 
 
@@ -64,3 +65,24 @@ def test_account_credentials_encrypted_isolated_and_not_in_profile(tmp_path, mon
     tg_session.delete_account_session_string("renamed")
     with pytest.raises(ValueError, match="重新登录"):
         tg_session.get_account_api_credentials("renamed")
+
+
+def test_legacy_session_without_encrypted_credentials_uses_compatible_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        tg_session, "get_settings", lambda: SimpleNamespace(
+            resolve_session_dir=lambda: tmp_path, secret_key="test-secret-for-account-store"
+        )
+    )
+    monkeypatch.setattr(
+        credentials, "get_settings",
+        lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path),
+    )
+    for name in ("SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "old.session").write_bytes(b"legacy session")
+    assert tg_session.get_account_api_credentials("old") == (
+        credentials.LEGACY_DEFAULT_API_ID,
+        credentials.LEGACY_DEFAULT_API_HASH,
+    )
+    with pytest.raises(ValueError, match="重新登录"):
+        tg_session.get_account_api_credentials("never-logged-in")

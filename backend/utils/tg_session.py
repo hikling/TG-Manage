@@ -187,12 +187,27 @@ def set_account_api_credentials(account_name: str, api_id: int, api_hash: str) -
 
 
 def get_account_api_credentials(account_name: str) -> tuple[int, str]:
-    from backend.services.telegram.credentials import validate_telegram_api_credentials
+    from backend.services.telegram.credentials import (
+        resolve_login_api_credentials,
+        validate_telegram_api_credentials,
+    )
+    from backend.utils.names import validate_storage_name
 
     entry = _load_account_store().get("accounts", {}).get(account_name)
     token = entry.get("api_credentials") if isinstance(entry, dict) else None
-    if not isinstance(token, str):
+    if token is None:
+        # Older accounts have a valid session but no encrypted API pair yet.
+        # Keep them usable without treating a deleted/nonexistent account as valid.
+        safe_name = validate_storage_name(account_name, field_name="account_name")
+        session_file = get_settings().resolve_session_dir() / f"{safe_name}.session"
+        session_string = entry.get("session_string") if isinstance(entry, dict) else None
+        if session_file.is_file() or (
+            isinstance(session_string, str) and is_valid_session_string(session_string)
+        ):
+            return resolve_login_api_credentials()
         raise ValueError(f"账号 {account_name} 缺少 Telegram API 凭据，请重新登录")
+    if not isinstance(token, str):
+        raise ValueError(f"账号 {account_name} 的 Telegram API 凭据不可用，请重新登录")
     try:
         values = json.loads(_account_cipher().decrypt(token.encode("ascii")))
         return validate_telegram_api_credentials(values["api_id"], values["api_hash"])
