@@ -2,7 +2,6 @@
 import fs from "node:fs";
 import readline from "node:readline";
 import util from "node:util";
-import type { TelegramClient } from "teleproto";
 
 process.umask(0o077);
 const protocolWrite = process.stdout.write.bind(process.stdout);
@@ -72,48 +71,12 @@ async function initialize(input: any) {
   stage = "启动运行时";
   await require("../src/utils/runtimeManager").startRuntime();
   stage = "运行中";
-  await emitCommands();
   emit({ event: "state", status: "running" });
 }
-async function emitCommands() {
-  const manager = require("../src/utils/pluginManager");
-  emit({ event: "commands", items: manager.listCommands().map((command: string) => ({
-    command, plugin: manager.getPluginEntry(command)?.plugin.name || "",
-    source: manager.getPluginEntry(command)?.source || "builtin",
-  })) });
-  emit({ event: "automations", items: manager.listAutomationPlugins() });
-}
-async function runPlugin(input: any) {
-  const plugin = String(input.plugin || "");
-  const command = String(input.command || "");
-  const args = String(input.args || "");
-  if (!/^[A-Za-z0-9_-]{1,80}$/.test(plugin) || !/^[^\x00-\x1f\x7f]{1,80}$/.test(command)
-    || args.length > 500 || /[\r\n]/.test(args)) throw new Error("invalid plugin command");
-  const manager = require("../src/utils/pluginManager");
-  if (manager.getPluginEntry(command)?.plugin.name !== plugin) throw new Error("plugin command unavailable");
+async function logout(): Promise<boolean> {
   const { getGlobalClient } = require("../src/utils/runtimeAccess");
-  const client = await getGlobalClient() as TelegramClient;
-  await client.sendMessage("me", { message: `${manager.getPrefixes()[0]}${command}${args.trim() ? ` ${args.trim()}` : ""}` });
-  // The plugin processes the self-message asynchronously through its normal handler.
-  console.info("TeleBox command dispatched", plugin, command);
-}
-async function pluginOperation(action: string, name?: string) {
-  if (!["install", "uninstall", "update", "reload"].includes(action)) throw new Error("invalid action");
-  if (name && !/^[a-zA-Z0-9_-]{1,80}$/.test(name)) throw new Error("invalid plugin name");
-  if (["install", "uninstall"].includes(action) && (!name || name === "all")) throw new Error("one plugin name required");
-  if (action === "reload") {
-    await require("../src/utils/runtimeManager").reloadRuntime();
-    return;
-  }
-  const outputs: string[] = [];
-  // TPM writes progress through a local UI message transport, never a Telegram chat.
-  const write = async (value: any) => { const text = String(value.text || value.message || value || ""); outputs.push(text); console.info(text); return sink; };
-  const sink: any = { __panelStatus: true, id: 0, message: `.tpm ${action} ${name || ""}`,
-    edit: write, reply: write, delete: async () => {}, client: { sendMessage: async (_: unknown, value: unknown) => write(value) } };
-  const tpm = require("../src/plugin/tpm").default;
-  await tpm.cmdHandlers.tpm(sink);
-  if (outputs.some(text => /❌|安装失败|卸载失败|更新失败/.test(text))) throw new Error("TPM operation failed; see logs");
-  await emitCommands();
+  const client = await getGlobalClient();
+  return await client.logOut();
 }
 const input = readline.createInterface({ input: process.stdin, terminal: false });
 let stage = "初始化";
@@ -125,11 +88,11 @@ input.on("line", (line) => {
   if (command.action === "password") { passwordResolve?.(String(command.password || "")); return; }
   queue = queue.then(async () => {
     try {
+      let revoked: boolean | undefined;
       if (command.action === "init") await initialize(command);
-      else if (command.action === "plugin") await pluginOperation(command.operation, command.name);
-      else if (command.action === "run") await runPlugin(command);
+      else if (command.action === "logout") revoked = await logout();
       else throw new Error("invalid command");
-      emit({ event: "result", id: command.id, ok: true });
+      emit({ event: "result", id: command.id, ok: true, ...(revoked === undefined ? {} : { revoked }) });
     } catch (error) {
       // Error objects can contain login secrets; emit a bounded safe category only.
       const category = error instanceof Error ? error.name : "Error";

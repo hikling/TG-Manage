@@ -25,7 +25,6 @@ from backend.services.telegram import get_telegram_service
 from backend.utils.account_locks import get_account_lock
 
 SOURCE = Path(__file__).resolve().parents[2] / "telebox"
-PLUGIN_NAME = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 
 
 def node_heap_limit_mb() -> int:
@@ -89,9 +88,6 @@ class TeleBoxService:
             "message": redact(message, self.secrets.get(account, [])),
         })
 
-    def metadata(self):
-        return json.loads((self.source / "UPSTREAM.json").read_text())
-
     def _marker(self, account: str, enabled: bool):
         path = self.directory(account) / "panel-state.json"
         self._private_json(path, {"account": account, "enabled": enabled})
@@ -123,8 +119,7 @@ class TeleBoxService:
         # Refresh managed integration code on existing account directories too.
         # Upstream plugins, user plugins and account config remain account-local.
         shutil.copytree(self.source / "panel", directory / "panel", dirs_exist_ok=True)
-        # Command origin is provided by the managed plugin loader; refresh it
-        # for accounts created before the panel added source-aware filtering.
+        # Keep the runtime loader current for existing account directories.
         shutil.copy2(self.source / "src/utils/pluginManager.ts", directory / "src/utils/pluginManager.ts")
         for script in ("esbuild-register.cjs", "esbuild-esm-loader.mjs", "cjs-helpers.js"):
             shutil.copy2(self.source / "scripts" / script, directory / "scripts" / script)
@@ -143,21 +138,18 @@ class TeleBoxService:
         marker = directory / "panel-state.json"
         if marker.exists():
             enabled = bool(json.loads(marker.read_text()).get("enabled"))
-        plugins = []
-        for folder, kind in [(directory / "src/plugin", "builtin"), (directory / "plugins", "installed")]:
-            if folder.exists():
-                plugins.extend({"name": p.stem, "kind": kind} for p in sorted(folder.glob("*.ts")))
+        config = directory / "config.json"
+        try:
+            authorized = bool(json.loads(config.read_text()).get("session")) if config.exists() else False
+        except (OSError, ValueError, AttributeError):
+            authorized = False
         return {"account": account, "status": worker["status"] if worker else "stopped", "enabled": enabled,
-                "version": self.metadata()["version"], "plugins": plugins,
-                "commands": worker.get("commands", []) if worker else [],
-                "automations": worker.get("automations", []) if worker and worker["status"] == "running" else [],
+                "authorized": authorized,
                 "message": worker.get("message", "") if worker else ""}
 
     def overview(self):
-        meta = self.metadata()
         accounts = get_telegram_service().list_accounts()
-        return {"version": meta["version"], "upstream_commit": meta["commit"],
-                "accounts": [self.status(item.get("name") or item.get("account_name")) for item in accounts]}
+        return {"accounts": [self.status(item.get("name") or item.get("account_name")) for item in accounts]}
 
     async def _send(self, worker: dict, command: dict):
         process = worker["process"]
@@ -258,25 +250,6 @@ class TeleBoxService:
                     task = asyncio.create_task(self._accept(account, worker, event.get("token", "")))
                     worker["tasks"].add(task)
                     task.add_done_callback(worker["tasks"].discard)
-                elif event.get("event") == "commands":
-                    worker["commands"] = [item for item in event.get("items", [])
-                                          if isinstance(item, dict) and PLUGIN_NAME.fullmatch(str(item.get("plugin", "")))]
-                elif event.get("event") == "automations":
-                    items = event.get("items")
-                    automations = []
-                    for item in (items[:200] if isinstance(items, list) else []):
-                        if not isinstance(item, dict):
-                            continue
-                        name, source, triggers = item.get("name"), item.get("source"), item.get("triggers")
-                        if (not isinstance(name, str) or not PLUGIN_NAME.fullmatch(name)
-                                or source not in {"builtin", "installed"}
-                                or not isinstance(triggers, list) or not triggers
-                                or not all(isinstance(trigger, str) and trigger in {"message", "event", "cron"}
-                                           for trigger in triggers)):
-                            continue
-                        automations.append({"name": name, "source": source,
-                                            "triggers": list(dict.fromkeys(triggers))})
-                    worker["automations"] = automations
                 elif event.get("event") == "state" and event.get("status") in {"running", "password_required", "failed"}:
                     worker["status"] = event["status"]
                 elif event.get("event") == "result":
@@ -299,8 +272,6 @@ class TeleBoxService:
     async def _watch(self, account: str, worker: dict):
         code = await worker["process"].wait()
         worker["status"] = "stopped" if worker.get("stopping") else "failed"
-        worker["commands"] = []
-        worker["automations"] = []
         if not worker.get("stopping") and not worker.get("message"):
             worker["message"] = f"TeleBox 进程退出（代码 {code}），请查看运行日志"
         for future in worker["pending"].values():
@@ -312,27 +283,67 @@ class TeleBoxService:
             task.cancel()
         self._log(account, f"TeleBox 进程退出 ({code})")
 
+    async def _stop_locked(self, account: str, *, disable: bool):
+        worker = self.workers.get(account)
+        if disable:
+            self._marker(account, False)
+        if worker:
+            worker["stopping"] = True
+        if worker and worker["process"].returncode is None:
+            worker["status"] = "stopping"
+            try:
+                os.killpg(worker["process"].pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                await asyncio.wait_for(worker["process"].wait(), 25)
+            except asyncio.TimeoutError:
+                try:
+                    os.killpg(worker["process"].pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                await worker["process"].wait()
+            await asyncio.gather(*worker["readers"], return_exceptions=True)
+        if worker and worker["process"].returncode is not None:
+            worker["status"] = "stopped"
+        return self.status(account)
+
     async def stop(self, account: str, *, disable: bool = True):
         account = self._account(account)
         async with self.locks.setdefault(account, asyncio.Lock()):
-            worker = self.workers.get(account)
-            if disable:
-                self._marker(account, False)
-            if worker and worker["process"].returncode is None:
-                worker["stopping"] = True
-                worker["status"] = "stopping"
-                os.killpg(worker["process"].pid, signal.SIGTERM)
-                try:
-                    await asyncio.wait_for(worker["process"].wait(), 25)
-                except asyncio.TimeoutError:
-                    os.killpg(worker["process"].pid, signal.SIGKILL)
-                    await worker["process"].wait()
-                await asyncio.gather(*worker["readers"], return_exceptions=True)
-            return self.status(account)
+            return await self._stop_locked(account, disable=disable)
 
-    async def restart(self, account: str):
-        await self.stop(account, disable=False)
-        return await self.start(account)
+    async def logout(self, account: str):
+        """Revoke the independent TeleBox session, then remove its local authorization."""
+        account = self._account(account)
+        async with self.locks.setdefault(account, asyncio.Lock()):
+            worker = self.workers.get(account)
+            revoked = False
+            if worker and worker["status"] == "running" and worker["process"].returncode is None:
+                identifier = uuid.uuid4().hex
+                future = asyncio.get_running_loop().create_future()
+                worker["pending"][identifier] = future
+                try:
+                    await self._send(worker, {"action": "logout", "id": identifier})
+                    result = await asyncio.wait_for(future, 20)
+                    revoked = result.get("ok") is True and result.get("revoked") is True
+                except (OSError, ValueError, asyncio.TimeoutError):
+                    pass
+                finally:
+                    worker["pending"].pop(identifier, None)
+            await self._stop_locked(account, disable=True)
+            config = self.directory(account) / "config.json"
+            if config.exists():
+                try:
+                    data = json.loads(config.read_text())
+                    if not isinstance(data, dict):
+                        data = {}
+                except (OSError, ValueError):
+                    data = {}
+                data.pop("session", None)
+                self._private_json(config, data)
+            self._log(account, "TeleBox 独立会话已退出" if revoked else "TeleBox 本地会话已清除，远端撤销未确认")
+            return {**self.status(account), "remote_revoked": revoked}
 
     async def password(self, account: str, password: str):
         account = self._account(account)
@@ -345,58 +356,6 @@ class TeleBoxService:
         await self._send(worker, {"action": "password", "password": password})
         worker["status"] = "starting"
         return self.status(account)
-
-    async def plugins(self, account: str, action: str, name: str | None):
-        account = self._account(account)
-        if action not in {"install", "uninstall", "update", "reload"}:
-            raise ValueError("不支持的插件操作")
-        if name and (not PLUGIN_NAME.fullmatch(name) or name.lower() == "all"):
-            raise ValueError("插件名格式无效，请逐个操作")
-        if action in {"install", "uninstall"} and not name:
-            raise ValueError("请填写插件名")
-        async with self.locks.setdefault(account, asyncio.Lock()):
-            worker = self.workers.get(account)
-            if not worker or worker["status"] != "running":
-                raise ValueError("请先启动 TeleBox")
-            identifier = uuid.uuid4().hex
-            future = asyncio.get_running_loop().create_future()
-            worker["pending"][identifier] = future
-            await self._send(worker, {"action": "plugin", "id": identifier, "operation": action, "name": name})
-            try:
-                result = await asyncio.wait_for(future, 180)
-            except asyncio.TimeoutError:
-                raise ValueError("插件操作仍未完成，请查看日志，避免重复提交")
-            finally:
-                worker["pending"].pop(identifier, None)
-            if not result.get("ok"):
-                raise ValueError(result.get("message", "插件操作失败"))
-            return self.status(account)
-
-    async def run_command(self, account: str, plugin: str, command: str, args: str = ""):
-        account = self._account(account)
-        if not PLUGIN_NAME.fullmatch(plugin) or not re.fullmatch(r"[^\x00-\x1f\x7f]{1,80}", command):
-            raise ValueError("TeleBox 插件或命令无效")
-        if len(args) > 500 or "\n" in args or "\r" in args:
-            raise ValueError("TeleBox 命令参数无效")
-        worker = self.workers.get(account)
-        if not worker or worker["status"] != "running":
-            raise ValueError("此账号 TeleBox 未运行")
-        if not any(item.get("plugin") == plugin and item.get("command") == command
-                   for item in worker.get("commands", [])):
-            raise ValueError("此账号没有加载所选 TeleBox 插件命令")
-        identifier = uuid.uuid4().hex
-        future = asyncio.get_running_loop().create_future()
-        worker["pending"][identifier] = future
-        try:
-            await self._send(worker, {"action": "run", "id": identifier,
-                                      "plugin": plugin, "command": command, "args": args})
-            result = await asyncio.wait_for(future, 30)
-            if not result.get("ok"):
-                raise ValueError(result.get("message") or "TeleBox 命令投递失败")
-            self._log(account, f"TeleBox 已投递命令：{plugin} / {command}")
-            return {"ok": True, "message": "命令已投递到 TeleBox；执行结果请查看运行日志"}
-        finally:
-            worker["pending"].pop(identifier, None)
 
     def log_items(self, account: str):
         account = self._account(account)

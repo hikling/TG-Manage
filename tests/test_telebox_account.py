@@ -1,7 +1,7 @@
-"""TeleBox task dispatch validates the installed command on the account."""
+"""TeleBox account session isolation and lifecycle."""
 from __future__ import annotations
 
-import asyncio
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -50,47 +50,50 @@ def test_existing_telebox_account_refreshes_managed_loader_without_losing_plugin
 
 
 @pytest.mark.asyncio
-async def test_dispatch_requires_loaded_command_and_account(monkeypatch, tmp_path):
+async def test_logout_revokes_running_worker_and_preserves_panel_account(monkeypatch, tmp_path):
     service = telebox.TeleBoxService(root=tmp_path)
     fake_account = SimpleNamespace(_normalize_account_name=lambda name: name,
                                    account_exists=lambda name: name == "one")
     monkeypatch.setattr(telebox, "get_telegram_service", lambda: fake_account)
-    worker = {"status": "running", "pending": {},
-              "commands": [{"plugin": "example", "command": "hello"}]}
+    directory = service.directory("one")
+    directory.mkdir()
+    (directory / "config.json").write_text('{"session":"private","api_id":123}')
+    service._marker("one", True)
+    process = SimpleNamespace(returncode=None, pid=1234)
+    worker = {"status": "running", "pending": {}, "process": process}
     service.workers["one"] = worker
-    sent = []
 
     async def send(target, command):
-        sent.append(command)
-        target["pending"][command["id"]].set_result({"ok": True})
+        assert command["action"] == "logout"
+        target["pending"][command["id"]].set_result({"ok": True, "revoked": True})
+
+    async def stop(name, *, disable):
+        assert name == "one" and disable
+        service._marker(name, False)
+        process.returncode = 0
+        worker["status"] = "stopped"
+        return service.status(name)
 
     monkeypatch.setattr(service, "_send", send)
-    with pytest.raises(ValueError, match="账号不存在"):
-        await service.run_command("two", "example", "hello")
-    with pytest.raises(ValueError, match="没有加载"):
-        await service.run_command("one", "example", "missing")
-    with pytest.raises(ValueError, match="参数无效"):
-        await service.run_command("one", "example", "hello", "first\nsecond")
-    result = await asyncio.wait_for(service.run_command("one", "example", "hello", "world"), 1)
-    assert result["ok"] is True
-    assert sent[0]["action"] == "run"
-    assert sent[0]["args"] == "world"
+    monkeypatch.setattr(service, "_stop_locked", stop)
+    result = await service.logout("one")
+    assert result["remote_revoked"] is True
+    assert result["authorized"] is False
+    assert result["enabled"] is False
+    assert json.loads((directory / "config.json").read_text()) == {"api_id": 123}
+    assert fake_account.account_exists("one")
     assert worker["pending"] == {}
 
 
 @pytest.mark.asyncio
-async def test_worker_reports_only_valid_loaded_automations(tmp_path):
+async def test_logout_offline_clears_only_local_telebox_session(monkeypatch, tmp_path):
     service = telebox.TeleBoxService(root=tmp_path)
-    reader = asyncio.StreamReader()
-    reader.feed_data((
-        '{"event":"automations","items":['
-        '{"name":"checkin","source":"installed","triggers":["message","cron"]},'
-        '{"name":"../bad","source":"installed","triggers":["message"]},'
-        '{"name":"other","source":"installed","triggers":["unknown"]}]}\n'
-    ).encode())
-    reader.feed_eof()
-    worker = {"process": SimpleNamespace(stdout=reader), "pending": {}}
-    await service._stdout("one", worker)
-    assert worker["automations"] == [
-        {"name": "checkin", "source": "installed", "triggers": ["message", "cron"]}
-    ]
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        _normalize_account_name=lambda name: name, account_exists=lambda name: name == "one"))
+    directory = service.directory("one")
+    directory.mkdir()
+    (directory / "config.json").write_text('{"session":"private","api_id":123}')
+    result = await service.logout("one")
+    assert result["remote_revoked"] is False
+    assert result["authorized"] is False
+    assert json.loads((directory / "config.json").read_text()) == {"api_id": 123}

@@ -10,7 +10,7 @@ import shutil
 import tempfile
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -73,7 +73,6 @@ BACKUP_ARCHIVE_PATHS = (
     ".signer",
     ".app_secret_key",
     "telebox",
-    "telebox-tasks.json",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",
@@ -85,7 +84,6 @@ BACKUP_STATUS_PATHS = (
     ".signer",
     ".app_secret_key",
     "telebox",
-    "telebox-tasks.json",
     ".global_settings.json",
     ".openai_config.json",
     ".telegram_api.json",
@@ -145,23 +143,18 @@ def _dir_size_cached(path: Path) -> int:
 
 @router.get("/scheduled-jobs", response_model=ScheduledJobsResponse)
 def list_scheduled_jobs(current_user: User = Depends(get_current_user)):
-    """Show the new TeleBox/workbench jobs and system maintenance."""
+    """Show system maintenance jobs."""
     from backend.scheduler import scheduler
-    from backend.services.telebox_tasks import get_telebox_task_service
 
     if scheduler is None:
         return ScheduledJobsResponse(jobs=[], total=0, timezone="")
-    tasks = {task["id"]: task for task in get_telebox_task_service().list()}
     jobs = []
     for job in scheduler.get_jobs():
         identifier = str(job.id)
-        task = tasks.get(identifier[3:]) if identifier.startswith("tb-") else None
         jobs.append(ScheduledJobOut(
-            id=identifier, name=task["name"] if task else str(job.name or identifier),
+            id=identifier, name=str(job.name or identifier),
             next_run_time=job.next_run_time.isoformat() if job.next_run_time else None,
-            trigger=str(job.trigger), kind="telebox" if task else "system",
-            task_name=task["name"] if task else None,
-            account_name=task["accounts"][0] if task else None,
+            trigger=str(job.trigger), kind="system",
         ))
     jobs.sort(key=lambda item: item.next_run_time or "9999")
     return ScheduledJobsResponse(jobs=jobs, total=len(jobs), timezone=str(scheduler.timezone))
@@ -626,43 +619,3 @@ def check_version(
         update_check=UpdateCheckInfo(**remote),
     )
 
-
-class DailyTrendItem(BaseModel):
-    date: str
-    total: int
-    success: int
-    failed: int
-    success_rate: float
-
-
-class TrendsResponse(BaseModel):
-    days: int
-    total_runs: int
-    total_success: int
-    total_failed: int
-    overall_success_rate: float
-    trends: List[DailyTrendItem]
-    categories: Dict[str, int]
-
-
-@router.get("/trends", response_model=TrendsResponse)
-def get_trends(days: int = 7, current_user: User = Depends(get_current_user)):
-    from backend.services.telebox_tasks import get_telebox_task_service
-
-    days = max(1, min(days, 90))
-    history = get_telebox_task_service().history()
-    today = datetime.now(timezone.utc).date()
-    entries = []
-    for offset in range(days - 1, -1, -1):
-        day = (today - timedelta(days=offset)).isoformat()
-        items = [item for item in history if item["time"].startswith(day)]
-        success = sum(bool(item["success"]) for item in items)
-        entries.append(DailyTrendItem(date=day, total=len(items), success=success,
-                                      failed=len(items) - success,
-                                      success_rate=round(100 * success / len(items), 1) if items else 0))
-    total = sum(item.total for item in entries)
-    success = sum(item.success for item in entries)
-    return TrendsResponse(days=days, total_runs=total, total_success=success,
-                          total_failed=total - success,
-                          overall_success_rate=round(100 * success / total, 1) if total else 0,
-                          trends=entries, categories={"telebox": total})

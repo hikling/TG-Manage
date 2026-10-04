@@ -14,10 +14,9 @@ describe('api barrel 完整性', () => {
     expect(typeof api.startQrLogin).toBe('function')
     expect(typeof api.fetchAccountAvatar).toBe('function')
   })
-  it('TeleBox 任务 API 导出', () => {
-    expect(typeof api.listTeleBoxTasks).toBe('function')
-    expect(typeof api.createTeleBoxTask).toBe('function')
-    expect(typeof api.deleteTeleBoxTask).toBe('function')
+  it('TeleBox 账号 API 导出', () => {
+    expect(typeof api.listTeleBoxAccounts).toBe('function')
+    expect(typeof api.logoutTeleBox).toBe('function')
   })
   it('config API 导出', () => {
     expect(typeof api.exportAllConfigs).toBe('function')
@@ -63,6 +62,6 @@ describe('api barrel 完整性', () => {
 
   it('barrel 保留核心业务函数', () => {
     const fns = Object.values(api).filter(v => typeof v === 'function')
-    expect(fns.length).toBeGreaterThanOrEqual(50)
+    expect(fns.length).toBeGreaterThanOrEqual(30)
   })
 })

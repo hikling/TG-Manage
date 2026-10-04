@@ -5,8 +5,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from backend.utils.task_logs import extract_last_target_message
-
 
 class LoginStartRequest(BaseModel):
     """开始登录请求"""
@@ -235,33 +233,3 @@ class AccountStatusJobStartRequest(BaseModel):
     timeout_seconds: float = 8.0
 
 
-
-class AccountLogItem(BaseModel):
-    """账号日志项"""
-
-    id: int
-    account_name: str
-    task_name: str
-    message: str
-    summary: Optional[str] = None
-    bot_message: Optional[str] = None
-    success: bool
-    created_at: str
-    failure_category: Optional[str] = None
-
-
-def _extract_last_bot_message(item: dict) -> str:
-    stored = str(item.get("last_target_message") or "").strip()
-    if stored:
-        return stored
-    return extract_last_target_message(item.get("flow_logs"))
-
-
-
-class ClearAccountLogsResponse(BaseModel):
-    """清理账号日志响应"""
-
-    success: bool
-    cleared: int
-    message: str
-    code: Optional[str] = None

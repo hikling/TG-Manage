@@ -142,7 +142,7 @@ const applyTeleboxPreference = async () => {
   const name = encodeURIComponent(form.value.account_name)
   try {
     await panelRequest(`/telebox/${name}/${enableTelebox.value ? 'start' : 'stop'}`, 'POST')
-    if (enableTelebox.value) toast.info('TeleBox 已请求启动，请在拓展插件中查看运行状态')
+    if (enableTelebox.value) toast.info('TeleBox 已请求启动，请在账号管理查看运行状态')
   } catch (err) {
     toast.error(`账号登录成功，但 TeleBox 设置失败：${getLocalizedErrorMessage(err, t)}`)
   }

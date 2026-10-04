@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, Zap, MonitorSmartphone, MessageCircle, MessagesSquare, Package, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical } from 'lucide-vue-next'
+import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight } from 'lucide-vue-next'
 import {
   deleteAccount,
   fetchAccountAvatar,
 } from '../lib/api'
 import { getAuthToken } from '../lib/api/core'
+import { listTeleBoxAccounts, startTeleBox, stopTeleBox, logoutTeleBox, submitTeleBoxPassword, type TeleBoxAccount } from '../lib/api/telebox'
 import { useI18n } from '../composables/useI18n'
 import { useToast } from '../composables/useToast'
 import { useConfirm } from '../composables/useConfirm'
@@ -34,6 +35,10 @@ const toast = useToast()
 const { confirm } = useConfirm()
 const accountsStore = useAccountsStore()
 const accounts = ref<AccountUiItem[]>([])
+const teleboxStates = ref<Record<string, TeleBoxAccount>>({})
+const teleboxBusy = ref('')
+const teleboxPasswords = ref<Record<string, string>>({})
+let statusTimer: ReturnType<typeof setInterval> | undefined
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
@@ -75,6 +80,60 @@ const hasListFilters = computed(() => searchQuery.value.trim().length > 0)
 
 const clearListFilters = () => {
   searchQuery.value = ''
+}
+
+async function loadTeleBoxStates() {
+  try {
+    const result = await listTeleBoxAccounts()
+    if (!disposed) teleboxStates.value = Object.fromEntries(result.accounts.map(item => [item.account, item]))
+  } catch (error) { devLog.error('Failed to load TeleBox status', error) }
+}
+
+function teleboxLabel(name: string) {
+  const state = teleboxStates.value[name]
+  if (!state) return '未启用'
+  return ({ running: '正在运行', starting: '正在启动', password_required: '等待二步验证', failed: '运行异常', stopped: '已停止' } as Record<string, string>)[state.status] || state.status
+}
+
+async function setTeleBoxEnabled(name: string, enabled: boolean) {
+  teleboxBusy.value = name
+  try {
+    if (enabled) await startTeleBox(name)
+    else await stopTeleBox(name)
+    await loadTeleBoxStates()
+    toast.success(enabled ? 'TeleBox 已请求启动' : 'TeleBox 已停止')
+  } catch (error) { notifyApiError(error, 'TeleBox 操作失败') }
+  finally { teleboxBusy.value = '' }
+}
+
+async function enterTeleBoxPassword(name: string) {
+  const password = teleboxPasswords.value[name]?.trim()
+  if (!password) return
+  teleboxBusy.value = name
+  try {
+    await submitTeleBoxPassword(name, password)
+    delete teleboxPasswords.value[name]
+    toast.success('已提交二步验证密码')
+    await loadTeleBoxStates()
+  } catch (error) { notifyApiError(error, 'TeleBox 二步验证失败') }
+  finally { teleboxBusy.value = '' }
+}
+
+async function handleTeleBoxLogout(name: string) {
+  if (!await confirm({
+    title: '退出 TeleBox 登录',
+    message: `将退出 ${name} 的 TeleBox 独立 Telegram 会话，并停止其进程。账号管理中的主账号登录不受影响。是否继续？`,
+    confirmText: '退出 TeleBox',
+    danger: true,
+  })) return
+  teleboxBusy.value = name
+  try {
+    const result = await logoutTeleBox(name)
+    await loadTeleBoxStates()
+    if (result.remote_revoked) toast.success('已退出 TeleBox 登录并撤销远端会话')
+    else toast.info('已清除本地 TeleBox 登录；离线状态下无法确认远端会话撤销')
+  } catch (error) { notifyApiError(error, '退出 TeleBox 失败') }
+  finally { teleboxBusy.value = '' }
 }
 
 /** 账号管理页为单一事实来源：每次调用都强制刷新（增删改/检测后保持一致） */
@@ -140,6 +199,8 @@ onMounted(async () => {
   document.addEventListener('click', onOutsideClick)
   document.addEventListener('keydown', onMenuKeydown)
   await loadAccounts()
+  void loadTeleBoxStates()
+  statusTimer = setInterval(() => void loadTeleBoxStates(), 10000)
   // 刷新页面后恢复未完成的批量检测
   void resumeActiveBatchJob()
 })
@@ -148,6 +209,7 @@ onUnmounted(() => {
   document.removeEventListener('click', onOutsideClick)
   document.removeEventListener('keydown', onMenuKeydown)
   disposed = true
+  if (statusTimer) clearInterval(statusTimer)
   if (reloginTimer !== undefined) {
     window.clearTimeout(reloginTimer)
     reloginTimer = undefined
@@ -227,9 +289,6 @@ const goLogs = (name: string) => {
   router.push({ name: 'logs', query: { account: name } })
 }
 
-const goTasks = (name: string) => {
-  router.push({ name: 'tasks', query: { account: name } })
-}
 </script>
 
 <template>
@@ -240,7 +299,7 @@ const goTasks = (name: string) => {
         <div class="ui-skeleton h-4 w-24" />
         <div class="ui-skeleton h-8 w-28" />
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+      <div class="account-grid">
         <div v-for="i in 4" :key="i" class="ui-card p-5 space-y-4">
           <div class="flex items-center gap-3">
             <div class="ui-skeleton w-10 h-10 shrink-0" />
@@ -385,21 +444,23 @@ const goTasks = (name: string) => {
         />
         <p v-else class="ui-empty-desc">{{ t('common.noData') }}</p>
       </div>
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+      <div v-else class="account-grid">
     <article v-for="acc in filteredAccounts" :key="acc.id" class="account-tile" :class="{ 'account-tile--menu-open': openActionsName === acc.name }">
       <div class="account-tile-top">
         <div class="account-tile-avatar">
           <img v-if="acc.avatarUrl" :src="acc.avatarUrl" :alt="acc.name" class="w-full h-full object-cover" loading="lazy" decoding="async" />
           <span v-else>{{ acc.name.substring(0, 2) }}</span>
         </div>
+        <div class="account-tile-info"><p class="account-tile-eyebrow">TELEGRAM ACCOUNT</p><h2 :title="acc.name">{{ acc.name }}</h2><p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p></div>
         <div class="account-tile-actions" @click.stop>
           <button type="button" class="account-more" :aria-label="`${acc.name} 操作`" :title="`${acc.name} 操作`" :aria-expanded="openActionsName === acc.name" aria-haspopup="true" @click="openActionsName = openActionsName === acc.name ? null : acc.name"><MoreVertical class="w-5 h-5" /></button>
           <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="`${acc.name} 操作`">
             <button type="button" :disabled="checkingAccount === acc.name" @click="runCardAction(() => handleCheck(acc.name))"><Play class="w-4 h-4" />{{ t('accounts.check') }}</button>
-            <button type="button" @click="runCardAction(() => goTasks(acc.name))"><Zap class="w-4 h-4" />{{ t('accounts.tasks') }}</button>
             <button type="button" @click="runCardAction(() => goLogs(acc.name))"><FileText class="w-4 h-4" />{{ t('accounts.logs') }}</button>
             <button type="button" @click="runCardAction(() => router.push({ name: 'chats', query: { account: acc.name } }))"><MessagesSquare class="w-4 h-4" />聊天中心</button>
-            <button type="button" @click="runCardAction(() => router.push({ name: 'telebox', query: { account: acc.name } }))"><Package class="w-4 h-4" />TeleBox</button>
+            <button v-if="teleboxStates[acc.name]?.enabled" type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, false))"><Power class="w-4 h-4" />停止 TeleBox</button>
+            <button v-else type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, true))"><Power class="w-4 h-4" />启动 TeleBox</button>
+            <button v-if="teleboxStates[acc.name]?.authorized || teleboxStates[acc.name]?.enabled" type="button" class="account-action-danger" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => handleTeleBoxLogout(acc.name))"><LogOut class="w-4 h-4" />退出 TeleBox 登录</button>
             <button type="button" @click="runCardAction(() => openDevices(acc.name))"><MonitorSmartphone class="w-4 h-4" />{{ t('accounts.devicesShort') }}</button>
             <button type="button" @click="runCardAction(() => openOfficialMessages(acc.name))"><MessageCircle class="w-4 h-4" />{{ t('accounts.officialMessagesShort') }}</button>
             <button type="button" @click="runCardAction(() => openEdit(acc))"><Edit2 class="w-4 h-4" />{{ t('accounts.editBtn') }}</button>
@@ -407,13 +468,13 @@ const goTasks = (name: string) => {
           </div>
         </div>
       </div>
-      <div class="account-tile-info">
-        <h2 :title="acc.name">{{ acc.name }}</h2>
-        <p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
+      <div class="account-tile-divider" />
+      <div class="account-tile-signals">
+        <div><span class="account-signal-label">账号状态</span><span class="account-tile-status" :class="`account-tile-status--${acc.status}`" :title="acc.message || ''"><span class="account-status-dot" />{{ acc.status === 'active' ? t('accounts.statusOk') : (acc.message || t('accounts.statusUnknown')) }}</span></div>
+        <div><span class="account-signal-label">TELEBOX</span><span class="account-tile-status" :class="{ 'account-tile-status--active': teleboxStates[acc.name]?.status === 'running', 'account-tile-status--error': teleboxStates[acc.name]?.status === 'failed' }" :title="teleboxStates[acc.name]?.message || ''"><span class="account-status-dot" />{{ teleboxLabel(acc.name) }}</span></div>
       </div>
-      <span class="account-tile-status" :class="`account-tile-status--${acc.status}`" :title="acc.message || ''">
-        <span class="account-status-dot" />{{ acc.status === 'active' ? t('accounts.statusOk') : (acc.message || t('accounts.statusUnknown')) }}
-      </span>
+      <form v-if="teleboxStates[acc.name]?.status === 'password_required'" class="account-tile-password" @submit.prevent="enterTeleBoxPassword(acc.name)"><label :for="`telebox-password-${acc.id}`">TeleBox 二步验证密码</label><div><input :id="`telebox-password-${acc.id}`" v-model="teleboxPasswords[acc.name]" type="password" autocomplete="current-password" class="panel-input" required /><button type="submit" class="panel-button" :disabled="teleboxBusy === acc.name">提交</button></div></form>
+      <div class="account-tile-footer"><button type="button" class="account-card-primary" :disabled="checkingAccount === acc.name" @click="handleCheck(acc.name)"><ShieldCheck :size="17" aria-hidden="true" />{{ checkingAccount === acc.name ? '检测中…' : '检测账号' }}</button><button type="button" class="account-card-secondary" @click="router.push({ name: 'chats', query: { account: acc.name } })">聊天中心 <ArrowUpRight :size="16" aria-hidden="true" /></button></div>
     </article>
     </div>
     </div>

@@ -232,25 +232,45 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .dashboard-activity-empty strong { color: var(--sp-text); font-size: .92rem; }
 .dashboard-activity-empty span { font-size: .78rem; }
 
-/* Accounts, workbench, tasks, logs, bots and plugin surfaces. */
-.account-tile { min-height: 210px; padding: 20px; background: var(--sp-bg-elevated); transition: border-color .18s, box-shadow .18s, transform .18s; }
+/* Account management. */
+.account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 18px; }
+.account-tile { min-height: 272px; padding: 24px; background: var(--sp-bg-elevated); transition: border-color .18s, box-shadow .18s, transform .18s; }
 .account-tile:hover { border-color: var(--sp-border-strong); box-shadow: var(--sp-shadow-md); transform: translateY(-2px); }
-.account-tile-avatar { width: 60px; height: 60px; border-radius: 16px; background: var(--sp-accent-soft); color: var(--sp-accent); }
+.account-tile-top { align-items: center; gap: 14px; }
+.account-tile-avatar { width: 56px; height: 56px; border-radius: 16px; background: var(--sp-accent-soft); color: var(--sp-accent); font-size: 1.15rem; }
 .dark .account-tile-avatar { background: #245248; color: #a0efda; }
-.account-tile-info h2 { font-size: 1rem; }
+.account-tile-info { margin: 0; flex: 1; }
+.account-tile-info h2 { font-size: 1.12rem; letter-spacing: -.02em; }
 .account-tile-info p { font-size: .82rem; }
-.account-tile-status { font-size: .77rem; font-weight: 600; }
+.account-tile-info .account-tile-eyebrow { color: var(--sp-accent); font-size: .63rem; letter-spacing: .11em; font-weight: 750; margin: 0 0 4px; }
+.account-tile-divider { height: 1px; background: var(--sp-border); margin: 20px 0 14px; }
+.account-tile-signals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.account-tile-signals > div { display: flex; flex-direction: column; min-width: 0; }
+.account-signal-label { color: var(--sp-text-muted); font-size: .65rem; font-weight: 750; letter-spacing: .09em; }
+.account-tile-status { margin: 5px 0 0; padding: 0; font-size: .81rem; font-weight: 650; }
+.account-tile-password { margin-top: 16px; }
+.account-tile-password label { font-size: .78rem; font-weight: 600; }
+.account-tile-password > div { display: flex; gap: 8px; margin-top: 6px; }
+.account-tile-password input { min-width: 0; flex: 1; }
+.account-tile-footer { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 22px; }
+.account-card-primary, .account-card-secondary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border-radius: 11px; padding: 0 12px; font-size: .83rem; font-weight: 650; transition: background .16s; }
+.account-card-primary { background: var(--sp-accent); color: white; flex: 1; }
+.account-card-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.account-card-secondary { background: var(--sp-bg-muted); color: var(--sp-text); flex: 1; }
+.account-card-secondary:hover { background: var(--sp-accent-soft); }
+.account-card-primary:disabled { opacity: .55; }
+.account-card-primary:focus-visible, .account-card-secondary:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
 .account-more { width: 44px; height: 44px; border-radius: 10px; }
-.account-action-menu { box-shadow: var(--sp-shadow-lg); }
-.account-action-menu button { min-height: 42px; }
+.account-action-menu { box-shadow: var(--sp-shadow-lg); width: 224px; }
+.account-action-menu button { min-height: 44px; }
 .workbench-intro { background: #173b3b; color: #f4fbf7; border-color: #2a6560; }
 .workbench-intro .panel-title, .workbench-intro .panel-eyebrow { color: #f4fbf7; }
 .workbench-intro .panel-muted { color: #cce3dc; }
 .workbench-intro .workbench-summary { background: rgb(255 255 255 / .1); }
 .workbench-intro .workbench-summary strong { color: #8df0cc; }
 .workbench-step { background: var(--sp-accent-soft); border-radius: 10px; }
-.workbench-option, .workbench-mode label { background: var(--sp-bg-elevated-2); }
-.workbench-option.selected, .workbench-mode label.selected { background: var(--sp-accent-soft); }
+.workbench-option { background: var(--sp-bg-elevated-2); }
+.workbench-option.selected { background: var(--sp-accent-soft); }
 .chat-frame { border-radius: 18px; box-shadow: var(--sp-shadow-md); }
 .chat-main { background: var(--sp-bg-muted); }
 .chat-bubble { box-shadow: var(--sp-shadow-sm); }
