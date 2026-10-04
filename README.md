@@ -2,7 +2,7 @@
 <h1 align="center">TG-SignPulse</h1>
 <p align="center">Telegram 多账号管理面板 · 内置 TeleBox</p>
 
-> 本仓库是基于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) 的二次开发版本。请从**本仓库源码**构建；上游 `ghcr.io/silentely/tg-signpulse` 镜像不包含这里的页面、聊天中心和 TeleBox 集成。
+> 本仓库是基于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) 的二次开发版本。请务必从**本仓库源码**构建；上游 `ghcr.io/silentely/tg-signpulse` 镜像不包含这里的页面、聊天中心和 TeleBox 集成。
 
 ## 目录
 
