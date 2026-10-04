@@ -62,13 +62,7 @@ def _effective_cpu_count() -> int:
 
 
 def _resolve_concurrency_limit() -> int:
-    # Priority: env var > global settings > cgroup-aware CPU default.
-    raw = (os.getenv("TG_GLOBAL_CONCURRENCY") or "").strip()
-    if raw:
-        try:
-            return max(int(raw), 1)
-        except ValueError:
-            pass
+    # An explicit panel setting wins; Compose's env value is the deployment default.
     try:
         from backend.services.config import get_config_service
         settings = get_config_service().get_global_settings()
@@ -77,6 +71,12 @@ def _resolve_concurrency_limit() -> int:
             return max(int(val), 1)
     except Exception:
         pass
+    raw = (os.getenv("TG_GLOBAL_CONCURRENCY") or "").strip()
+    if raw:
+        try:
+            return max(int(raw), 1)
+        except ValueError:
+            pass
     return min(_effective_cpu_count(), 5)
 
 

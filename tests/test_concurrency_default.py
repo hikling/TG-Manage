@@ -9,11 +9,23 @@ class TestResolveConcurrencyLimit:
     """_resolve_concurrency_limit 应正确处理优先级和默认值"""
 
     def test_env_var_takes_priority(self):
-        """环境变量 TG_GLOBAL_CONCURRENCY 优先级最高"""
+        """未在面板指定时使用环境变量。"""
         from backend.utils.tg_session import _resolve_concurrency_limit
 
-        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "10"}):
+        service = MagicMock()
+        service.get_global_settings.return_value = {"tg_global_concurrency": None}
+        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "10"}), \
+             patch("backend.services.config.get_config_service", return_value=service):
             assert _resolve_concurrency_limit() == 10
+
+    def test_explicit_setting_overrides_compose_default(self):
+        from backend.utils.tg_session import _resolve_concurrency_limit
+
+        service = MagicMock()
+        service.get_global_settings.return_value = {"tg_global_concurrency": 3}
+        with patch.dict(os.environ, {"TG_GLOBAL_CONCURRENCY": "2"}), \
+             patch("backend.services.config.get_config_service", return_value=service):
+            assert _resolve_concurrency_limit() == 3
 
     def test_env_var_invalid_falls_through(self):
         """环境变量无效值应降级到下一级"""

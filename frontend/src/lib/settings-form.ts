@@ -4,7 +4,6 @@
  */
 
 export type SettingsFormState = {
-  checkInterval: string
   logDays: number | ''
   dataDir: string
   proxy: string
@@ -13,8 +12,6 @@ export type SettingsFormState = {
   deviceKeepaliveIntervalDays: number | ''
   botEnabled: boolean
   botLoginNotify: boolean
-  botTaskFailure: boolean
-  botTaskSuccess: boolean
   quietEnabled: boolean
   quietStart: string
   quietEnd: string
@@ -62,11 +59,10 @@ function clampNumber(v: number | string | '', lo: number, hi: number): number | 
 
 export function buildGeneralPayload(s: SettingsFormState) {
   return {
-    sign_interval: emptyToNull(s.checkInterval),
     log_retention_days: emptyToNull(s.logDays) ?? 7,
     data_dir: s.dataDir || null,
     global_proxy: s.proxy || null,
-    tg_global_concurrency: clampNumber(s.concurrency, 1, 10) ?? 1,
+    tg_global_concurrency: clampNumber(s.concurrency, 1, 10),
     device_keepalive_enabled: s.deviceKeepaliveEnabled,
     device_keepalive_interval_days: clampNumber(s.deviceKeepaliveIntervalDays, 1, 170) ?? 30,
     timezone: s.timezone,
@@ -77,8 +73,6 @@ export function buildBotPayload(s: SettingsFormState) {
   return {
     telegram_bot_notify_enabled: s.botEnabled,
     telegram_bot_login_notify_enabled: s.botLoginNotify,
-    telegram_bot_task_failure_enabled: s.botTaskFailure,
-    telegram_bot_task_success_enabled: s.botTaskSuccess,
     telegram_bot_quiet_hours_enabled: s.quietEnabled,
     telegram_bot_quiet_hours_start: s.quietStart || '23:00',
     telegram_bot_quiet_hours_end: s.quietEnd || '07:00',
@@ -116,7 +110,6 @@ export function snapSection(
   switch (section) {
     case 'general':
       return JSON.stringify({
-        checkInterval: s.checkInterval,
         logDays: s.logDays,
         dataDir: s.dataDir,
         proxy: s.proxy,
@@ -129,8 +122,6 @@ export function snapSection(
       return JSON.stringify({
         botEnabled: s.botEnabled,
         botLoginNotify: s.botLoginNotify,
-        botTaskFailure: s.botTaskFailure,
-        botTaskSuccess: s.botTaskSuccess,
         quietEnabled: s.quietEnabled,
         quietStart: s.quietStart,
         quietEnd: s.quietEnd,
@@ -187,7 +178,6 @@ export function dirtySectionLabels(
 export function applyGlobalSettingsToForm(
   s: SettingsFormState,
   res: {
-    sign_interval?: number | null
     log_retention_days?: number
     data_dir?: string | null
     global_proxy?: string | null
@@ -197,8 +187,6 @@ export function applyGlobalSettingsToForm(
     device_keepalive_interval_days?: number
     telegram_bot_notify_enabled?: boolean
     telegram_bot_login_notify_enabled?: boolean
-    telegram_bot_task_failure_enabled?: boolean
-    telegram_bot_task_success_enabled?: boolean
     telegram_bot_quiet_hours_enabled?: boolean
     telegram_bot_quiet_hours_start?: string | null
     telegram_bot_quiet_hours_end?: string | null
@@ -215,17 +203,14 @@ export function applyGlobalSettingsToForm(
     webdav_remote_dir?: string | null
   },
 ): { botTokenSet: boolean; webdavPasswordSet: boolean } {
-  s.checkInterval = res.sign_interval ? String(res.sign_interval) : ''
   s.logDays = res.log_retention_days || 7
   s.dataDir = res.data_dir || ''
   s.proxy = res.global_proxy || ''
-  s.concurrency = res.tg_global_concurrency || 1
+  s.concurrency = res.tg_global_concurrency ?? ''
   s.deviceKeepaliveEnabled = res.device_keepalive_enabled !== false
   s.deviceKeepaliveIntervalDays = res.device_keepalive_interval_days || 30
   s.botEnabled = res.telegram_bot_notify_enabled || false
   s.botLoginNotify = res.telegram_bot_login_notify_enabled || false
-  s.botTaskFailure = res.telegram_bot_task_failure_enabled || false
-  s.botTaskSuccess = res.telegram_bot_task_success_enabled || false
   s.quietEnabled = res.telegram_bot_quiet_hours_enabled || false
   s.quietStart = res.telegram_bot_quiet_hours_start || '23:00'
   s.quietEnd = res.telegram_bot_quiet_hours_end || '07:00'

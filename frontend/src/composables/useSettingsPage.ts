@@ -39,17 +39,14 @@ export function useSettingsPage() {
   const { confirm } = useConfirm()
 
   const settings = ref<SettingsFormState>({
-    checkInterval: '',
     logDays: 7,
     dataDir: '',
     proxy: '',
-    concurrency: 1,
+    concurrency: '',
     deviceKeepaliveEnabled: true,
     deviceKeepaliveIntervalDays: 30,
     botEnabled: false,
     botLoginNotify: false,
-    botTaskFailure: false,
-    botTaskSuccess: false,
     quietEnabled: false,
     quietStart: '23:00',
     quietEnd: '07:00',

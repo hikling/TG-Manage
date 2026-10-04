@@ -129,7 +129,6 @@ class AIConfigSaveResponse(BaseModel):
 
 class GlobalSettingsRequest(BaseModel):
     chat_center_enabled: Optional[bool] = None
-    sign_interval: Optional[int] = None
     log_retention_days: Optional[int] = None
     data_dir: Optional[str] = None
     global_proxy: Optional[str] = None
@@ -138,8 +137,6 @@ class GlobalSettingsRequest(BaseModel):
     device_keepalive_interval_days: Optional[int] = None
     telegram_bot_notify_enabled: Optional[bool] = None
     telegram_bot_login_notify_enabled: Optional[bool] = None
-    telegram_bot_task_failure_enabled: Optional[bool] = None
-    telegram_bot_task_success_enabled: Optional[bool] = None
     telegram_bot_quiet_hours_enabled: Optional[bool] = None
     telegram_bot_quiet_hours_start: Optional[str] = None
     telegram_bot_quiet_hours_end: Optional[str] = None
@@ -158,17 +155,14 @@ class GlobalSettingsRequest(BaseModel):
 
 class GlobalSettingsResponse(BaseModel):
     chat_center_enabled: bool = False
-    sign_interval: Optional[int] = None
     log_retention_days: int = 7
     data_dir: Optional[str] = None
     global_proxy: Optional[str] = None
-    tg_global_concurrency: Optional[int] = 1
+    tg_global_concurrency: Optional[int] = None
     device_keepalive_enabled: bool = True
     device_keepalive_interval_days: int = 30
     telegram_bot_notify_enabled: bool = False
     telegram_bot_login_notify_enabled: bool = False
-    telegram_bot_task_failure_enabled: bool = True
-    telegram_bot_task_success_enabled: bool = False
     telegram_bot_quiet_hours_enabled: bool = False
     telegram_bot_quiet_hours_start: Optional[str] = "23:00"
     telegram_bot_quiet_hours_end: Optional[str] = "07:00"

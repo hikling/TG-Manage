@@ -76,7 +76,6 @@ describe('useSettingsPage (mount + dirty)', () => {
     useAuthStore().setToken('tok')
 
     api.getGlobalSettings.mockResolvedValue({
-      sign_interval: 45,
       log_retention_days: 14,
       telegram_bot_token_set: true,
       webdav_password_set: true,
@@ -101,7 +100,7 @@ describe('useSettingsPage (mount + dirty)', () => {
     })
     await flushPromises(10)
 
-    expect(result.settings.value.checkInterval).toBe('45')
+    expect(result.settings.value.concurrency).toBe('')
     expect(result.settings.value.logDays).toBe(14)
     expect(result.settings.value.timezone).toBe('UTC')
     expect(result.settings.value.botThreadId).toBe('9')

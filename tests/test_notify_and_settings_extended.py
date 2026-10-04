@@ -29,10 +29,6 @@ class TestAdvancedSettingsApi:
         assert resp.status_code == 200
         body = resp.json()
         for key in (
-            "ai_vision_timeout",
-            "ai_vision_retry_attempts",
-            "ai_vision_reasoning_effort",
-            "telegram_bot_task_success_enabled",
             "telegram_bot_quiet_hours_enabled",
             "telegram_bot_quiet_hours_start",
             "telegram_bot_quiet_hours_end",
@@ -62,7 +58,8 @@ class TestAdvancedSettingsApi:
         got = client.get("/api/config/settings", headers=_auth_headers()).json()
         assert "sign_interval" not in got
         assert "sign_task_execution_timeout" not in got
-        assert got["ai_vision_timeout"] == 20
+        assert "ai_vision_timeout" not in got
+        assert "telegram_bot_task_success_enabled" not in got
 
 
 class TestBotTestApi:
@@ -357,30 +354,6 @@ async def test_keyword_push_outside_quiet_hours():
         "tg_signer.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         await send_keyword_push(cfg, {"title": "hit", "body": "body"})
-        m.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_success_notification_respects_quiet_hours():
-    from backend.services.push_notifications import send_task_success_notification
-
-    cfg = {
-        "telegram_bot_notify_enabled": True,
-        "telegram_bot_task_success_enabled": True,
-        "telegram_bot_quiet_hours_enabled": True,
-        "telegram_bot_quiet_hours_start": "00:00",
-        "telegram_bot_quiet_hours_end": "23:59",
-        "timezone": "UTC",
-        "telegram_bot_token": "1:t",
-        "telegram_bot_chat_id": "1",
-    }
-    with patch(
-        "backend.services.push_notifications.send_telegram_bot_message",
-        new_callable=AsyncMock,
-    ) as m:
-        await send_task_success_notification(
-            cfg, account_name="a", task_name="t", message="ok"
-        )
         m.assert_not_awaited()
 
 

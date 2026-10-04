@@ -6,7 +6,6 @@ import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import type { SettingsFormState } from '../lib/settings-form'
 
 const settingsState = (): SettingsFormState => ({
-  checkInterval: '',
   logDays: 7,
   dataDir: '',
   proxy: '',
@@ -15,8 +14,6 @@ const settingsState = (): SettingsFormState => ({
   deviceKeepaliveIntervalDays: 30,
   botEnabled: false,
   botLoginNotify: false,
-  botTaskFailure: true,
-  botTaskSuccess: false,
   quietEnabled: false,
   quietStart: '23:00',
   quietEnd: '07:00',
