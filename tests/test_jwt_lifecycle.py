@@ -8,7 +8,7 @@ from backend.utils.time import utc_now
 
 
 class TestTokenExpiry:
-    def test_expired_token_is_rejected(self, client, db_session):
+    def test_expired_token_is_rejected(self, client, authenticated_admin):
         """过期 token 应返回 401"""
         expired_token = create_access_token(
             {"sub": "admin"},
@@ -20,7 +20,7 @@ class TestTokenExpiry:
         )
         assert response.status_code == 401
 
-    def test_valid_token_is_accepted(self, client, db_session):
+    def test_valid_token_is_accepted(self, client, authenticated_admin):
         """未过期 token 应返回 200"""
         token = create_access_token(
             {"sub": "admin"},
@@ -34,7 +34,7 @@ class TestTokenExpiry:
 
 
 class TestTokenTampering:
-    def test_tampered_signature_is_rejected(self, client, db_session):
+    def test_tampered_signature_is_rejected(self, client, authenticated_admin):
         """篡改签名的 token 应返回 401"""
         token = create_access_token({"sub": "admin"})
         tampered = token[:-5] + "XXXXX"
@@ -44,7 +44,7 @@ class TestTokenTampering:
         )
         assert response.status_code == 401
 
-    def test_tampered_payload_is_rejected(self, client, db_session):
+    def test_tampered_payload_is_rejected(self, client, authenticated_admin):
         """篡改 payload 的 token 应返回 401"""
         import base64
         import json
@@ -69,7 +69,7 @@ class TestTokenTampering:
 
 
 class TestTokenCrossKey:
-    def test_different_secret_invalidates_token(self, client, db_session):
+    def test_different_secret_invalidates_token(self, client, authenticated_admin):
         """不同密钥签发的 token 应返回 401"""
         _ = create_access_token({"sub": "admin"})  # 默认密钥签发，仅作对照基线
         # 手动构造一个用不同密钥签发的 token
@@ -86,7 +86,7 @@ class TestTokenCrossKey:
         )
         assert response.status_code == 401
 
-    def test_missing_sub_claim_is_rejected(self, client, db_session):
+    def test_missing_sub_claim_is_rejected(self, client, authenticated_admin):
         """缺少 sub 声明的 token 应返回 401"""
         token = create_access_token({"role": "admin"})  # 没有 sub
         response = client.get(
@@ -95,7 +95,7 @@ class TestTokenCrossKey:
         )
         assert response.status_code == 401
 
-    def test_empty_token_is_rejected(self, client, db_session):
+    def test_empty_token_is_rejected(self, client, authenticated_admin):
         """空 token 应返回 401"""
         response = client.get(
             "/api/accounts",
@@ -107,7 +107,7 @@ class TestTokenCrossKey:
 class TestTokenDecodeLogging:
     """JWT 解码失败分类日志：行为不变（返回 None），但留可观测线索。"""
 
-    def test_expired_token_logs_decode_failure(self, db_session, caplog):
+    def test_expired_token_logs_decode_failure(self, authenticated_admin, caplog):
         # 直接构造一个已过期的 token（exp 设为过去）
         import datetime
 
@@ -123,17 +123,17 @@ class TestTokenDecodeLogging:
         import logging
 
         with caplog.at_level(logging.DEBUG, logger="backend.auth"):
-            result = _resolve_user_from_token(expired, db_session)
+            result = _resolve_user_from_token(expired, authenticated_admin)
         assert result is None
         # 过期 token 触发任一解码失败日志（版本差异可能走 ExpiredSignatureError 或签名校验分支）
         assert any("JWT" in r.message for r in caplog.records)
 
-    def test_tampered_token_logs_decode_failure(self, db_session, caplog):
+    def test_tampered_token_logs_decode_failure(self, authenticated_admin, caplog):
         import logging
 
         from backend.core.auth import _resolve_user_from_token
 
         with caplog.at_level(logging.DEBUG, logger="backend.auth"):
-            result = _resolve_user_from_token("not-a-jwt", db_session)
+            result = _resolve_user_from_token("not-a-jwt", authenticated_admin)
         assert result is None
         assert any("JWT 解码失败" in r.message for r in caplog.records)

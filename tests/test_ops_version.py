@@ -17,15 +17,15 @@ def _auth() -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_version_requires_auth(client, db_session):
+def test_version_requires_auth(client, authenticated_admin):
     assert client.get("/api/ops/version").status_code == 401
 
 
-def test_version_check_requires_auth(client, db_session):
+def test_version_check_requires_auth(client, authenticated_admin):
     assert client.post("/api/ops/version/check").status_code == 401
 
 
-def test_version_returns_local_fields(client, db_session, monkeypatch):
+def test_version_returns_local_fields(client, authenticated_admin, monkeypatch):
     monkeypatch.setenv("APP_VERSION", "2.0.0")
     monkeypatch.setenv("GIT_SHA", "abc123def456")
     monkeypatch.setenv("GIT_BRANCH", "dev")
@@ -42,7 +42,7 @@ def test_version_returns_local_fields(client, db_session, monkeypatch):
     assert "update_check" not in body
 
 
-def test_version_check_disabled(client, db_session, monkeypatch):
+def test_version_check_disabled(client, authenticated_admin, monkeypatch):
     clear_update_check_cache()
     monkeypatch.setenv("APP_UPDATE_CHECK", "0")
     monkeypatch.setenv("APP_VERSION", "2.0.0")
@@ -54,7 +54,7 @@ def test_version_check_disabled(client, db_session, monkeypatch):
     assert body["update_check"]["update_available"] is False
 
 
-def test_version_check_success(client, db_session, monkeypatch):
+def test_version_check_success(client, authenticated_admin, monkeypatch):
     clear_update_check_cache()
     monkeypatch.setenv("APP_UPDATE_CHECK", "1")
     monkeypatch.setenv("APP_VERSION", "2.0.0")
@@ -83,7 +83,7 @@ def test_version_check_success(client, db_session, monkeypatch):
     assert body["update_check"]["update_available"] is True
 
 
-def test_version_check_soft_fail(client, db_session, monkeypatch):
+def test_version_check_soft_fail(client, authenticated_admin, monkeypatch):
     clear_update_check_cache()
     monkeypatch.setenv("APP_UPDATE_CHECK", "1")
     remote = {

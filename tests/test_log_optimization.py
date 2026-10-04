@@ -235,13 +235,12 @@ class TestNoBarePrintInProduction:
     """
 
     # 待扫描的生产模块文件路径（相对项目根）
-    # 旧 /api/tasks 已移除，改为扫描 sign-tasks 主路由
     _TARGETS = [
         "backend/scheduler/__init__.py",
         "backend/utils/storage.py",
-        "backend/api/routes/sign_tasks_v2.py",
-        "backend/api/routes/events.py",
-        "tg_signer/core/runtime.py",
+        "backend/api/routes/accounts.py",
+        "backend/api/routes/ops.py",
+        "tg_signer/core/client.py",
     ]
 
     @pytest.mark.parametrize("rel_path", _TARGETS)

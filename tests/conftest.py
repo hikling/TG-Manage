@@ -183,6 +183,17 @@ def db_session(memory_session_local):
 
 
 @pytest.fixture
+def authenticated_admin(db_session):
+    """Seed the user behind tests' signed admin JWTs in the isolated database."""
+    from backend.models.user import User
+
+    if db_session.query(User).filter(User.username == "admin").first() is None:
+        db_session.add(User(username="admin", password_hash="!test-only"))
+        db_session.commit()
+    return db_session
+
+
+@pytest.fixture
 def mock_db_session() -> MockDBSession:
     """
     模拟数据库会话（不依赖真实数据库）
