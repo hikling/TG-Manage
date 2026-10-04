@@ -13,7 +13,11 @@ const history = ref<TeleBoxTaskRun[]>([])
 const loading = ref(false)
 const error = ref('')
 const runningCount = computed(() => telebox.value.filter(item => item.status === 'running').length)
-const enabledCount = computed(() => tasks.value.filter(item => item.enabled).length)
+const enabledCount = computed(() =>
+  tasks.value.filter(item => item.kind === 'message' && item.enabled).length +
+  telebox.value.filter(account => account.enabled && account.status === 'running')
+    .reduce((total, account) => total + (account.automations || [])
+      .filter(item => item.source === 'installed' || item.name === 'kitt').length, 0))
 const recentHistory = computed(() => history.value.slice(0, 8))
 async function load() {
   loading.value = true

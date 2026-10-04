@@ -81,6 +81,7 @@ async function emitCommands() {
     command, plugin: manager.getPluginEntry(command)?.plugin.name || "",
     source: manager.getPluginEntry(command)?.source || "builtin",
   })) });
+  emit({ event: "automations", items: manager.listAutomationPlugins() });
 }
 async function runPlugin(input: any) {
   const plugin = String(input.plugin || "");

@@ -76,3 +76,21 @@ async def test_dispatch_requires_loaded_command_and_account(monkeypatch, tmp_pat
     assert sent[0]["action"] == "run"
     assert sent[0]["args"] == "world"
     assert worker["pending"] == {}
+
+
+@pytest.mark.asyncio
+async def test_worker_reports_only_valid_loaded_automations(tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    reader = asyncio.StreamReader()
+    reader.feed_data((
+        '{"event":"automations","items":['
+        '{"name":"checkin","source":"installed","triggers":["message","cron"]},'
+        '{"name":"../bad","source":"installed","triggers":["message"]},'
+        '{"name":"other","source":"installed","triggers":["unknown"]}]}\n'
+    ).encode())
+    reader.feed_eof()
+    worker = {"process": SimpleNamespace(stdout=reader), "pending": {}}
+    await service._stdout("one", worker)
+    assert worker["automations"] == [
+        {"name": "checkin", "source": "installed", "triggers": ["message", "cron"]}
+    ]

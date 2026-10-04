@@ -1,11 +1,17 @@
 import { panelRequest } from './communications'
 
 export interface TeleBoxCommand { plugin: string; command: string; source: 'builtin' | 'installed' }
+export interface TeleBoxAutomation {
+  name: string
+  source: 'builtin' | 'installed'
+  triggers: Array<'message' | 'event' | 'cron'>
+}
 export interface TeleBoxAccount {
   account: string
   status: string
   enabled: boolean
   commands: TeleBoxCommand[]
+  automations: TeleBoxAutomation[]
   plugins: { name: string; kind: string }[]
 }
 export interface TeleBoxTask {
