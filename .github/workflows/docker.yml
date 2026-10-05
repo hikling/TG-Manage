@@ -128,6 +128,18 @@ jobs:
         working-directory: telebox
         run: node --check src/utils/panel/webapp/app.js
 
+  docker-build-smoke:
+    if: github.event_name == 'pull_request'
+    needs: [test, frontend-test, telebox-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build production image without publishing
+        run: docker build --target production -t tg-signpulse:pr-check .
+
   # 镜像构建：
   # - main 分支推送：main + main-<sha>（稳定主干滚动镜像）
   # - v* 标签：vX.Y.Z + latest（正式发版，多架构）
