@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -17,6 +18,20 @@ def test_node_heap_limit_for_multi_account_host(monkeypatch):
     for value, expected in [("96", 96), ("8", 64), ("999", 512), ("bad", 128)]:
         monkeypatch.setenv("TELEBOX_NODE_HEAP_MB", value)
         assert telebox.node_heap_limit_mb() == expected
+
+
+def test_worker_passes_telebox_settings_without_panel_secrets(tmp_path, monkeypatch):
+    monkeypatch.setenv("TB_PREFIX", "! .")
+    monkeypatch.setenv("TB_LISTENER_HANDLE_EDITED", "kitt checkin")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.example:8080")
+    monkeypatch.setenv("APP_SECRET_KEY", "must-not-leak")
+    env = telebox.worker_environment(tmp_path)
+    assert env["TB_PREFIX"] == "! ."
+    assert env["TB_LISTENER_HANDLE_EDITED"] == "kitt checkin"
+    assert env["HTTPS_PROXY"] == "http://proxy.example:8080"
+    assert env["HOME"] == str(tmp_path / "home")
+    assert env["NODE_PATH"] == str(tmp_path / "plugins/node_modules")
+    assert "APP_SECRET_KEY" not in env
 
 
 def test_login_credentials_choose_account_server_legacy_and_builtin(monkeypatch, tmp_path):
@@ -69,6 +84,44 @@ def test_existing_telebox_account_refreshes_managed_loader_without_losing_plugin
     ).read_bytes()
     assert (directory / "plugins" / "custom.ts").read_text() == "user plugin"
     assert (directory / "config.json").read_text() == '{"session":"private"}'
+
+
+def test_existing_account_refreshes_upstream_core_and_keeps_plugin_data(tmp_path):
+    source = tmp_path / "upstream"
+    (source / "src" / "utils").mkdir(parents=True)
+    (source / "src" / "utils" / "runtimeManager.ts").write_text("fixed runtime")
+    (source / "src" / "plugin").mkdir()
+    (source / "src" / "plugin" / "reload.ts").write_text("fixed reload")
+    (source / "scripts").mkdir()
+    (source / "panel").mkdir()
+    (source / "node_modules").mkdir()
+    service = telebox.TeleBoxService(root=tmp_path / "accounts", source=source)
+    directory = service._prepare("one")
+    (directory / "src" / "utils" / "runtimeManager.ts").write_text("old runtime")
+    (directory / "src" / "plugin" / "reload.ts").write_text("old reload")
+    (directory / "plugins" / "custom.ts").write_text("my plugin")
+    (directory / "assets" / "settings.json").write_text('{"enabled":true}')
+    (directory / "config.json").write_text('{"session":"private"}')
+
+    service._prepare("one")
+
+    assert (directory / "src" / "utils" / "runtimeManager.ts").read_text() == "fixed runtime"
+    assert (directory / "src" / "plugin" / "reload.ts").read_text() == "fixed reload"
+    assert (directory / "plugins" / "custom.ts").read_text() == "my plugin"
+    assert (directory / "plugins" / "node_modules").is_dir()
+    assert (directory / "assets" / "settings.json").read_text() == '{"enabled":true}'
+    assert (directory / "config.json").read_text() == '{"session":"private"}'
+
+
+@pytest.mark.asyncio
+async def test_plugin_action_error_keeps_line_across_stderr_chunks(tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    stream = SimpleNamespace(read=AsyncMock(side_effect=[b"[KITT] match ok\n[KITT] action ",
+                                                       b"error: missing dep\n", b""]))
+    await service._stderr("one", {"process": SimpleNamespace(stderr=stream)})
+    assert [(entry["level"], entry["message"]) for entry in service.logs["one"]] == [
+        ("info", "[KITT] match ok"), ("error", "[KITT] action error: missing dep")
+    ]
 
 
 @pytest.mark.asyncio

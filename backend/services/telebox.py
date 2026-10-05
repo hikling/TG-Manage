@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import codecs
 import fcntl
 import hashlib
 import json
@@ -34,6 +35,19 @@ def node_heap_limit_mb() -> int:
     except ValueError:
         requested = 128
     return min(512, max(64, requested))
+
+
+def worker_environment(directory: Path) -> dict[str, str]:
+    """Pass upstream TeleBox settings without exposing SignPulse secrets."""
+    inherited = {"PATH", "LANG", "TZ", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "SSL_CERT_DIR",
+                 "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+                 "http_proxy", "https_proxy", "no_proxy", "all_proxy"}
+    env = {key: value for key, value in os.environ.items()
+           if value and (key in inherited or key.startswith("TB_"))}
+    env.update({"HOME": str(directory / "home"), "XDG_CACHE_HOME": str(directory / "cache"),
+                "TB_LOCALSTORAGE_FILE": str(directory / "cache/localstorage"),
+                "NODE_PATH": str(directory / "plugins/node_modules"), "NODE_ENV": "production"})
+    return env
 
 
 def redact(text: str, secrets: list[str] = ()) -> str:
@@ -106,24 +120,18 @@ class TeleBoxService:
         directory = self.directory(account)
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         directory.chmod(0o700)
-        # Source is account-local because upstream TPM/update can write relative
-        # to __dirname. Existing plugins/config/assets are never overwritten.
-        for entry in ["src", "scripts", "panel", "plugins", "assets", "temp", "package.json", "package-lock.json", "tsconfig.json", "LICENSE", "UPSTREAM.json"]:
+        # Core code is image-managed. Refresh it on every start so existing
+        # accounts receive fixes too; keep plugins and account data writable
+        # and untouched for TPM and the user's customizations.
+        for entry in ["src", "scripts", "panel", "package.json", "package-lock.json", "tsconfig.json", "LICENSE", "UPSTREAM.json"]:
             source, target = self.source / entry, directory / entry
-            if target.exists() or not source.exists():
+            if not source.exists():
                 continue
             if source.is_dir():
-                shutil.copytree(source, target)
+                shutil.copytree(source, target, dirs_exist_ok=True)
             else:
                 shutil.copy2(source, target)
-        # Refresh managed integration code on existing account directories too.
-        # Upstream plugins, user plugins and account config remain account-local.
-        shutil.copytree(self.source / "panel", directory / "panel", dirs_exist_ok=True)
-        # Keep the runtime loader current for existing account directories.
-        shutil.copy2(self.source / "src/utils/pluginManager.ts", directory / "src/utils/pluginManager.ts")
-        for script in ("esbuild-register.cjs", "esbuild-esm-loader.mjs", "cjs-helpers.js"):
-            shutil.copy2(self.source / "scripts" / script, directory / "scripts" / script)
-        for folder in ["home", "cache", "temp"]:
+        for folder in ["plugins", "plugins/node_modules", "assets", "home", "cache", "temp"]:
             (directory / folder).mkdir(exist_ok=True, mode=0o700)
         dependencies = directory / "node_modules"
         if not dependencies.exists():
@@ -190,9 +198,8 @@ class TeleBoxService:
             self.secrets[account] = [str(credentials["api_hash"])]
             if proxy and proxy.get("password"):
                 self.secrets[account].append(proxy["password"])
-            env = {key: value for key, value in os.environ.items() if key in {"PATH", "LANG", "TZ", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "SSL_CERT_DIR"}}
-            env.update({"HOME": str(directory / "home"), "XDG_CACHE_HOME": str(directory / "cache"),
-                        "TB_LOCALSTORAGE_FILE": str(directory / "cache/localstorage"), "NODE_ENV": "production"})
+            # Account-local .env supplies plugin-specific settings.
+            env = worker_environment(directory)
             try:
                 process = await asyncio.create_subprocess_exec(
                     node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
@@ -264,10 +271,21 @@ class TeleBoxService:
             self._log(account, "TeleBox 控制通道已关闭", "error")
 
     async def _stderr(self, account: str, worker: dict):
-        # Read fixed chunks so a plugin cannot kill log draining with a huge line.
+        # Preserve line boundaries across reads, while bounding memory when a
+        # plugin writes an enormous line without a newline.
+        decoder = codecs.getincrementaldecoder("utf-8")("replace")
+        pending = ""
         while data := await worker["process"].stderr.read(4096):
-            for line in data.decode(errors="replace").splitlines():
-                self._log(account, line)
+            pending += decoder.decode(data)
+            while "\n" in pending:
+                line, pending = pending.split("\n", 1)
+                self._log(account, line.rstrip("\r"), "error" if any(word in line.lower() for word in ("error", "失败", "出错")) else "info")
+            if len(pending) > 8192:
+                self._log(account, pending[:8192])
+                pending = pending[8192:]
+        pending += decoder.decode(b"", final=True)
+        if pending:
+            self._log(account, pending)
 
     async def _watch(self, account: str, worker: dict):
         code = await worker["process"].wait()

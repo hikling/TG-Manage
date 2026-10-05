@@ -20,6 +20,27 @@ function safeError(error: unknown): string {
   for (const secret of privateValues) if (secret) value = value.split(secret).join("[REDACTED]");
   return value.replace(/[A-Fa-f0-9]{32,}|[A-Za-z0-9+/=_-]{80,}/g, "[REDACTED]").replace(/\+?\d{10,15}/g, "[REDACTED]").slice(0, 180);
 }
+function initializeRuntimeServices() {
+  // Mirror upstream src/index.ts bootstrap. Without dotenv the account's
+  // plugin configuration is ignored, and HTTP plugin actions bypass its proxy.
+  require("dotenv/config");
+  require("../src/utils/logger");
+  require("../src/utils/coreDumpCleaner").cleanCoreDumps();
+  const proxyValue = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  if (proxyValue) {
+    const url = new URL(proxyValue);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      require("axios").defaults.proxy = {
+        host: url.hostname,
+        port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
+        protocol: url.protocol.slice(0, -1),
+        ...(url.username ? { auth: { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) } } : {}),
+      };
+    }
+  }
+}
+process.on("unhandledRejection", (reason) => console.error("[WARN] Unhandled promise rejection:", safeError(reason)));
+process.on("uncaughtException", (error) => console.error("[ERROR] Uncaught exception:", safeError(error)));
 async function shutdown(code = 0) {
   if (stop) return;
   stop = true;
@@ -65,6 +86,7 @@ async function initialize(input: any) {
     fs.writeFileSync("config.json", JSON.stringify(config), { mode: 0o600 });
   } finally { await client.destroy(); }
   stage = "加载插件";
+  initializeRuntimeServices();
   const { initPluginBaseConfig } = require("../src/utils/pluginBase");
   initPluginBaseConfig();
   require("../src/hook/patches/telegram.patch");

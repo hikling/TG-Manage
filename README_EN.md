@@ -35,6 +35,8 @@ Open `http://YOUR_SERVER_IP:8080`, enter the one-time setup token and choose an 
 
 `./data` is mounted at `/data` and holds SQLite, Telegram sessions, tasks, logs, and per-account TeleBox data. Back up all of `data/`, including `.app_secret_key` before rebuilding or migrating. Rebuild with `docker compose up -d --build`; do not pull the upstream image over this version.
 
+The bundled TeleBox runtime contains its system plugins and the native Panel. Community plugins live in the separate [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins) repository; use `.tpm install <name>` and `.tpm update` from Telegram Saved Messages. On upgrade, the core code is refreshed for existing accounts while their plugins and account data are preserved. Optional plugin settings can go in an account-local `data/telebox/<SHA-256 account name>/.env` (mode 600). Failed plugin actions are shown in the account's TeleBox logs.
+
 Frontend typecheck/build/tests, targeted backend tests and TeleBox TypeScript checks passed during implementation. Real Telegram authorization, Bot API access, TPM remote installation and a full Docker build still need verification in the target environment. The [Docker guide](docs/deploy/docker.md) and [quick start](docs/guide/quick-start.md) cover this fork.
 
 TeleBox retains its upstream LGPL-2.1-only [license](telebox/LICENSE); the rest of this project is covered by the root [license](LICENSE).

@@ -88,6 +88,8 @@ docker compose up -d --build  # 代码更新后重新构建
 
 每个账号的 TeleBox 数据独立保存在 `data/telebox/` 的散列目录中，不能共用同一个工作目录。TeleBox 上游命令/插件仍受其自身许可及运行规则约束，详见 [`telebox/README.md`](telebox/README.md)。
 
+TeleBox 原生系统插件随镜像提供；官方社区插件由独立的 [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins) 仓库维护，可在 Telegram 收藏夹用 `.tpm install 插件名` 安装、`.tpm update` 更新、`.tpm ls` 查看。更新保留用户改过的插件并由 TPM 热重载。升级本项目后，已有账号下的 TeleBox 核心代码会自动同步，`plugins/`、`assets/`、`config.json` 和独立会话不会覆盖。插件需要额外的配置时，在对应账号的 `data/telebox/<账号名 SHA-256>/` 下创建私有 `.env`（权限 600）；目录名可用 `printf %s '账号名' | sha256sum` 计算。TeleBox 子进程会读取它，不会把 SignPulse 的 `APP_SECRET_KEY` 传给插件。插件命中但动作失败时，在账号卡片的 TeleBox 日志中找“执行时出错”或依赖安装错误。
+
 ## 本地源码开发
 
 Docker 是部署首选。本地开发需要**两个 Node 版本**和 Python；下面以 Linux/macOS 的 shell 为例。Windows 推荐 WSL2 或 Docker。
@@ -150,6 +152,7 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 | `TG_GLOBAL_CONCURRENCY` | Telegram 操作同时执行上限；与账号总数无关；面板明确设值时以面板为准 | 2 核 Compose 默认 2，可在私有 `.env` 中调整 |
 | `TELEBOX_NODE` | 本地指定 Node 24 可执行文件；Docker 镜像内 Node 24 已就绪 | 默认查找 `node` |
 | `TELEBOX_NODE_HEAP_MB` | 每个 TeleBox Node 进程的 V8 老生代上限，限制在 64–512 MiB | 默认 128 MiB，非进程总内存上限 |
+| `TB_PREFIX` / `TB_LISTENER_HANDLE_EDITED` / `TB_CMD_IGNORE_EDITED` | TeleBox 原生命令前缀、编辑消息监听、编辑命令设置 | Compose 透传；也可在账号私有 `.env` 单独配置 |
 | `ENABLE_API_DOCS` | 开启 Swagger/ReDoc/OpenAPI | 默认关闭 |
 
 实际可配置项还见 [`backend/core/config.py`](backend/core/config.py) 与 [本地配置参考](docs/reference/configuration.md)。不要将真实 API ID、API Hash、密码、session、Bot Token 或导出的数据写进 README、`.env.example` 或 Git。
@@ -173,7 +176,7 @@ cd frontend && npm run typecheck && npm test && npm run build
 cd ../telebox && npx tsc --noEmit
 ```
 
-前端类型检查、构建与针对性自动测试请以本次变更的检查结果为准；TeleBox TypeScript 检查还需运行。完整 Docker 构建与**真实 Telegram 账号**的验证码/扫码、TeleBox 独立授权、Bot API、TPM 远程安装仍需在你的部署环境验证。功能表说明的是代码实现范围，不代表真实账号端到端验收通过。
+前端、后端和 TeleBox TypeScript 自动检查请以本次 PR 的运行结果为准。完整 Docker 构建与**真实 Telegram 账号**的验证码/扫码、TeleBox 独立授权、Bot API、TPM 远程安装仍需在你的部署环境验证。功能表说明的是代码实现范围，不代表真实账号端到端验收通过。
 
 - TeleBox 需要额外账号会话和内存，运行多个账号时调高宿主机资源及 Compose 内存限额。
 - 旧插件任务保留原数据，但对应动作不会继续运行；迁移前先备份。
