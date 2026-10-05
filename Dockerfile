@@ -36,7 +36,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential tzdata gosu libcairo2 libpango-1.0-0 libjpeg62-turbo libgif7 libpixman-1-0 libglib2.0-0 && \
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential pkg-config tzdata gosu curl git libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev libpixman-1-0 libglib2.0-0 && \
   rm -rf /var/lib/apt/lists/*
 
 # Install all Python dependencies in a single layer for faster builds.
@@ -48,6 +48,9 @@ COPY tg_signer /app/tg_signer
 COPY telebox /app/telebox
 COPY --from=telebox-builder /telebox/node_modules /app/telebox/node_modules
 COPY --from=telebox-builder /usr/local/bin/node /usr/local/bin/node
+COPY --from=telebox-builder /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
+    ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 ARG TARGETPLATFORM
 RUN pip install --no-cache-dir . \

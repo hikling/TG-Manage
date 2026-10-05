@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/TeleBoxOrg/TeleBox",
-  "commit": "c46437405be459d279821587e48f311f06d53bd4",
+  "commit": "8732b7708cfa122419600aba9c5673c04bd169ec",
   "version": "0.2.9",
   "license": "LGPL-2.1-only",
   "integration": "panel/ adapter; complete upstream source retained"

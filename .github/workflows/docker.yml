@@ -99,12 +99,57 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  telebox-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: telebox/package-lock.json
+
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev
+
+      - name: Install TeleBox dependencies
+        working-directory: telebox
+        run: npm ci --include=dev --no-audit --no-fund
+
+      - name: Check TeleBox runtime and panel adapter
+        working-directory: telebox
+        run: npx tsc --noEmit --pretty false
+
+      - name: Check native Panel asset
+        working-directory: telebox
+        run: node --check src/utils/panel/webapp/app.js
+
+      - name: Exercise TeleBox listener action with worker loader
+        working-directory: telebox
+        run: node --max-old-space-size=128 -r tsconfig-paths/register -r ./scripts/esbuild-register.cjs ./scripts/signpulse-plugin-smoke.cjs
+
+  docker-build-smoke:
+    if: github.event_name == 'pull_request'
+    needs: [test, frontend-test, telebox-test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Build production image without publishing
+        run: docker build --target production -t tg-signpulse:pr-check .
+
   # 镜像构建：
   # - main 分支推送：main + main-<sha>（稳定主干滚动镜像）
   # - v* 标签：vX.Y.Z + latest（正式发版，多架构）
   # - dev 分支：dev + dev-<sha>（预发滚动镜像）
   build-and-push:
-    needs: [test, frontend-test]
+    needs: [test, frontend-test, telebox-test]
     if: >
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.ref, 'refs/tags/v') ||
