@@ -128,6 +128,10 @@ jobs:
         working-directory: telebox
         run: node --check src/utils/panel/webapp/app.js
 
+      - name: Exercise TeleBox listener action with worker loader
+        working-directory: telebox
+        run: node --max-old-space-size=128 -r tsconfig-paths/register -r ./scripts/esbuild-register.cjs ./scripts/signpulse-plugin-smoke.cjs
+
   docker-build-smoke:
     if: github.event_name == 'pull_request'
     needs: [test, frontend-test, telebox-test]
