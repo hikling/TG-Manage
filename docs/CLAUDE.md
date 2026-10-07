@@ -2,7 +2,7 @@
 
 # TG Manage 文档模块
 
-`docs/` 包含 VitePress 页面、公开静态文档与自托管部署说明。当前产品源码位于 [hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)；上游来源见根目录 README。
+`docs/` 包含 VitePress 页面、公开静态文档与自托管部署说明。当前产品源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；上游来源见根目录 README。
 
 ## 入口
 

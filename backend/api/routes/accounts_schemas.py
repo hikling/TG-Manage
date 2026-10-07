@@ -79,6 +79,7 @@ class AccountInfo(BaseModel):
     status_checked_at: Optional[str] = None
     needs_relogin: bool = False
     tags: list[str] = []
+    country_code: Optional[str] = None
 
 
 class QrLoginStatusResponse(BaseModel):

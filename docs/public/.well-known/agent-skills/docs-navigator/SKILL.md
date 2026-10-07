@@ -7,7 +7,7 @@ description: 根据主题定位 TG Manage 的部署、账号、聊天、备份�
 
 ## 文档根
 
-源码与文档：[hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)。这是私有仓库，读取需要相应 GitHub 权限。
+源码与文档：[hikling/TG-Manage](https://github.com/hikling/TG-Manage)。这是私有仓库，读取需要相应 GitHub 权限。
 
 ## 主题路由
 

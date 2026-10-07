@@ -3,11 +3,11 @@ import { devLog } from './devLog'
 import { storageGet, storageSet, storageRemove } from './safe-storage'
 
 export const DEFAULT_GITHUB_RELEASES_URL =
-  'https://api.github.com/repos/hikling/TG-SignPulse-Private/releases/latest'
+  'https://api.github.com/repos/hikling/TG-Manage/releases/latest'
 
 /** 不计入 api.github.com 配额：跟随 HTML 站 latest 重定向解析 tag */
 export const DEFAULT_GITHUB_HTML_LATEST_URL =
-  'https://github.com/hikling/TG-SignPulse-Private/releases/latest'
+  'https://github.com/hikling/TG-Manage/releases/latest'
 
 const CACHE_KEY = 'tg_manage_update_check_v1'
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000

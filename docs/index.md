@@ -23,7 +23,7 @@ hero:
       link: /deploy/docker
     - theme: alt
       text: GitHub
-      link: https://github.com/hikling/TG-SignPulse-Private
+      link: https://github.com/hikling/TG-Manage
 
 features:
   - icon: 👥

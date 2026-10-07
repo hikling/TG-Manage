@@ -62,7 +62,7 @@ describe('NotFound.vue 404 页面', () => {
     expect(githubBtn.exists()).toBe(true)
     await githubBtn.trigger('click')
 
-    expect(openSpy).toHaveBeenCalledWith('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
+    expect(openSpy).toHaveBeenCalledWith('https://github.com/hikling/TG-Manage', '_blank', 'noopener,noreferrer')
     openSpy.mockRestore()
   })
 

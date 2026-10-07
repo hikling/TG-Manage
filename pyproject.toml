@@ -41,6 +41,7 @@ dependencies = [
     "filelock",
     "aiofiles",
     "psutil>=5.9.0",
+    "phonenumbers>=9.0,<10",
 ]
 
 [project.optional-dependencies]
@@ -59,8 +60,8 @@ speedup = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/hikling/TG-SignPulse-Private"
-Repository = "https://github.com/hikling/TG-SignPulse-Private"
+Homepage = "https://github.com/hikling/TG-Manage"
+Repository = "https://github.com/hikling/TG-Manage"
 
 [tool.setuptools]
 include-package-data = true

@@ -6,14 +6,14 @@
       "type": "skill-md",
       "description": "根据主题定位 TG Manage 官方文档页面（部署、账号、任务、AI、监听、运维）。",
       "url": "/.well-known/agent-skills/docs-navigator/SKILL.md",
-      "digest": "sha256:3ff981406b1ef209ed58db0b3bae4c1e5c6f4bca425b81f2d6f41ab7c078dec7"
+      "digest": "sha256:990b76ff6e0e7d9f12fe1a0411e82416b3e8a911935dca51895f40d14269b1ea"
     },
     {
       "name": "quick-start",
       "type": "skill-md",
       "description": "引导完成 TG Manage 安装、登录并添加首个账号。",
       "url": "/.well-known/agent-skills/quick-start/SKILL.md",
-      "digest": "sha256:4908f155a11071ffa6a7b8fa540f9de662e695f58ddab8b93a1271e06e013148"
+      "digest": "sha256:793792a7ba77dcdd54186a6c9c1b9259e8eb11122b9cb96b7d37be518191d9a7"
     }
   ]
 }

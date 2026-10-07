@@ -20,7 +20,7 @@ assignees: ''
 是否已查阅以下文档？
 
 - [ ] [README](../../README.md)
-- [ ] [项目文档](https://github.com/hikling/TG-SignPulse-Private/tree/main/docs)
+- [ ] [项目文档](https://github.com/hikling/TG-Manage/tree/main/docs)
 - [ ] [已有 Issue](../../issues)
 
 ## 环境信息（如适用）

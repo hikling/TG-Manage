@@ -2,13 +2,13 @@
 
 ## 准备
 
-服务器需要 Docker Engine 24+、Docker Compose v2、Git、本[私有仓库](https://github.com/hikling/TG-SignPulse-Private)的读取权限，以及连接 Telegram 和下载构建依赖的网络。TeleBox 账号需要自己的 Telegram API ID/Hash。
+服务器需要 Docker Engine 24+、Docker Compose v2、Git、本[私有仓库](https://github.com/hikling/TG-Manage)的读取权限，以及连接 Telegram 和下载构建依赖的网络。TeleBox 账号需要自己的 Telegram API ID/Hash。
 
 ## 安装
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git
-cd TG-SignPulse-Private
+git clone https://github.com/hikling/TG-Manage.git
+cd TG-Manage
 bash scripts/install.sh
 ```
 

@@ -3,7 +3,7 @@
 > Telegram 多账号管理面板：账号、聊天、TeleBox、机器人与备份。
 
 文档站：https://tg.cosr.eu.org
-源码：https://github.com/hikling/TG-SignPulse-Private
+源码：https://github.com/hikling/TG-Manage
 版本：2.5.0
 
 ## 产品摘要
