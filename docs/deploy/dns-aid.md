@@ -1,27 +1,27 @@
 # DNS for AI Discovery (DNS-AID)
 
-文档站代码无法代你写入 DNS。若域名 `tg.cosr.eu.org` 由你控制，可在 DNS 面板添加以下记录，以通过 [DNS-AID](https://datatracker.ietf.org/doc/draft-mozleywilliams-dnsop-dnsaid/) 检查。
+只有在你控制文档站域名时才需要配置 DNS。下面以 `docs.example.com` 为示例；将其替换为你实际拥有的域名。
 
 ## 推荐记录（HTTPS / SVCB）
 
-将 `example.com` 替换为 `tg.cosr.eu.org`（或你的文档域名）。
+先确认站点已在该域名可访问，再添加发现记录。
 
 ```text
 ; 索引入口：指向文档站根
-_index._agents.tg.cosr.eu.org. 3600 IN HTTPS 1 tg.cosr.eu.org. alpn="h2,h3" port=443
+_index._agents.docs.example.com. 3600 IN HTTPS 1 docs.example.com. alpn="h2,h3" port=443
 
 ; MCP / 文档发现入口
-_mcp._agents.tg.cosr.eu.org. 3600 IN HTTPS 1 tg.cosr.eu.org. alpn="h2,h3" port=443
+_mcp._agents.docs.example.com. 3600 IN HTTPS 1 docs.example.com. alpn="h2,h3" port=443
 
 ; 可选 TXT 索引（部分解析器回退）
-_index._agents.tg.cosr.eu.org. 3600 IN TXT "https://tg.cosr.eu.org/.well-known/agent-skills/index.json"
-_index._agents.tg.cosr.eu.org. 3600 IN TXT "https://tg.cosr.eu.org/.well-known/mcp/server-card.json"
+_index._agents.docs.example.com. 3600 IN TXT "https://docs.example.com/.well-known/agent-skills/index.json"
+_index._agents.docs.example.com. 3600 IN TXT "https://docs.example.com/.well-known/mcp/server-card.json"
 ```
 
 若提供商不支持 HTTPS 记录类型，可改用 SVCB：
 
 ```text
-_index._agents.tg.cosr.eu.org. 3600 IN SVCB 1 tg.cosr.eu.org. alpn="h2,h3" port=443
+_index._agents.docs.example.com. 3600 IN SVCB 1 docs.example.com. alpn="h2,h3" port=443
 ```
 
 ## DNSSEC
@@ -33,14 +33,14 @@ _index._agents.tg.cosr.eu.org. 3600 IN SVCB 1 tg.cosr.eu.org. alpn="h2,h3" port=
 ```bash
 # DNS-over-HTTPS 查询示例（Cloudflare）
 curl -sG 'https://cloudflare-dns.com/dns-query' \
-  --data-urlencode 'name=_index._agents.tg.cosr.eu.org' \
+  --data-urlencode 'name=_index._agents.docs.example.com' \
   --data-urlencode 'type=HTTPS' \
   -H 'accept: application/dns-json' | jq .
 
 # 或重新扫描
 curl -s https://isitagentready.com/api/scan \
   -H 'content-type: application/json' \
-  -d '{"url":"https://tg.cosr.eu.org"}' | jq '.checks.discoverability.dnsAid'
+  -d '{"url":"https://docs.example.com"}' | jq '.checks.discoverability.dnsAid'
 ```
 
 ## 说明

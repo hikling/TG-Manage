@@ -19,10 +19,21 @@ backup_dir="${BACKUP_DIR:-$PROJECT_ROOT/backups}"
 mkdir -p "$backup_dir"
 
 ts="$(date +%Y%m%d-%H%M%S)"
-tar -czf "$backup_dir/tg-signpulse-data-$ts.tar.gz" \
+backup_path="$backup_dir/tg-manage-data-$ts.tar.gz"
+if [ -e "$backup_path" ]; then
+    echo "错误: 备份文件已存在，避免覆盖: $backup_path" >&2
+    exit 1
+fi
+
+# 先写入临时文件，完整校验后才公开为正式备份。
+backup_tmp="$(mktemp "$backup_dir/.tg-manage-data-$ts.XXXXXX.tmp")"
+trap 'rm -f -- "$backup_tmp"' EXIT
+tar -czf "$backup_tmp" \
     -C "$(dirname "$DATA_DIR")" \
     "$(basename "$DATA_DIR")"
+tar -tzf "$backup_tmp" >/dev/null
+mv -- "$backup_tmp" "$backup_path"
+trap - EXIT
 
-find "$backup_dir" -name 'tg-signpulse-data-*.tar.gz' -mtime +14 -delete
-
-echo "备份完成: $backup_dir/tg-signpulse-data-$ts.tar.gz"
+echo "备份完成: $backup_path"
+echo '旧备份不会由此脚本自动删除，请按自己的保留策略定期检查磁盘空间。'

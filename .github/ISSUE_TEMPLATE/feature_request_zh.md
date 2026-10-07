@@ -1,6 +1,6 @@
 ---
 name: 功能请求
-about: 为 TG-SignPulse 建议新功能或改进
+about: 为 TG Manage 建议新功能或改进
 title: '[Feature] '
 labels: enhancement
 assignees: ''
@@ -32,7 +32,7 @@ assignees: ''
 
 - [ ] 前端面板
 - [ ] 后端 API
-- [ ] 签到引擎 (tg_signer)
+- [ ] 签到引擎 (tg_manage)
 - [ ] 文档
 - [ ] 其他：___
 

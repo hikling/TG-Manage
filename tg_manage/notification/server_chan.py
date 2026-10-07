@@ -35,7 +35,7 @@ async def sc_send(sendkey, title, desp="", options=None):
     key = str(sendkey or "").strip()
     if not key:
         raise ValueError("sendkey cannot be empty")
-    safe_title = str(title or "").strip()[:256] or "TG-SignPulse Notification"
+    safe_title = str(title or "").strip()[:256] or "TG Manage Notification"
     safe_options = options if isinstance(options, dict) else {}
 
     # 判断 sendkey 是否以 'sctp' 开头，并提取数字构造 URL

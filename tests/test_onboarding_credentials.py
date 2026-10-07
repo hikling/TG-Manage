@@ -77,7 +77,7 @@ def test_legacy_session_without_encrypted_credentials_uses_compatible_default(tm
         credentials, "get_settings",
         lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path),
     )
-    for name in ("SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
+    for name in ("TG_MANAGE_TG_API_ID", "TG_MANAGE_TG_API_HASH", "SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
         monkeypatch.delenv(name, raising=False)
     (tmp_path / "old.session").write_bytes(b"legacy session")
     assert tg_session.get_account_api_credentials("old") == (

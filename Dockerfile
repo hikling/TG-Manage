@@ -28,7 +28,7 @@ ARG BUILD_TIME=unknown
 ENV PYTHONDONTWRITEBYTECODE=1 \
   PYTHONUNBUFFERED=1 \
   TZ=Asia/Shanghai \
-  TG_SIGNER_DATA_DIR=/data \
+  TG_MANAGE_DATA_DIR=/data \
   APP_VERSION=${APP_VERSION} \
   GIT_SHA=${GIT_SHA} \
   GIT_BRANCH=${GIT_BRANCH} \
@@ -42,9 +42,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 # Install all Python dependencies in a single layer for faster builds.
 # 注意：pyotp 直接使用官方依赖（pip 安装），仓库不再提供根级 pyotp.py shim，勿在此 COPY。
 COPY pyproject.toml README.md /app/
-COPY tg_signer/__init__.py /app/tg_signer/__init__.py
+COPY tg_manage/__init__.py /app/tg_manage/__init__.py
 COPY backend /app/backend
-COPY tg_signer /app/tg_signer
+COPY tg_manage /app/tg_manage
 COPY telebox /app/telebox
 COPY --from=telebox-builder /telebox/node_modules /app/telebox/node_modules
 COPY --from=telebox-builder /usr/local/bin/node /usr/local/bin/node

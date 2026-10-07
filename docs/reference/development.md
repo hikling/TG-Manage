@@ -9,7 +9,7 @@
 | Python | `>=3.10,<3.14` |
 | Node.js | `22.23.1`（以仓库 `.nvmrc` 为准） |
 | FastAPI | `>=0.109.2` |
-| Pydantic | `pydantic>=1.10.26,<2`（v1 钉死；兼容层见 `tg_signer/pydantic_compat.py`） |
+| Pydantic | `pydantic>=1.10.26,<2`（v1 钉死；兼容层见 `tg_manage/pydantic_compat.py`） |
 | SQLAlchemy | 当前使用 1.x 风格 API |
 | APScheduler | 进程内调度器，单后端实例运行 |
 
@@ -30,7 +30,7 @@
 - 先迁移测试覆盖充分的边界模型，再迁移核心任务配置模型。
 - 不在业务服务中散落版本判断。
 
-**当前状态**：依赖钉死为 `pydantic>=1.10.26,<2`（v1 路径）。统一使用 `tg_signer.pydantic_compat`（`model_validate` / `model_dump` / `try_import_field_validator`）。业务模型与路由逐步迁入 compat，为后续放宽到 `<3` 预留兼容层。
+**当前状态**：依赖钉死为 `pydantic>=1.10.26,<2`（v1 路径）。统一使用 `tg_manage.pydantic_compat`（`model_validate` / `model_dump` / `try_import_field_validator`）。业务模型与路由逐步迁入 compat，为后续放宽到 `<3` 预留兼容层。
 
 ## SQLAlchemy 使用规范
 
@@ -91,7 +91,7 @@ pytest
 pytest tests/test_core.py -v
 
 # 运行并查看覆盖率
-pytest --cov=tg_signer --cov-report=term-missing
+pytest --cov=tg_manage --cov-report=term-missing
 
 # 跳过覆盖率阈值检查（用于新增 backend/ 模块测试）
 pytest --no-cov
@@ -138,7 +138,7 @@ Vitest 的 jsdom 环境和 Node/Undici 可能分别提供 `Blob`、`File`、`Res
 
 `pyproject.toml` 中配置了 pytest-cov：
 
-- `fail_under` 阈值为 **40%**，同时统计 `tg_signer` 与 `backend` 两个包（`addopts` 中 `--cov=tg_signer --cov=backend`）
+- `fail_under` 阈值为 **40%**，同时统计 `tg_manage` 与 `backend` 两个包（`addopts` 中 `--cov=tg_manage --cov=backend`）
 - 新增测试用例时，优先覆盖核心逻辑和边界条件
 
 ### 新增依赖

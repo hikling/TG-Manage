@@ -13,9 +13,8 @@ const router = createRouter({
       children: [
         { path: 'dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue') },
         { path: 'accounts', name: 'accounts', component: () => import('../views/Accounts.vue') },
-        { path: 'workbench', name: 'workbench', component: () => import('../views/Workbench.vue') },
         { path: 'chats', name: 'chats', component: () => import('../views/Chats.vue') },
-        { path: 'bots', name: 'bots', component: () => import('../views/Bots.vue') },
+        { path: 'bots', redirect: '/settings?section=bots' },
         { path: 'logs', name: 'logs', component: () => import('../views/Logs.vue') },
         { path: 'settings', name: 'settings', component: () => import('../views/Settings.vue') }
       ]

@@ -1,5 +1,5 @@
 """
-tg_signer/security.py 单元测试
+tg_manage/security.py 单元测试
 
 覆盖范围：
 - 前缀/掩码判定：is_encrypted_secret、is_masked_secret、mask_secret
@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
-from tg_signer.security import (
+from tg_manage.security import (
     SecretKeyError,
     _read_app_secret_key,
     decrypt_secret,
@@ -73,7 +73,7 @@ class TestReadAppSecretKey:
         """注册的密钥提供者作为 env 缺失时的兜底。"""
         monkeypatch.delenv("APP_SECRET_KEY", raising=False)
         monkeypatch.setattr(
-            "tg_signer.security._secret_key_provider",
+            "tg_manage.security._secret_key_provider",
             lambda: "  fallback-secret  ",
         )
         assert _read_app_secret_key() == "fallback-secret"
@@ -81,7 +81,7 @@ class TestReadAppSecretKey:
     def test_missing_everywhere_raises(self, monkeypatch):
         monkeypatch.delenv("APP_SECRET_KEY", raising=False)
         monkeypatch.setattr(
-            "tg_signer.security._secret_key_provider", lambda: ""
+            "tg_manage.security._secret_key_provider", lambda: ""
         )
         with pytest.raises(SecretKeyError, match="APP_SECRET_KEY"):
             _read_app_secret_key()
@@ -91,7 +91,7 @@ class TestReadAppSecretKey:
             raise RuntimeError("config broken")
 
         monkeypatch.delenv("APP_SECRET_KEY", raising=False)
-        monkeypatch.setattr("tg_signer.security._secret_key_provider", _boom)
+        monkeypatch.setattr("tg_manage.security._secret_key_provider", _boom)
         with pytest.raises(SecretKeyError, match="APP_SECRET_KEY"):
             _read_app_secret_key()
 

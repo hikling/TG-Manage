@@ -74,7 +74,7 @@ export function useSettingsBackup(options: {
     try {
       const jsonStr = await exportAllConfigs(token)
       const blob = new Blob([jsonStr], { type: 'application/json' })
-      downloadBlob(blob, `tg-signpulse-export-${new Date().toISOString().split('T')[0]}.json`)
+      downloadBlob(blob, `tg-manage-export-${new Date().toISOString().split('T')[0]}.json`)
       notifySuccess(t('settings.exportSuccess'))
     } catch (e: unknown) {
       notifyError(resolveApiErrorMessage(e, 'settings.exportFailed'))

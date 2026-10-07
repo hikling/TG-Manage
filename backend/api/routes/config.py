@@ -49,7 +49,7 @@ def export_all_configs(current_user: User = Depends(get_current_user)):
             content=config_json.encode("utf-8"),
             media_type="application/json; charset=utf-8",
             headers={
-                "Content-Disposition": 'attachment; filename="tg_signer_all_configs.json"'
+                "Content-Disposition": 'attachment; filename="tg_manage_all_configs.json"'
             },
         )
     except Exception as e:
@@ -179,7 +179,7 @@ class GlobalSettingsResponse(BaseModel):
     # GET 永不回传明文密码；用 webdav_password_set 表示已落盘
     webdav_password: Optional[str] = None
     webdav_password_set: bool = False
-    webdav_remote_dir: Optional[str] = "tg-signpulse-backups"
+    webdav_remote_dir: Optional[str] = "tg-manage-backups"
 
 
 @router.get("/settings", response_model=GlobalSettingsResponse)
@@ -304,7 +304,7 @@ async def test_bot_notification(
     if not bot_token or not chat_id:
         return BotTestResponse(success=False, message="未配置 Bot Token 或 Chat ID")
     raw_msg = (request.message or "").strip()
-    text = raw_msg or "TG-SignPulse 通知测试：连接正常"
+    text = raw_msg or "TG Manage 通知测试：连接正常"
     # 限制长度，避免误填超大文本导致 Telegram API 失败
     text = text[:3900]
     try:

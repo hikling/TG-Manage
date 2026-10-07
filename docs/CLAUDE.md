@@ -1,83 +1,25 @@
 [根目录](../CLAUDE.md) > **docs**
 
-# Docs 模块
+# TG Manage 文档模块
 
-> VitePress 用户/部署/架构文档站（与面板、引擎分离的对外文档）。
+`docs/` 包含 VitePress 页面、公开静态文档与自托管部署说明。当前产品源码位于 [hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)；上游来源见根目录 README。
 
-## 变更记录 (Changelog)
+## 入口
 
-> 模块级变更并入根 [`CHANGELOG.md`](../CHANGELOG.md)。本文件由 `/ccg:init` 补扫生成。
+| 页面 | 用途 |
+| --- | --- |
+| `index.md`、`README.md`、`features.md` | 站点首页、文档目录和当前功能。 |
+| `guide/` | 账号、聊天、备份及历史功能迁移说明。 |
+| `deploy/` | Docker 安装、无损升级、Nginx 示例。 |
+| `reference/` | 配置、架构、开发和运维参考。 |
+| `public/` | 静态发现文件和公开 API 认证说明。 |
 
-## 模块职责
+VitePress 配置位于 `.vitepress/config.mts`。本地构建运行仓库根目录的 `npm run docs:build`；它会先生成 Agent 发现资源，再构建站点。
 
-- 产品介绍与功能说明
-- 用户指南（账号、任务、关键词监听、AI、备份）
-- 部署指南（Docker、Nginx、DNS）
-- 架构与运维参考（与代码 CLAUDE 交叉对齐，不复制实现细节）
-- FAQ
+## 维护约定
 
-## 入口与启动
-
-| 项 | 说明 |
-|----|------|
-| 内容根 | `docs/` |
-| 本地预览 | 仓库根 `npm run docs:dev`（端口 **5173**） |
-| 构建 | `npm run docs:build`（以根 `package.json` 为准） |
-| 配置 | VitePress 配置在 `docs/.vitepress/`（主题/侧栏） |
-
-## 目录结构
-
-```
-docs/
-├── index.md           # 首页
-├── README.md          # 文档总览与架构表
-├── features.md        # 功能清单
-├── faq.md             # 常见问题
-├── guide/             # 用户指南
-│   ├── quick-start.md
-│   ├── accounts.md
-│   ├── tasks.md
-│   ├── keyword-monitor.md
-│   ├── ai.md
-│   └── backup-webdav.md
-├── deploy/            # 部署
-│   ├── docker.md
-│   ├── nginx.md
-│   └── dns-aid.md
-├── reference/         # 参考
-│   ├── architecture.md
-│   ├── configuration.md
-│   ├── development.md
-│   ├── device-management.md
-│   └── ops.md
-└── public/            # 静态资源
-```
-
-## 与代码文档的边界
-
-| 文档 | 面向 | 内容重心 |
-|------|------|----------|
-| 根 / `backend` / `frontend` / `tg_signer` 的 `CLAUDE.md` | AI 与开发者 | 入口、调用链、文件级地图 |
-| `docs/reference/*` | 人类读者 | 架构分层、配置项、运维场景 |
-| `docs/guide/*` | 终端用户 | 如何配置任务/监听/AI |
-
-**交叉对齐要点**（`reference/architecture.md` 已与代码一致）：
-
-- 主路径：`/api/sign-tasks`；旧 `/api/tasks` **已移除**
-- 调度：APScheduler + `data/.scheduler.lock`；listen 模式交给 `KeywordMonitorService`
-- 存储：`db.sqlite` + `sessions/` + `.signer/`（任务 JSON）
-- 扩展：单写主实例；可选 `APP_DATABASE_URL`；监听分片 `APP_MONITOR_SHARD`
-
-修改路由或任务体系时：先改代码与模块 CLAUDE，再检查 `docs/reference/architecture.md`、`docs/guide/tasks.md`、`faq.md` 是否过时。
-
-## 测试与质量
-
-- 文档 agent 资源：`scripts/prepare-docs-agent-assets.mjs` / `verify-docs-agent-assets.mjs`
-- 无独立 pytest；链接与版本号（如 README 中 v2.3.0）需与 `tg_signer.__version__` 人工对齐
-
-## 相关文件清单
-
-- `docs/README.md`、`docs/index.md`
-- `docs/guide/*`、`docs/deploy/*`、`docs/reference/*`
-- 根 `package.json` 的 `docs:*` 脚本
-- `docker-compose.panel.yml` / `Dockerfile`（部署章节的真实来源）
+- 部署说明以 `docker-compose.yml`、`scripts/install.sh`、`scripts/update.sh` 和 `scripts/backup.sh` 为准。Compose 将 `./data` 挂载到 `/data`，无损升级必须保留完整目录。
+- 当前界面包含仪表盘、账号管理、聊天中心、日志和系统设置；机器人中心位于系统设置。旧签到、关键词监听与 AI 动作已退出运行链路。
+- Python 包名为 `tg_manage`。旧数据路径和环境变量兼容规则须与代码同步核对，不能仅按新品牌名推测磁盘迁移。
+- 所有“本项目源码”“编辑此页”“GitHub”入口指向 hikling 仓库；上游地址仅用于来源或许可证说明。旧文档站域名的归属未确认，不应写成当前正式入口。
+- 编辑文档后检查相对链接、示例命令和 VitePress 构建。历史迁移文档要明确哪些内容仍运行，哪些仅保留供备份。

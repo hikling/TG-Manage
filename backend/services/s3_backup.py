@@ -38,7 +38,7 @@ class S3BackupClient:
         access_key: str,
         secret_key: str,
         region: str = "auto",
-        prefix: str = "tg-signpulse-backups/",
+        prefix: str = "tg-manage-backups/",
     ) -> None:
         self.endpoint_url = endpoint_url.rstrip("/")
         self.bucket = bucket.strip()

@@ -3,11 +3,11 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tg-signer"
+name = "tg-manage"
 dynamic = ["version"]
 description = "Automated Telegram tasks (check-ins, sending messages, keyboard clicks, AI replies, etc.); monitoring, forwarding, and auto-replying to private, group, and channel messages."
 authors = [
-    { name = "Amchii", email = "finethankuandyou@gmail.com" }
+    { name = "hikling" }
 ]
 license = "BSD-3-Clause"
 readme = "README.md"
@@ -59,14 +59,14 @@ speedup = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/amchii/tg-signer"
-Repository = "https://github.com/amchii/tg-signer"
+Homepage = "https://github.com/hikling/TG-SignPulse-Private"
+Repository = "https://github.com/hikling/TG-SignPulse-Private"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.dynamic]
-version = { attr = "tg_signer.__version__" }
+version = { attr = "tg_manage.__version__" }
 
 [tool.setuptools.packages.find]
 exclude = ["tests*"]
@@ -97,13 +97,13 @@ ignore = [
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
-addopts = "--cov=tg_signer --cov=backend --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml:coverage.xml"
+addopts = "--cov=tg_manage --cov=backend --cov-report=term-missing --cov-report=html:htmlcov --cov-report=xml:coverage.xml"
 
 [tool.coverage.run]
-source = ["tg_signer", "backend"]
+source = ["tg_manage", "backend"]
 branch = true
 omit = [
-    "tg_signer/__main__.py",
+    "tg_manage/__main__.py",
     "tests/*",
     "backend/cli/*",
 ]

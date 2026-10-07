@@ -1,16 +1,16 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "TG-SignPulse Self-Hosted Panel API (Discovery Stub)",
-    "version": "2.2.0",
+    "title": "TG Manage Self-Hosted Panel API (Discovery Stub)",
+    "version": "2.5.0",
     "description": "文档站发布的 OpenAPI 发现桩。完整、可交互的 OpenAPI 由你部署的面板实例在 {panel-origin}/openapi.json 提供。认证见 /auth.md。",
     "contact": {
-      "name": "TG-SignPulse",
-      "url": "https://github.com/Silentely/TG-SignPulse"
+      "name": "TG Manage",
+      "url": "https://github.com/hikling/TG-SignPulse-Private"
     },
     "license": {
       "name": "See repository LICENSE",
-      "url": "https://github.com/Silentely/TG-SignPulse/blob/main/LICENSE"
+      "url": "https://github.com/hikling/TG-SignPulse-Private/blob/main/LICENSE"
     }
   },
   "servers": [

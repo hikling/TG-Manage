@@ -95,7 +95,7 @@ const memoryHealthText = computed(() => {
           <div class="font-medium font-sans text-gray-700 dark:text-gray-300 mb-1">{{ t('settings.versionBuildTitle') }}</div>
           <div class="text-gray-600 dark:text-gray-400">
             <span class="text-gray-500">{{ t('settings.appName') }}:</span>
-            <span class="ml-1 text-gray-900 dark:text-gray-100 font-medium">{{ appVersion.app_name || 'TG-SignPulse' }}</span>
+            <span class="ml-1 text-gray-900 dark:text-gray-100 font-medium">{{ appVersion.app_name || 'TG Manage' }}</span>
           </div>
           <div class="text-gray-600 dark:text-gray-400">
             <span class="text-gray-500">{{ t('settings.currentVersion') }}:</span>

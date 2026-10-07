@@ -1,6 +1,6 @@
 # 后端开发规范索引
 
-适用 `backend/`，涉及 Telegram 引擎时也阅读 `tg_signer/CLAUDE.md`。以实际源码为准；根目录和 `backend/CLAUDE.md` 含旧版插件说明，不能把已删除的 Python 插件路由重新引入。
+适用 `backend/`，涉及 Telegram 客户端时也阅读 `tg_manage/CLAUDE.md`。以实际源码为准；不要把已删除的 Python 插件与工作台路由重新引入。
 
 ## 开发前
 
@@ -11,7 +11,7 @@
 ## 质量检查
 
 ```bash
-python3 -m ruff check backend tg_signer tests
+python3 -m ruff check backend tg_manage tests
 python3 -m pytest -q tests/<相关测试文件>.py
 ```
 

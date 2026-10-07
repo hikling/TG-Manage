@@ -121,6 +121,7 @@ _test*.json
 *.session-journal
 
 .signer
+.tg_manage
 *.session_string
 
 .agent
@@ -141,6 +142,8 @@ docs/.vitepress/dist/
 .mypy_cache/
 *.pid
 .tg_signpulse_data_dir
+.tg_manage_data_dir
+backups/
 .local-data/
 .local-login-data/
 .test-run-data/

@@ -101,7 +101,7 @@ def upload_file_to_webdav(
     将本地文件 PUT 到 WebDAV。
 
     base_url: 服务器根，如 https://cloud.example.com/remote.php/dav/files/user
-    remote_dir: 远端目录相对路径，如 backups/tg-signpulse
+    remote_dir: 远端目录相对路径，如 backups/tg-manage
     """
     base = validate_webdav_url(base_url)
     user = (username or "").strip()
@@ -296,7 +296,7 @@ def _parse_mtime_key(mtime: Optional[str], name: str) -> tuple:
         except (TypeError, ValueError, IndexError, OverflowError):
             epoch = 0.0
     if epoch <= 0:
-        # auto-YYYYMMDD-HHMMSS / tg-signpulse-backup-YYYYMMDD-HHMMSS
+        # auto-YYYYMMDD-HHMMSS / tg-manage-backup-YYYYMMDD-HHMMSS
         m = re.search(r"(20\d{6})-(\d{6})", name or "")
         if m:
             try:

@@ -284,7 +284,7 @@ async def send_keyword_push(settings: Dict[str, Any], payload: Dict[str, Any]) -
         logger.debug("关键词命中推送处于静默时段，跳过推送")
         return
     channel = (settings.get("keyword_monitor_push_channel") or "telegram").strip()
-    title = str(payload.get("title") or "TG-SignPulse 关键词命中")
+    title = str(payload.get("title") or "TG Manage 关键词命中")
     body = str(payload.get("body") or "")
     url = str(payload.get("url") or "")
     # 多通道标题统一带状态 emoji，避免各通道展示不一致
@@ -300,7 +300,7 @@ async def send_keyword_push(settings: Dict[str, Any], payload: Dict[str, Any]) -
         if not sendkey:
             logger.warning("Server酱 sendkey 未配置")
             return
-        from tg_signer.notification.server_chan import sc_send
+        from tg_manage.notification.server_chan import sc_send
 
         await sc_send(sendkey, title, desp=body)
         return
@@ -391,7 +391,7 @@ async def send_login_notification(
         return
 
     text = build_html_notification(
-        title="🔐 TG-SignPulse 登录成功通知",
+        title="🔐 TG Manage 登录成功通知",
         fields=[
             ("时间 (UTC)", utc_now_iso_z_seconds()),
             ("用户", username or ""),
@@ -433,7 +433,7 @@ async def send_auto_backup_failure_notification(
     if detail:
         fields.append(("详情", str(detail)[:500]))
     text = build_html_notification(
-        title="🗄️ TG-SignPulse 自动备份失败",
+        title="🗄️ TG Manage 自动备份失败",
         fields=fields,
     )
     try:
@@ -501,7 +501,7 @@ async def send_discord_message(webhook_url: str, title: str, text: str) -> None:
     if not webhook_url or not webhook_url.strip():
         return
     payload = {
-        "username": "TG-SignPulse",
+        "username": "TG Manage",
         "embeds": [
             {
                 "title": title[:256],

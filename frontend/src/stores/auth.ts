@@ -1,22 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { storageGet, storageRemove, storageSet } from '../lib/safe-storage'
+import { storageGet, storageGetMigrated, storageRemove, storageSet } from '../lib/safe-storage'
 
-const TOKEN_KEY = 'tg-signer-token'
+const TOKEN_KEY = 'tg-manage-token'
+const LEGACY_TOKEN_KEY = 'tg-signer-token'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(storageGet(TOKEN_KEY))
+  const token = ref<string | null>(storageGetMigrated(TOKEN_KEY, LEGACY_TOKEN_KEY))
 
   const isAuthenticated = computed(() => !!token.value)
 
   function setToken(newToken: string) {
     token.value = newToken
     storageSet(TOKEN_KEY, newToken)
+    if (storageGet(TOKEN_KEY) === newToken) storageRemove(LEGACY_TOKEN_KEY)
   }
 
   function clearToken() {
     token.value = null
     storageRemove(TOKEN_KEY)
+    storageRemove(LEGACY_TOKEN_KEY)
   }
 
   function logout() {

@@ -1,7 +1,7 @@
 import { defineConfig } from "vitepress";
 
-const repository = process.env.GITHUB_REPOSITORY || "Silentely/TG-SignPulse";
-const repositoryName = repository.split("/")[1] || "TG-SignPulse";
+const repository = "hikling/TG-SignPulse-Private";
+const repositoryName = repository.split("/")[1];
 const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
 const editBranch =
   process.env.VITEPRESS_EDIT_BRANCH ||
@@ -22,9 +22,9 @@ const siteUrl =
 
 export default defineConfig({
   lang: "zh-CN",
-  title: "TG-SignPulse",
+  title: "TG Manage",
   description:
-    "Telegram 多账号自动化管理面板：签到、消息编排、关键词监听与 AI 验证。",
+    "Telegram 多账号管理面板：账号、聊天、TeleBox、机器人与备份。",
   base,
   // Vercel 上配合根目录 vercel.json 的 rewrite 使用 clean URL
   cleanUrls: true,
@@ -62,29 +62,29 @@ export default defineConfig({
       },
     ],
     ["meta", { name: "theme-color", content: "#229ED9" }],
-    ["meta", { name: "author", content: "TG-SignPulse" }],
+    ["meta", { name: "author", content: "TG Manage" }],
     ["meta", { name: "robots", content: "index,follow" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:title", content: "TG-SignPulse 文档" }],
+    ["meta", { property: "og:title", content: "TG Manage 文档" }],
     [
       "meta",
       {
         property: "og:description",
         content:
-          "Telegram 多账号自动化管理面板：签到、消息编排、关键词监听与 AI 验证。",
+          "Telegram 多账号管理面板：账号、聊天、TeleBox、机器人与备份。",
       },
     ],
     ["meta", { property: "og:url", content: siteUrl }],
-    ["meta", { property: "og:site_name", content: "TG-SignPulse" }],
+    ["meta", { property: "og:site_name", content: "TG Manage" }],
     ["meta", { property: "og:locale", content: "zh_CN" }],
     ["meta", { property: "og:image", content: `${siteUrl}/logo.svg` }],
     ["meta", { name: "twitter:card", content: "summary" }],
-    ["meta", { name: "twitter:title", content: "TG-SignPulse 文档" }],
+    ["meta", { name: "twitter:title", content: "TG Manage 文档" }],
     [
       "meta",
       {
         name: "twitter:description",
-        content: "Telegram 多账号自动化：签到 · 编排 · 监听 · AI",
+        content: "Telegram 多账号管理：账号 · 聊天 · TeleBox · 机器人",
       },
     ],
     [
@@ -93,14 +93,14 @@ export default defineConfig({
       JSON.stringify({
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        name: "TG-SignPulse",
+        name: "TG Manage",
         description:
-          "Telegram 多账号自动化管理面板，支持签到、消息编排、关键词监听与 AI 验证。",
+          "Telegram 多账号管理面板，支持账号、聊天、TeleBox、机器人与备份。",
         url: siteUrl,
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Linux, macOS, Windows, Docker",
         offers: { "@type": "Offer", price: "0", priceCurrency: "CNY" },
-        author: { "@type": "Organization", name: "TG-SignPulse" },
+        author: { "@type": "Organization", name: "TG Manage" },
       }),
     ],
   ],
@@ -111,7 +111,7 @@ export default defineConfig({
 
   themeConfig: {
     logo: "/logo.svg",
-    siteTitle: "TG-SignPulse",
+    siteTitle: "TG Manage",
 
     nav: [
       { text: "首页", link: "/" },
@@ -149,9 +149,9 @@ export default defineConfig({
         text: "使用指南",
         items: [
           { text: "账号管理", link: "/guide/accounts" },
-          { text: "任务编排", link: "/guide/tasks" },
-          { text: "AI 动作", link: "/guide/ai" },
-          { text: "关键词监听", link: "/guide/keyword-monitor" },
+          { text: "历史任务数据", link: "/guide/tasks" },
+          { text: "旧 AI 任务迁移", link: "/guide/ai" },
+          { text: "旧关键词监听迁移", link: "/guide/keyword-monitor" },
           { text: "WebDAV 备份与恢复", link: "/guide/backup-webdav" },
         ],
       },
@@ -226,7 +226,7 @@ export default defineConfig({
 
     footer: {
       message: "基于 <a href=\"https://vitepress.dev/\">VitePress</a> 构建 · 默认 SQLite，可选 PostgreSQL",
-      copyright: "Copyright © 2026 TG-SignPulse",
+      copyright: "Copyright © 2026 TG Manage",
     },
 
     docFooter: {

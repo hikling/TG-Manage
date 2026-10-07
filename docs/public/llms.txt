@@ -1,19 +1,19 @@
-# TG-SignPulse
+# TG Manage
 
-> Telegram 多账号自动化管理面板：签到、消息编排、关键词监听与 AI 验证。
+> Telegram 多账号管理面板：账号、聊天、TeleBox、机器人与备份。
 
 文档站：https://tg.cosr.eu.org
-源码：https://github.com/Silentely/TG-SignPulse
-版本：2.3.0
+源码：https://github.com/hikling/TG-SignPulse-Private
+版本：2.5.0
 
 ## 产品摘要
 
-TG-SignPulse 提供 Web 面板统一管理多个 Telegram 账号，支持定时签到、消息交互、关键词监控和 AI 辅助回复。技术栈为 Vue 3 + FastAPI + Pyrogram/kurigram，默认 SQLite，可选 PostgreSQL，Docker 一键部署。
+TG Manage 提供 Web 面板管理多个 Telegram 账号、聊天、机器人及 TeleBox 进程。旧版签到、关键词监听和 AI 动作不再由面板运行；原有数据保留供备份或迁移。技术栈为 Vue 3 + FastAPI + Pyrogram/kurigram，默认 SQLite，可选 PostgreSQL。
 
 ## 推荐阅读顺序
 
 1. [功能介绍](https://tg.cosr.eu.org/features)：能力边界与适用场景
-2. [快速开始](https://tg.cosr.eu.org/guide/quick-start)：5 分钟部署到第一个任务
+2. [快速开始](https://tg.cosr.eu.org/guide/quick-start)：部署面板并登录首个账号
 3. [Docker 部署](https://tg.cosr.eu.org/deploy/docker)：生产部署与持久化
 4. [配置参考](https://tg.cosr.eu.org/reference/configuration)：环境变量与数据目录
 5. [运维手册](https://tg.cosr.eu.org/reference/ops)：健康检查、备份、版本与调度
@@ -30,9 +30,9 @@ TG-SignPulse 提供 Web 面板统一管理多个 Telegram 账号，支持定时�
 ### 使用指南
 
 - [账号管理](https://tg.cosr.eu.org/guide/accounts): 短信/二维码登录、2FA、代理
-- [任务编排](https://tg.cosr.eu.org/guide/tasks): 动作类型、调度、多账号共享
-- [AI 动作](https://tg.cosr.eu.org/guide/ai): OpenAI 兼容接口与提示词
-- [关键词监听](https://tg.cosr.eu.org/guide/keyword-monitor): 匹配规则与推送
+- [历史任务数据](https://tg.cosr.eu.org/guide/tasks): 旧任务数据保留与迁移边界
+- [旧 AI 任务迁移](https://tg.cosr.eu.org/guide/ai): 历史动作与 TeleBox 插件的边界
+- [旧关键词监听迁移](https://tg.cosr.eu.org/guide/keyword-monitor): 历史规则迁移说明
 - [WebDAV 备份](https://tg.cosr.eu.org/guide/backup-webdav): 备份与换机恢复
 
 ### 部署

@@ -58,7 +58,7 @@ class TestResolveVersion:
 
 class TestValidateUrl:
     def test_https_ok(self):
-        url = "https://api.github.com/repos/Silentely/TG-SignPulse/releases/latest"
+        url = "https://api.github.com/repos/hikling/TG-SignPulse-Private/releases/latest"
         assert validate_update_check_url(url) == url
 
     def test_http_rejected(self):
@@ -71,13 +71,13 @@ class TestValidateUrl:
 
 
 class TestLocalInfo:
-    def test_falls_back_to_tg_signer_version(self, monkeypatch):
+    def test_falls_back_to_tg_manage_version(self, monkeypatch):
         monkeypatch.delenv("APP_VERSION", raising=False)
         monkeypatch.setenv("GIT_SHA", "deadbeefcafebabe")
         monkeypatch.setenv("GIT_BRANCH", "dev")
         monkeypatch.delenv("BUILD_TIME", raising=False)
         info = get_local_version_info()
-        from tg_signer import __version__
+        from tg_manage import __version__
 
         assert info["version"] == __version__
         assert info["git_sha"] == "deadbeefcafebabe"
@@ -94,7 +94,7 @@ class TestLocalInfo:
     def test_placeholder_app_version_falls_back(self, monkeypatch):
         monkeypatch.setenv("APP_VERSION", "0.0.0")
         info = get_local_version_info()
-        from tg_signer import __version__
+        from tg_manage import __version__
 
         assert info["version"] == __version__
 
@@ -131,11 +131,11 @@ class TestRemoteCheck:
         html_resp.is_redirect = True
         html_resp.headers = {
             "location": (
-                f"https://github.com/Silentely/TG-SignPulse/releases/tag/{tag}"
+                f"https://github.com/hikling/TG-SignPulse-Private/releases/tag/{tag}"
             )
         }
         html_resp.url = httpx.URL(
-            "https://github.com/Silentely/TG-SignPulse/releases/latest"
+            "https://github.com/hikling/TG-SignPulse-Private/releases/latest"
         )
         mock_client = MagicMock()
         mock_client.__enter__.return_value = mock_client
@@ -256,7 +256,7 @@ class TestRemoteCheck:
                 "enabled": True,
                 "latest_version": "2.2.0",
                 "latest_url": (
-                    "https://github.com/Silentely/TG-SignPulse/releases/tag/v2.2.0"
+                    "https://github.com/hikling/TG-SignPulse-Private/releases/tag/v2.2.0"
                 ),
                 "update_available": True,
                 "checked_at": "2026-07-26T00:00:00+00:00",
@@ -278,7 +278,7 @@ class TestRemoteCheck:
         mock_client.__exit__.return_value = None
         mock_client.get.side_effect = httpx.HTTPStatusError(
             "Client error '403 rate limit exceeded' for url "
-            "'https://api.github.com/repos/Silentely/TG-SignPulse/releases/latest' "
+            "'https://api.github.com/repos/hikling/TG-SignPulse-Private/releases/latest' "
             "For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403",
             request=MagicMock(),
             response=MagicMock(status_code=403),

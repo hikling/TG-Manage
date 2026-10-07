@@ -22,7 +22,7 @@ const DOC_CATALOG: Record<string, { title: string; path: string; summary: string
     home: {
       title: "首页",
       path: "/",
-      summary: "TG-SignPulse 产品总览与入口",
+      summary: "TG Manage 产品总览与入口",
     },
     features: {
       title: "功能介绍",
@@ -32,7 +32,7 @@ const DOC_CATALOG: Record<string, { title: string; path: string; summary: string
     "quick-start": {
       title: "快速开始",
       path: "/guide/quick-start",
-      summary: "5 分钟部署到第一个任务",
+      summary: "部署面板并登录首个账号",
     },
     accounts: {
       title: "账号管理",
@@ -40,19 +40,19 @@ const DOC_CATALOG: Record<string, { title: string; path: string; summary: string
       summary: "短信/二维码登录、2FA、代理",
     },
     tasks: {
-      title: "任务编排",
+      title: "历史任务数据",
       path: "/guide/tasks",
-      summary: "动作类型、调度、多账号共享",
+      summary: "旧任务数据保留与迁移边界",
     },
     ai: {
-      title: "AI 动作",
+      title: "旧 AI 任务迁移",
       path: "/guide/ai",
-      summary: "OpenAI 兼容接口与提示词",
+      summary: "历史动作与 TeleBox 插件的边界",
     },
     "keyword-monitor": {
-      title: "关键词监听",
+      title: "旧关键词监听迁移",
       path: "/guide/keyword-monitor",
-      summary: "匹配规则与推送通道",
+      summary: "历史规则迁移说明",
     },
     docker: {
       title: "Docker 部署",
@@ -82,7 +82,7 @@ const DOC_CATALOG: Record<string, { title: string; path: string; summary: string
     faq: {
       title: "常见问题",
       path: "/faq",
-      summary: "登录、AI、镜像与监听 FAQ",
+      summary: "登录、TeleBox、升级与数据 FAQ",
     },
     auth: {
       title: "Agent 认证",
@@ -109,7 +109,7 @@ function buildTools(): WebMcpTool[] {
     {
       name: "list_docs",
       description:
-        "列出 TG-SignPulse 文档站主要页面（标题、路径、摘要），用于导航。",
+        "列出 TG Manage 文档站主要页面（标题、路径、摘要），用于导航。",
       inputSchema: {
         type: "object",
         properties: {},

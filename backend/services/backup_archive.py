@@ -15,6 +15,7 @@ DEFAULT_BACKUP_PATHS: Tuple[str, ...] = (
     "db.sqlite-wal",
     "db.sqlite-shm",
     "sessions",
+    ".tg_manage",
     ".signer",
     ".app_secret_key",
     "telebox",
@@ -140,7 +141,7 @@ def run_auto_backup(
                 base_url=str(wd.get("webdav_url") or ""),
                 username=str(wd.get("webdav_username") or ""),
                 password=str(wd.get("webdav_password") or ""),
-                remote_dir=str(wd.get("webdav_remote_dir") or "tg-signpulse-backups"),
+                remote_dir=str(wd.get("webdav_remote_dir") or "tg-manage-backups"),
                 local_path=dest,
             )
         except Exception as exc:
@@ -165,7 +166,7 @@ def run_auto_backup(
                     username=str(wd.get("webdav_username") or ""),
                     password=str(wd.get("webdav_password") or ""),
                     remote_dir=str(
-                        wd.get("webdav_remote_dir") or "tg-signpulse-backups"
+                        wd.get("webdav_remote_dir") or "tg-manage-backups"
                     ),
                     keep=keep,
                 )

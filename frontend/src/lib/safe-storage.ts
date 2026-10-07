@@ -13,6 +13,17 @@ export function storageGet(key: string): string | null {
   }
 }
 
+/** 首次读取新键时迁移旧版浏览器偏好；写入失败则保留旧键供下次重试。 */
+export function storageGetMigrated(key: string, legacyKey: string): string | null {
+  const current = storageGet(key)
+  if (current !== null) return current
+  const legacy = storageGet(legacyKey)
+  if (legacy === null) return null
+  storageSet(key, legacy)
+  if (storageGet(key) === legacy) storageRemove(legacyKey)
+  return legacy
+}
+
 export function storageSet(key: string, value: string): void {
   try {
     if (typeof localStorage === 'undefined') return

@@ -20,13 +20,13 @@ assignees: ''
 是否已查阅以下文档？
 
 - [ ] [README](../../README.md)
-- [ ] [文档站](https://tg-signpulse-docs.pages.dev)
+- [ ] [项目文档](https://github.com/hikling/TG-SignPulse-Private/tree/main/docs)
 - [ ] [已有 Issue](../../issues)
 
 ## 环境信息（如适用）
 
 | 项目 | 值 |
 |------|-----|
-| TG-SignPulse 版本 | |
+| TG Manage 版本 | |
 | 部署方式 | [Docker / 直接运行] |
 | 操作系统 | |

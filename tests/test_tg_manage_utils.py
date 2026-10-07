@@ -1,5 +1,5 @@
 """
-tg_signer/utils.py 单元测试
+tg_manage/utils.py 单元测试
 
 覆盖范围：
 - numbering：各编号语言取值、未知数字/语言回退
@@ -12,7 +12,7 @@ from __future__ import annotations
 import io
 from unittest.mock import patch
 
-from tg_signer.utils import (
+from tg_manage.utils import (
     UserInput,
     numbering,
     numbering_systems,

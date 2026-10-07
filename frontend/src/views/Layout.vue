@@ -6,7 +6,7 @@ import { getAppVersion } from '../lib/api'
 import {
   LayoutDashboard,
   Users,
-  Workflow, MessagesSquare, Bot,
+  MessagesSquare,
   Terminal,
   Settings,
   UserCircle,
@@ -24,6 +24,7 @@ import { useI18n } from '../composables/useI18n'
 import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import { createViewPrefetcher } from '../lib/view-prefetch'
+import { storageGetMigrated, storageSet } from '../lib/safe-storage'
 
 const route = useRoute()
 const router = useRouter()
@@ -88,7 +89,7 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
-  try { sidebarCollapsed.value = window.localStorage.getItem('tg-sidebar-collapsed') === '1' } catch { /* private mode */ }
+  sidebarCollapsed.value = storageGetMigrated('tg-manage-sidebar-collapsed', 'tg-sidebar-collapsed') === '1'
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
   void loadSidebarVersion()
@@ -118,22 +119,20 @@ const prefetchView = (name: string) => {
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
-  try { window.localStorage.setItem('tg-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0') } catch { /* private mode */ }
+  storageSet('tg-manage-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
 const navigation = computed(() => [
   { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard', color: 'cyan' },
   { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts', color: 'blue' },
-  { id: 'workbench', name: 'workbench', icon: Workflow, labelKey: '账号工作台', color: 'violet' },
   { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心', color: 'green' },
-  { id: 'bots', name: 'bots', icon: Bot, labelKey: '机器人中心', color: 'orange' },
   { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs', color: 'slate' },
   { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings', color: 'teal' },
 ])
 
 const currentTitle = computed(() => {
   const current = navigation.value.find(n => n.name === route.name)
-  if (!current) return 'TG-SignPulse'
+  if (!current) return 'TG Manage'
   return current.labelKey.startsWith('nav.') ? t(current.labelKey) : current.labelKey
 })
 
@@ -141,13 +140,13 @@ const currentTitle = computed(() => {
 watch(
   currentTitle,
   (title) => {
-    document.title = title && title !== 'TG-SignPulse' ? `${title} - TG-SignPulse` : 'TG-SignPulse'
+    document.title = title && title !== 'TG Manage' ? `${title} - TG Manage` : 'TG Manage'
   },
   { immediate: true },
 )
 
 const openGithub = () => {
-  window.open('https://github.com/Silentely/TG-SignPulse', '_blank')
+  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
 }
 
 const handleNavClick = () => {
@@ -172,9 +171,9 @@ const handleNavClick = () => {
       :inert="sidebarHidden || undefined"
     >
       <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
-        <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">SP</div>
+        <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">TG</div>
         <div class="sidebar-label min-w-0 flex-1">
-          <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">SignPulse</div>
+          <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG Manage</div>
           <div class="text-[10px] text-gray-400 mt-1 tracking-wide truncate">
             <button
               v-if="sidebarVersion"
@@ -193,7 +192,7 @@ const handleNavClick = () => {
         <button
           ref="drawerCloseButtonRef"
           type="button"
-          class="lg:hidden shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-white/[0.06] relative z-[60]"
+          class="lg:hidden shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-md text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-white/[0.06] relative z-[60]"
           :aria-label="t('common.close')"
           @click.stop="isMobileMenuOpen = false"
         >
@@ -222,7 +221,7 @@ const handleNavClick = () => {
         </router-link>
       </nav>
 
-      <div class="border-t border-[var(--sp-border)] p-3">
+      <div class="border-t border-[var(--tg-border)] p-3">
         <button
           type="button"
           class="sidebar-link flex items-center w-full h-11 px-2.5 whitespace-nowrap rounded-xl"
@@ -250,7 +249,7 @@ const handleNavClick = () => {
             <Menu class="w-5 h-5" />
           </button>
           <div class="min-w-0">
-            <p class="header-kicker">SIGNPULSE / WORKSPACE</p>
+            <p class="header-kicker">TG MANAGE / WORKSPACE</p>
             <h1 class="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 tracking-wide truncate">{{ currentTitle }}</h1>
           </div>
         </div>

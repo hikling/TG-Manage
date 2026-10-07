@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    image: tg-signpulse-telebox:local
-    container_name: tg-signpulse
+    image: tg-manage-telebox:local
+    container_name: tg-manage
     ports:
       - "8080:8080"
     # 单账号 TeleBox V8 老生代默认 128 MiB；实际进程还包含原生内存。
@@ -21,6 +21,9 @@ services:
       - TB_PREFIX=${TB_PREFIX:-}
       - TB_LISTENER_HANDLE_EDITED=${TB_LISTENER_HANDLE_EDITED:-}
       - TB_CMD_IGNORE_EDITED=${TB_CMD_IGNORE_EDITED:-}
+      - TG_MANAGE_TG_API_ID=${TG_MANAGE_TG_API_ID:-}
+      - TG_MANAGE_TG_API_HASH=${TG_MANAGE_TG_API_HASH:-}
+      # 旧部署的私有 .env 继续读取，升级时无需改动账号数据。
       - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
       - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
       - TG_API_ID=${TG_API_ID:-}

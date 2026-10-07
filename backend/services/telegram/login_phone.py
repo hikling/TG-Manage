@@ -93,7 +93,7 @@ class TelegramPhoneLoginMixin:
         from pyrogram import Client
         from pyrogram.errors import FloodWait, PhoneNumberInvalid
 
-        from tg_signer.core import close_client_by_name
+        from tg_manage.core import close_client_by_name
 
         await _cleanup_expired_login_sessions()
 

@@ -12,7 +12,7 @@ from backend.scheduler.instance_lock import (
     release_scheduler_lock,
     try_acquire_scheduler_lock,
 )
-from tg_signer.pydantic_compat import (
+from tg_manage.pydantic_compat import (
     IS_V2,
     model_dump,
     model_dump_json,

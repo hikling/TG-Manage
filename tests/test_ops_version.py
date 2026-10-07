@@ -61,7 +61,7 @@ def test_version_check_success(client, authenticated_admin, monkeypatch):
     remote = {
         "enabled": True,
         "latest_version": "2.5.0",
-        "latest_url": "https://github.com/Silentely/TG-SignPulse/releases/tag/v2.5.0",
+        "latest_url": "https://github.com/hikling/TG-SignPulse-Private/releases/tag/v2.5.0",
         "update_available": True,
         "checked_at": "2026-07-17T12:00:00+00:00",
         "error": None,

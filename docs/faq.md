@@ -1,96 +1,25 @@
 # 常见问题
 
-## 首次登录如何设置密码
+## 首次登录如何设置密码？
 
-运行 `bash scripts/install.sh`，复制输出的一次性设置码，在网页首次登录页设置自己的管理员密码（至少 12 位）。已有管理员继续使用原账号。设置码在 `data/.admin_setup_token`，完成后失效。
+运行 `bash scripts/install.sh`。脚本输出一次性设置码，在网页首次登录页用它设置至少 12 位的管理员密码。已有管理员继续使用原密码。
 
-## 为什么任务开启了却没有执行
+## 如何更新并保留账号和设置？
 
-优先检查：
+在原仓库目录运行 `bash scripts/update.sh`。脚本会短暂停止应用，备份完整 `data/`，拉取当前仓库源码并重新构建。请保持 `./data:/data` 挂载。完整步骤见 [无损升级与回退](deploy/docker.md#无损升级与回退)。
 
-- 执行模式是不是 `listen`
-- 定时表达式或时间段是否正确
-- 任务是否启用
-- 绑定账号是否仍然有效
-- `/readyz` 是否正常（含 `scheduler_lock_held`）
-- 多实例时是否误配 `APP_MONITOR_SHARD` 导致监听不在本机
+## 为什么重启后数据不见？
 
-## 旧 /api/tasks 接口为什么不可用
+先检查 Compose 是否继续将宿主机原 `./data` 挂载到容器 `/data`，以及目录是否可写。若移动了仓库目录，相对路径 `./data` 也随之改变；请找回原数据目录并恢复挂载。不要创建空目录覆盖原挂载。
 
-旧 ORM 任务 API（`/api/tasks`、`/api/batch/tasks`）已**完全移除**。  
-新功能请使用 `/api/sign-tasks` 与 `/api/batch/sign-tasks`。
+## 账号凭据为什么无法解密？
 
-- 盘点残留 ORM 表（模型已删）：`python tools/check_legacy_tasks.py --json`
-- `/readyz` 含 `legacy_tasks_removed: true`
-- 旧 SSE `/api/events/logs` 已移除，请改用 `/api/events/sign-history`
+`data/.app_secret_key` 是账号 API 凭据和 Bot Token 的加密根密钥。还原数据库时必须同时还原原密钥和会话文件。参见 [运维手册](reference/ops.md#数据目录)。
 
-## Dashboard 实时日志连不上
+## 为什么 TeleBox 占用较多内存？
 
-优先检查：
+每个运行中的账号都有独立 Node 进程。仪表盘显示当前应用进程内存；容器内存还包括 TeleBox 等子进程，使用 `docker stats --no-stream tg-manage` 检查。
 
-- 是否已登录且 token 未过期
-- 反向代理是否关闭 SSE 缓冲（见 [Nginx 部署](deploy/nginx.md)）
-- 浏览器控制台是否有 EventSource 错误；面板会指数退避重连
+## 旧任务为什么不再执行？
 
-## 设置里「导出 JSON」和「完整备份」有什么区别？
-
-| | 配置 JSON | 完整备份 tar.gz |
-|--|-----------|-----------------|
-| 含任务配置 | ✅ | ✅（在 `.signer`） |
-| 含登录会话 | ❌ | ✅ |
-| 含数据库 | ❌ | ✅（SQLite） |
-| 面板可导入 | ✅ | ❌（需手动解压恢复） |
-| 应用密钥与账号凭据 | JSON 不含账号凭据 | 备份整个 `data/` 才能保留密钥与会话 |
-
-- 只想搬任务流程 → 用 **JSON**  
-- 换服务器整机恢复 → 用 **完整备份**（可上传 WebDAV），停止服务后解压到 data 目录再启动（见 [WebDAV 备份与恢复](guide/backup-webdav.md)、[运维手册](reference/ops.md)）
-
-## 如何配置 WebDAV 自动备份？
-
-见 [WebDAV 备份与恢复](guide/backup-webdav.md)：设置 → 完整备份 → 填 URL/账号 → 测试连接 → 开启自动备份并保存。上传成功会清理本地副本并按保留份数轮转远端；失败会尽量发 Bot 通知。
-
-## 是否已经改成 PostgreSQL、取消 SQLite？
-
-**没有。** 默认数据库仍是 **SQLite**（数据目录下的 `db.sqlite`，WAL 模式）。
-
-- 不设置 `APP_DATABASE_URL` / `DATABASE_URL` → 使用 SQLite  
-- 设置 `APP_DATABASE_URL=postgresql+psycopg2://...` 并安装 `psycopg2-binary` → 可选使用 PostgreSQL  
-
-项目**支持** Postgres，但**不强制**迁移，也未移除 SQLite 路径。
-
-## 为什么重启后数据丢了
-
-通常是因为没有挂载 `/data`，或者 `/data` 不可写导致程序降级到了 `/tmp/tg-signpulse`。
-
-## AI 动作与全局 Telegram API 设置去哪了
-
-这两个设置入口已移除。Telegram API ID/Hash 在每次账号登录时输入；旧 AI 任务应按 [迁移说明](guide/ai.md) 人工检查。
-
-## 测试镜像和正式镜像有什么区别
-
-- `dev` / `dev-*`：dev 分支滚动构建，适合预发
-- `main` / `main-<sha>`：main 分支滚动构建，稳定主干镜像
-- `vX.Y.Z` + `latest`：仅在推送 Git 标签 `v*` 时一次生成（正式版）
-
-不要长期把 `dev` 当正式版使用。`latest` 只跟随正式 tag；`main` 跟随 main 分支最新提交。
-
-## 监听任务为什么没命中
-
-检查：
-
-- `chat_id` 是否正确
-- `message_thread_id` 是否填错
-- 匹配模式是 `contains`、`exact` 还是 `regex`
-- 正则是否写对
-- 账号是否开启 updates
-
-## 什么时候用 `string` 会话模式
-
-当你希望：
-
-- 用 session string 统一迁移
-- 更方便做容器化备份
-- 避免分散的会话文件
-
-否则默认 `file` 模式就够用。
-
+旧签到任务、关键词监听和 AI 动作已经退出当前运行链路。历史数据会留在 `data/` 中，备份时应一并保存。见 [历史任务数据](guide/tasks.md)。

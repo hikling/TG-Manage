@@ -93,7 +93,7 @@ export async function exportBackupArchive(token: string): Promise<{
     const blob = await res.blob();
     const cd = res.headers.get("Content-Disposition") || "";
     const match = /filename="?([^"]+)"?/.exec(cd);
-    const filename = match?.[1] || `tg-signpulse-backup-${Date.now()}.tar.gz`;
+    const filename = match?.[1] || `tg-manage-backup-${Date.now()}.tar.gz`;
     downloadBlob(blob, filename);
     return { mode: "download", filename };
   } catch (e: unknown) {

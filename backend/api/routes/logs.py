@@ -75,7 +75,7 @@ def get_login_logs(
     current_user: User = Depends(get_current_user),
 ):
     del current_user
-    from tg_signer.utils import clamp
+    from tg_manage.utils import clamp
 
     limit = clamp(limit, 1, 500)
 

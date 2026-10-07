@@ -70,6 +70,7 @@ BACKUP_ARCHIVE_PATHS = (
     "db.sqlite-wal",
     "db.sqlite-shm",
     "sessions",
+    ".tg_manage",
     ".signer",
     ".app_secret_key",
     "telebox",
@@ -81,6 +82,7 @@ BACKUP_ARCHIVE_PATHS = (
 BACKUP_STATUS_PATHS = (
     "db.sqlite",
     "sessions",
+    ".tg_manage",
     ".signer",
     ".app_secret_key",
     "telebox",
@@ -271,8 +273,8 @@ def export_backup_archive(current_user: User = Depends(get_current_user)):
     webdav_user = str(cfg.get("webdav_username") or "").strip()
     webdav_password = str(cfg.get("webdav_password") or "")
     webdav_remote = str(
-        cfg.get("webdav_remote_dir") or "tg-signpulse-backups"
-    ).strip() or "tg-signpulse-backups"
+        cfg.get("webdav_remote_dir") or "tg-manage-backups"
+    ).strip() or "tg-manage-backups"
 
     # 已声明 WebDAV 时先校验凭据，避免空打包后再失败
     if webdav_url:
@@ -289,8 +291,8 @@ def export_backup_archive(current_user: User = Depends(get_current_user)):
 
     # 备份文件名用 UTC，与自动备份/命中导出的时间口径一致
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    tmp_dir = Path(tempfile.mkdtemp(prefix="tg-signpulse-backup-"))
-    archive_path = tmp_dir / f"tg-signpulse-backup-{ts}.tar.gz"
+    tmp_dir = Path(tempfile.mkdtemp(prefix="tg-manage-backup-"))
+    archive_path = tmp_dir / f"tg-manage-backup-{ts}.tar.gz"
 
     try:
         create_backup_tarball(data_dir, archive_path, BACKUP_ARCHIVE_PATHS)
@@ -377,7 +379,7 @@ def test_webdav_backup(current_user: User = Depends(get_current_user)):
             base_url=str(cfg.get("webdav_url") or ""),
             username=str(cfg.get("webdav_username") or ""),
             password=str(cfg.get("webdav_password") or ""),
-            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-signpulse-backups"),
+            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-manage-backups"),
         )
         return WebDavTestResponse(**result)
     except ValueError as exc:
@@ -419,7 +421,7 @@ def list_webdav_backup_files(current_user: User = Depends(get_current_user)):
             base_url=url,
             username=str(cfg.get("webdav_username") or ""),
             password=str(cfg.get("webdav_password") or ""),
-            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-signpulse-backups"),
+            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-manage-backups"),
             name_suffix=".tar.gz",
             limit=20,
         )
@@ -478,7 +480,7 @@ def download_webdav_backup_file(
             base_url=url,
             username=str(cfg.get("webdav_username") or ""),
             password=str(cfg.get("webdav_password") or ""),
-            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-signpulse-backups"),
+            remote_dir=str(cfg.get("webdav_remote_dir") or "tg-manage-backups"),
             filename=safe_name,
         )
         first = next(stream)

@@ -311,7 +311,7 @@ class TestServerChanScSend:
             return _FakeResp()
 
         monkeypatch.setattr("httpx.AsyncClient.post", _fake_post, raising=False)
-        from tg_signer.notification.server_chan import sc_send
+        from tg_manage.notification.server_chan import sc_send
 
         with pytest.raises(httpx.HTTPStatusError):
             await sc_send("key-123", "标题", "内容")
@@ -333,7 +333,7 @@ class TestServerChanScSend:
             return _FakeResp()
 
         monkeypatch.setattr("httpx.AsyncClient.post", _fake_post, raising=False)
-        from tg_signer.notification.server_chan import sc_send
+        from tg_manage.notification.server_chan import sc_send
 
         result = await sc_send("key-123", "标题")
         assert result.get("raw") == "<html>gateway error</html>"

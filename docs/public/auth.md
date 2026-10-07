@@ -1,34 +1,10 @@
-# auth.md
+# TG Manage API 认证
 
-> TG-SignPulse 文档站与自托管面板的 Agent 认证说明。
+本文面向需要访问自托管 TG Manage API 的客户端。面板使用本地管理员账号和 JWT Bearer 认证；公开文档站本身无需登录。
 
-## 受众
+## 获取访问令牌
 
-本页面向需要程序化访问 **自托管 TG-SignPulse 面板 API** 的 AI Agent / 自动化客户端。  
-文档站 `https://tg.cosr.eu.org` 为公开静态站点，无需认证。
-
-## 认证模型概览
-
-| 组件 | 说明 |
-|------|------|
-| 方案 | JWT Bearer（HS256） |
-| 登录 | `POST /api/auth/login`（OAuth2 Password 风格） |
-| Token 用法 | `Authorization: Bearer <access_token>` |
-| 可选二步验证 | 用户启用 TOTP 时，登录需附带 `totp_code` |
-| 发现元数据 | 见 `/.well-known/oauth-protected-resource` 与 `/.well-known/oauth-authorization-server` |
-
-## 自托管面板注册 / 开通
-
-面板采用 **本地管理员账号**，首次启动时通过网页设置：
-
-1. 运行 `bash scripts/install.sh`，用脚本输出的一次性设置码在网页创建管理员密码。
-2. 使用管理员账号登录 Web 面板或调用登录 API。
-3. 在「用户设置」中可修改用户名、密码，并启用 TOTP。
-4. Agent 侧：使用同一账号密码换取 JWT，再调用受保护 API。
-
-没有公开的第三方 OAuth 客户端动态注册端点。Agent 注册 = 由管理员在面板创建/分配账号凭据。
-
-## 登录示例
+首次部署后，运行 `bash scripts/install.sh`，用一次性设置码在网页创建管理员密码。后续客户端使用同一账号调用登录接口：
 
 ```http
 POST /api/auth/login
@@ -36,56 +12,12 @@ Content-Type: application/json
 
 {
   "username": "admin",
-  "password": "<password>",
-  "totp_code": "123456"
+  "password": "<password>"
 }
 ```
 
-成功响应：
+启用 TOTP 时还需提交 `totp_code`。成功响应包含 `access_token`，后续请求使用 `Authorization: Bearer <access_token>`。请勿把密码或 JWT 提交到公共仓库。
 
-```json
-{
-  "access_token": "<jwt>",
-  "token_type": "bearer"
-}
-```
+面板没有第三方 OAuth 客户端动态注册功能。具体 API 以当前部署的服务端路由为准；OpenAPI 文档仅在启用 `ENABLE_API_DOCS` 时可访问。
 
-后续请求：
-
-```http
-GET /api/sign-tasks
-Authorization: Bearer <jwt>
-```
-
-## 受保护资源范围（逻辑 scope）
-
-面板 API 使用统一 JWT，无细粒度 OAuth scope 拆分。逻辑能力包括：
-
-| scope 名称（文档用） | 含义 |
-|----------------------|------|
-| `panel.read` | 读取账号、任务、日志、运维状态 |
-| `panel.write` | 创建/修改任务、触发签到、导入配置 |
-| `ops.read` | 运维只读接口（版本、调度、内存） |
-| `ops.write` | 备份导出、设备保活触发等 |
-
-实际授权以服务端 JWT 校验 + 管理员账号权限为准。
-
-## 发现文档
-
-- Protected Resource Metadata: `/.well-known/oauth-protected-resource`
-- Authorization Server Metadata: `/.well-known/oauth-authorization-server`
-- OpenAPI（自托管实例）: `{panel-origin}/openapi.json`
-- 服务文档: https://tg.cosr.eu.org/reference/configuration
-
-## Agent 接入建议
-
-1. 先读取本页与 OAuth 元数据，确认 `issuer` 与 `token_endpoint`。
-2. 使用管理员提供的账号调用 `token_endpoint` / 登录接口换 token。
-3. 将 token 放入 `Authorization: Bearer` 访问 `{resource}` 下的 API。
-4. Token 过期后重新登录；不要在公共仓库提交密码或 JWT。
-5. 文档站内容可用 `Accept: text/markdown` 获取 Markdown 正文。
-
-## 联系与源码
-
-- GitHub: https://github.com/Silentely/TG-SignPulse
-- 文档: https://tg.cosr.eu.org/
+源码：[hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)。

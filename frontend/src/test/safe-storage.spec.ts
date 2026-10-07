@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   storageGet,
+  storageGetMigrated,
   storageSet,
   storageRemove,
   storageGetJSON,
@@ -23,6 +24,15 @@ describe('safe-storage', () => {
     expect(storageGet('k1')).toBe('v1')
     storageRemove('k1')
     expect(storageGet('k1')).toBeNull()
+  })
+
+  it('旧键只在新键缺失时迁移，写入成功后清理旧键', () => {
+    storageSet('legacy', 'existing-data')
+    expect(storageGetMigrated('current', 'legacy')).toBe('existing-data')
+    expect(storageGet('current')).toBe('existing-data')
+    expect(storageGet('legacy')).toBeNull()
+    storageSet('legacy', 'stale-data')
+    expect(storageGetMigrated('current', 'legacy')).toBe('existing-data')
   })
 
   it('localStorage 抛错时读回退 null、写删不抛出', () => {

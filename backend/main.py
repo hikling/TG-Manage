@@ -47,7 +47,7 @@ from backend.scheduler import (  # noqa: E402
 )
 from backend.services.users import prepare_admin_setup  # noqa: E402
 from backend.utils.paths import ensure_data_dirs  # noqa: E402
-from tg_signer.async_utils import create_logged_task  # noqa: E402
+from tg_manage.async_utils import create_logged_task  # noqa: E402
 
 
 # Silence /health check logs
@@ -157,16 +157,16 @@ def _app_version() -> str:
         return str(get_local_version_info().get("version") or "0.0.0")
     except (ImportError, AttributeError, ValueError, TypeError):
         logging.getLogger("backend.startup").debug(
-            "version_info 解析失败，回退到 tg_signer.__version__",
+            "version_info 解析失败，回退到 tg_manage.__version__",
             exc_info=True,
         )
         try:
-            from tg_signer import __version__
+            from tg_manage import __version__
 
             return str(__version__)
         except (ImportError, AttributeError):
             logging.getLogger("backend.startup").warning(
-                "tg_signer.__version__ 也不可用，版本回退到 0.0.0",
+                "tg_manage.__version__ 也不可用，版本回退到 0.0.0",
                 exc_info=True,
             )
             return "0.0.0"
@@ -391,7 +391,7 @@ async def on_startup() -> None:
     _git_branch = os.getenv("GIT_BRANCH", "dev")
     _git_sha = os.getenv("GIT_SHA", "dev")[:7]
     logging.getLogger("backend.startup").info(
-        "TG-SignPulse version=%s-%s", _git_branch, _git_sha
+        "TG Manage version=%s-%s", _git_branch, _git_sha
     )
 
     ensure_data_dirs(settings)

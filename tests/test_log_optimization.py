@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 # 导入待测试的函数
-from tg_signer.log_utils import safe_traceback_preview
+from tg_manage.log_utils import safe_traceback_preview
 
 
 class TestSafeTracebackPreview:
@@ -108,7 +108,7 @@ class TestConfigureLogger:
 
     def test_invalid_log_level_fallback(self):
         """测试无效日志等级自动降级到 INFO"""
-        from tg_signer.logger import configure_logger
+        from tg_manage.logger import configure_logger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             logger = configure_logger(
@@ -122,7 +122,7 @@ class TestConfigureLogger:
 
     def test_warn_log_creation(self):
         """测试 WARNING 等级时 warn.log 创建"""
-        from tg_signer.logger import configure_logger
+        from tg_manage.logger import configure_logger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             configure_logger(
@@ -136,7 +136,7 @@ class TestConfigureLogger:
 
     def test_error_log_creation(self):
         """测试 ERROR 等级时 error.log 创建"""
-        from tg_signer.logger import configure_logger
+        from tg_manage.logger import configure_logger
 
         with tempfile.TemporaryDirectory() as tmpdir:
             configure_logger(
@@ -154,7 +154,7 @@ class TestConfigureLogger:
 
     def test_pyrogram_handler_no_duplicate(self):
         """测试 Pyrogram logger 不会重复添加 handler"""
-        from tg_signer.logger import configure_logger
+        from tg_manage.logger import configure_logger
 
         # 设置环境变量启用 Pyrogram 日志
         original_value = os.environ.get("PYROGRAM_LOG_ON")
@@ -240,7 +240,7 @@ class TestNoBarePrintInProduction:
         "backend/utils/storage.py",
         "backend/api/routes/accounts.py",
         "backend/api/routes/ops.py",
-        "tg_signer/core/client.py",
+        "tg_manage/core/client.py",
     ]
 
     @pytest.mark.parametrize("rel_path", _TARGETS)

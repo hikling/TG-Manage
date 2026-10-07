@@ -8,7 +8,8 @@ from typing import Optional
 
 _BASE_DIR: Optional[Path] = None
 _DATA_DIR_OVERRIDE_FILE_ENV = "APP_DATA_DIR_OVERRIDE_FILE"
-_DEFAULT_DATA_DIR_OVERRIDE_FILE = Path.cwd() / ".tg_signpulse_data_dir"
+_DEFAULT_DATA_DIR_OVERRIDE_FILE = Path.cwd() / ".tg_manage_data_dir"
+_LEGACY_DATA_DIR_OVERRIDE_FILE = Path.cwd() / ".tg_signpulse_data_dir"
 
 def _probe_writable_dir(base: Path) -> bool:
     probe_dir = base / ".probe"
@@ -48,7 +49,12 @@ def get_data_dir_override_file() -> Path:
 def load_data_dir_override() -> Optional[Path]:
     override_file = get_data_dir_override_file()
     if not override_file.exists():
-        return None
+        # Existing installs may store the location in the previous marker.
+        if os.getenv(_DATA_DIR_OVERRIDE_FILE_ENV):
+            return None
+        override_file = _LEGACY_DATA_DIR_OVERRIDE_FILE
+        if not override_file.exists():
+            return None
     try:
         value = override_file.read_text(encoding="utf-8").strip()
     except OSError:
@@ -71,6 +77,8 @@ def clear_data_dir_override() -> None:
     override_file = get_data_dir_override_file()
     if override_file.exists():
         override_file.unlink()
+    if not os.getenv(_DATA_DIR_OVERRIDE_FILE_ENV) and _LEGACY_DATA_DIR_OVERRIDE_FILE.exists():
+        _LEGACY_DATA_DIR_OVERRIDE_FILE.unlink()
 
 
 def get_initial_data_dir() -> Path:
@@ -93,7 +101,8 @@ def get_writable_base_dir() -> Path:
         _BASE_DIR = preferred
         return _BASE_DIR
 
-    fallback = Path(tempfile.gettempdir()) / "tg-signpulse"
+    legacy_fallback = Path(tempfile.gettempdir()) / "tg-signpulse"
+    fallback = legacy_fallback if legacy_fallback.exists() else Path(tempfile.gettempdir()) / "tg-manage"
     fallback.mkdir(parents=True, exist_ok=True)
     message = (
         f"WARNING: /data is not writable. Falling back to {fallback}; "

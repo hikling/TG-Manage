@@ -1,4 +1,4 @@
-# TG-SignPulse 文档站爬取规则（RFC 9309）
+# TG Manage 文档站爬取规则（RFC 9309）
 # 站点：https://tg.cosr.eu.org
 # 文档欢迎检索与引用；禁止将全文用于模型训练语料。
 

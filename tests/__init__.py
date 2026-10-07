@@ -1,1 +1,1 @@
-# TG-SignPulse 测试套件
+# TG Manage 测试套件

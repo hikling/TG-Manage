@@ -46,7 +46,7 @@ class TempDirManager:
     def __init__(self):
         self._dirs: List[str] = []
 
-    def create(self, prefix: str = "tg_signpulse_test_") -> Path:
+    def create(self, prefix: str = "tg_manage_test_") -> Path:
         """创建临时目录并跟踪"""
         d = tempfile.mkdtemp(prefix=prefix)
         self._dirs.append(d)

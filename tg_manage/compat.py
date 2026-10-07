@@ -5,7 +5,7 @@ import unicodedata
 from types import SimpleNamespace
 from typing import Any, List, Tuple
 
-from tg_signer.async_utils import compute_backoff
+from tg_manage.async_utils import compute_backoff
 
 _PYROGRAM_IMPORT_ERROR: Exception | None = None
 

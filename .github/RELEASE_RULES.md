@@ -1,4 +1,4 @@
-# TG-SignPulse 发布规则
+# TG Manage 发布规则
 
 > 本文档定义 Agent 在执行版本发布时必须遵循的规则与流程。
 
@@ -39,7 +39,7 @@
 
 | 位置 | 文件路径 | 说明 |
 |------|----------|------|
-| Python 包版本 | `tg_signer/__init__.py` → `__version__` | **唯一真实来源**，pyproject.toml 动态读取 |
+| Python 包版本 | `tg_manage/__init__.py` → `__version__` | **唯一真实来源**，pyproject.toml 动态读取 |
 | pyproject.toml | `pyproject.toml` → `[project]` | `dynamic = ["version"]`，无需手动改 |
 | Docker 标签 | `.github/workflows/docker.yml` | 自动从 tag 派生，无需手动改 |
 | CHANGELOG | 根目录 `CHANGELOG.md`（如存在）或 CLAUDE.md 变更记录 | 新增版本条目 |
@@ -50,7 +50,7 @@
 
 ```bash
 # 查看当前版本
-python -c "from tg_signer import __version__; print(__version__)"
+python -c "from tg_manage import __version__; print(__version__)"
 
 # 确定新版本号（基于变更类型）
 # Bug fix → PATCH, 新功能 → MINOR, 破坏性变更 → MAJOR
@@ -59,7 +59,7 @@ python -c "from tg_signer import __version__; print(__version__)"
 ### Step 2：更新版本号
 
 ```bash
-# 修改 tg_signer/__init__.py 中的 __version__
+# 修改 tg_manage/__init__.py 中的 __version__
 # 例如：__version__ = "2.3.0"
 ```
 
@@ -87,7 +87,7 @@ python -c "from tg_signer import __version__; print(__version__)"
 
 ```bash
 # 提交版本更新
-git add tg_signer/__init__.py CLAUDE.md
+git add tg_manage/__init__.py CLAUDE.md
 git commit -m "chore: 发布版本号同步至 X.Y.Z"
 
 # 打 tag（必须以 v 开头）
@@ -114,7 +114,7 @@ gh run list --workflow=docker.yml --limit=3
 
 ## 发布后验证
 
-- [ ] GHCR 镜像已推送（`ghcr.io/<owner>/tg-signpulse:vX.Y.Z`）
+- [ ] GHCR 镜像已推送（`ghcr.io/<owner>/tg-manage:vX.Y.Z`）
 - [ ] Docker 标签 `latest` 已更新
 - [ ] 版本检查 API 返回新版本号
 

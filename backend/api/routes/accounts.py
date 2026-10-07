@@ -416,7 +416,7 @@ def list_account_status_check_jobs(
     current_user: User = Depends(get_current_user),
 ):
     from backend.services.account_status_jobs import list_account_status_jobs
-    from tg_signer.utils import clamp
+    from tg_manage.utils import clamp
 
     return {"jobs": list_account_status_jobs(limit=clamp(limit, 1, 50))}
 

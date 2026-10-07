@@ -112,14 +112,14 @@ const SKILLS = [
     name: "docs-navigator",
     type: "skill-md",
     description:
-      "根据主题定位 TG-SignPulse 官方文档页面（部署、账号、任务、AI、监听、运维）。",
+      "根据主题定位 TG Manage 官方文档页面（部署、账号、任务、AI、监听、运维）。",
     relativePath: ".well-known/agent-skills/docs-navigator/SKILL.md",
   },
   {
     name: "quick-start",
     type: "skill-md",
     description:
-      "引导完成 TG-SignPulse 安装、登录、添加账号与创建第一个签到任务。",
+      "引导完成 TG Manage 安装、登录并添加首个账号。",
     relativePath: ".well-known/agent-skills/quick-start/SKILL.md",
   },
 ];

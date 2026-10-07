@@ -593,7 +593,7 @@
     "updateCheckDisabled": "Server-side update check is disabled; tried browser → GitHub instead.",
     "updateCheckFailed": "Update check failed: {error}",
     "openRelease": "Open release page",
-    "upgradeDockerHint": "Docker upgrade: docker pull ghcr.io/silentely/tg-signpulse:latest",
+    "upgradeDockerHint": "Docker upgrade: docker pull ghcr.io/hikling/tg-manage:latest",
     "unknownValue": "unknown",
     "advanced": "Advanced execution / AI",
     "advancedDesc": "Override env task timeout, cooldown and AI vision params (saved with “Save AI Config” below)",

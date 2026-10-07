@@ -1,12 +1,12 @@
 {
-  "name": "TG-SignPulse Docs Agent",
-  "description": "帮助用户发现 TG-SignPulse 文档、部署步骤与自托管 API 认证方式的文档站 Agent Card。",
+  "name": "TG Manage Docs Agent",
+  "description": "帮助用户发现 TG Manage 文档、部署步骤与自托管 API 认证方式的文档站 Agent Card。",
   "url": "https://tg.cosr.eu.org/",
-  "version": "2.2.0",
+  "version": "2.5.0",
   "protocolVersion": "0.2.1",
   "provider": {
-    "organization": "TG-SignPulse",
-    "url": "https://github.com/Silentely/TG-SignPulse"
+    "organization": "TG Manage",
+    "url": "https://github.com/hikling/TG-SignPulse-Private"
   },
   "documentationUrl": "https://tg.cosr.eu.org/",
   "capabilities": {
@@ -28,17 +28,17 @@
     {
       "id": "docs-navigator",
       "name": "docs-navigator",
-      "description": "根据主题定位 TG-SignPulse 文档页面",
+      "description": "根据主题定位 TG Manage 文档页面",
       "tags": ["docs", "navigation"],
       "examples": [
         "如何 Docker 部署？",
-        "关键词监听怎么配？"
+        "旧监听规则如何迁移？"
       ]
     },
     {
       "id": "quick-start",
       "name": "quick-start",
-      "description": "引导完成安装、登录与第一个任务",
+      "description": "引导完成安装、登录与首个账号",
       "tags": ["onboarding", "deploy"],
       "examples": [
         "5 分钟快速开始"

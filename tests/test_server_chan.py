@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tg_signer.notification import server_chan
-from tg_signer.notification.server_chan import sc_send
+from tg_manage.notification import server_chan
+from tg_manage.notification.server_chan import sc_send
 
 PAYLOAD = {"errno": 0, "errmsg": "success"}
 

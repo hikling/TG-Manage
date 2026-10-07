@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'TG-SignPulse',
-        short_name: 'SignPulse',
-        description: 'Telegram Automation Panel',
+        name: 'TG Manage',
+        short_name: 'TG Manage',
+        description: 'Telegram account and bot management panel',
         // 与 index.html 首帧脚本的深色主题一致：深色启动屏避免安装后闪白；
         // 运行时标签栏颜色由 useTheme 动态同步 theme-color meta
         theme_color: '#0f172a',
