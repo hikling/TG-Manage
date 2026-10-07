@@ -184,7 +184,7 @@ onUnmounted(() => {
       </div>
     </section>
     <section class="dashboard-activity panel-card" aria-labelledby="recent-activity-title">
-      <div class="dashboard-section-heading"><div><p class="panel-eyebrow">ACCOUNTS / 健康状态</p><h3 id="recent-activity-title">需要关注的账号</h3></div><RouterLink to="/accounts" class="panel-button">查看全部账号 <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>
+      <div class="dashboard-section-heading"><h3 id="recent-activity-title">需要关注的账号</h3><RouterLink to="/accounts" class="panel-button">查看全部账号 <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>
       <div v-if="loading && !store.accounts.length" class="dashboard-activity-loading" role="status">正在读取账号状态…</div>
       <div v-else-if="!attention.length" class="dashboard-activity-empty"><CheckCircle2 :size="26" aria-hidden="true" /><strong>目前没有异常账号</strong><span>账号状态变化会在这里显示。</span></div>
       <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>

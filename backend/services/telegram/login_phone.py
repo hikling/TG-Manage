@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 from backend.core.config import get_settings
 from backend.services.telegram.accounts import (
     mark_account_connected,
-    remember_account_country,
 )
 from backend.services.telegram.sessions import (
     _cleanup_expired_login_sessions,
@@ -316,7 +315,6 @@ class TelegramPhoneLoginMixin:
                     # get_me 走超时保护：网络挂起时登录接口不能无限等待
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
                     await self._persist_client_session(client, account_name, proxy)
-                    remember_account_country(account_name, me)
                     set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                     # 断开连接并清理（成功路径同样容忍断连抖动，避免已登录被误报失败）
@@ -340,7 +338,6 @@ class TelegramPhoneLoginMixin:
                         await client.check_password(password)
                         me = await asyncio.wait_for(client.get_me(), timeout=10)
                         await self._persist_client_session(client, account_name, proxy)
-                        remember_account_country(account_name, me)
                         set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                         # 断开连接并清理

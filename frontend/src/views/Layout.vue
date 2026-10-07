@@ -24,7 +24,6 @@ import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import Modal from '../components/Modal.vue'
 import { createViewPrefetcher } from '../lib/view-prefetch'
-import { storageGetMigrated, storageSet } from '../lib/safe-storage'
 
 const route = useRoute()
 const { isDark, toggleTheme, accentColor, setAccentColor } = useTheme()
@@ -72,7 +71,6 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
-  sidebarCollapsed.value = storageGetMigrated('tg-manage-sidebar-collapsed', 'tg-sidebar-collapsed') !== '0'
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
 })
@@ -101,7 +99,6 @@ const prefetchView = (name: string) => {
 
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
-  storageSet('tg-manage-sidebar-collapsed', sidebarCollapsed.value ? '1' : '0')
 }
 
 const navigation = computed(() => [
@@ -153,7 +150,7 @@ const handleNavClick = () => {
       :inert="sidebarHidden || undefined"
     >
       <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
-        <img src="/favicon.svg" alt="" class="ui-brand-logo w-7 h-7 shrink-0" />
+        <img :src="'/favicon.svg'" alt="" class="ui-brand-logo w-7 h-7 shrink-0" />
         <div class="sidebar-label min-w-0 flex-1">
           <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG Manage</div>
         </div>
@@ -173,12 +170,11 @@ const handleNavClick = () => {
       </div>
 
       <nav class="flex-1 py-5 flex flex-col gap-1 px-3 overflow-y-auto custom-scrollbar" :aria-label="t('nav.mainNav')">
-        <p class="sidebar-label sidebar-section-title">WORKSPACE / 工作空间</p>
         <router-link 
           v-for="nav in navigation" 
           :key="nav.id"
           :to="{ name: nav.name }"
-          class="sidebar-link flex items-center h-11 px-2.5 whitespace-nowrap rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+          class="sidebar-link flex items-center h-11 px-2.5 whitespace-nowrap rounded-xl"
           :class="[{ 'ui-nav-active': route.name === nav.name }, `sidebar-link--${nav.color}`]"
           :aria-current="route.name === nav.name ? 'page' : undefined"
           :title="nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey"
@@ -231,7 +227,6 @@ const handleNavClick = () => {
             <Menu class="w-5 h-5" />
           </button>
           <div class="min-w-0">
-            <p class="header-kicker">TG MANAGE / WORKSPACE</p>
             <h1 class="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 tracking-wide truncate">{{ currentTitle }}</h1>
           </div>
         </div>
