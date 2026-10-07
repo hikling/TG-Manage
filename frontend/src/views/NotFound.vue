@@ -38,7 +38,7 @@ const handleGoBack = () => {
 }
 
 const openGithub = () => {
-  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
+  window.open('https://github.com/hikling/TG-Manage', '_blank', 'noopener,noreferrer')
 }
 </script>
 

@@ -15,6 +15,7 @@ from backend.services.telegram.sessions import (
 )
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
+from backend.utils.phone_country import country_code_from_phone
 from backend.utils.proxy import build_proxy_dict
 from backend.utils.tg_session import (
     delete_account_session_string,
@@ -29,6 +30,7 @@ from backend.utils.tg_session import (
     load_account_session_string,
     load_session_string_file,
     rename_account_entry,
+    set_account_country,
     set_account_status,
 )
 from backend.utils.time import utc_now_iso_z
@@ -69,6 +71,14 @@ def mark_account_connected(account_name: str) -> None:
         code="OK",
         needs_relogin=False,
     )
+
+
+def remember_account_country(account_name: str | None, user: Any) -> bool:
+    """Cache the user's region without persisting their phone number."""
+    if not account_name:
+        return False
+    country = country_code_from_phone(getattr(user, "phone_number", None))
+    return set_account_country(account_name, country) if country else False
 
 
 class TelegramAccountsMixin:
@@ -201,6 +211,7 @@ class TelegramAccountsMixin:
                             "remark": profile.get("remark"),
                             "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
+                            "country_code": profile.get("country_code"),
                             **self._account_status_payload(account_name),
                         }
                     )
@@ -222,6 +233,7 @@ class TelegramAccountsMixin:
                             "remark": profile.get("remark"),
                             "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
+                            "country_code": profile.get("country_code"),
                             **self._account_status_payload(account_name),
                         }
                     )
@@ -243,6 +255,7 @@ class TelegramAccountsMixin:
                             "remark": profile.get("remark"),
                             "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
+                            "country_code": profile.get("country_code"),
                             **self._account_status_payload(account_name),
                         }
                     )
@@ -337,6 +350,8 @@ class TelegramAccountsMixin:
             async with lock:
                 async with client:
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
+                    if remember_account_country(account_name, me):
+                        self._accounts_cache = None
                     if not me or not getattr(me, "photo", None):
                         return None
 
@@ -597,6 +612,8 @@ class TelegramAccountsMixin:
                 if not getattr(client, "is_connected", False):
                     await client.connect()
                 me = await asyncio.wait_for(client.get_me(), timeout=timeout_seconds)
+            if remember_account_country(account_name, me):
+                self._accounts_cache = None
             set_account_status(
                 account_name,
                 status="connected",

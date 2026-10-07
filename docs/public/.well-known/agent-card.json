@@ -6,7 +6,7 @@
   "protocolVersion": "0.2.1",
   "provider": {
     "organization": "TG Manage",
-    "url": "https://github.com/hikling/TG-SignPulse-Private"
+    "url": "https://github.com/hikling/TG-Manage"
   },
   "documentationUrl": "https://tg.cosr.eu.org/",
   "capabilities": {

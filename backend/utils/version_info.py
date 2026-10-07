@@ -32,10 +32,10 @@ from backend.utils.time import utc_now_iso
 logger = logging.getLogger("backend.version_info")
 
 DEFAULT_UPDATE_CHECK_URL = (
-    "https://api.github.com/repos/hikling/TG-SignPulse-Private/releases/latest"
+    "https://api.github.com/repos/hikling/TG-Manage/releases/latest"
 )
 DEFAULT_GITHUB_HTML_LATEST = (
-    "https://github.com/hikling/TG-SignPulse-Private/releases/latest"
+    "https://github.com/hikling/TG-Manage/releases/latest"
 )
 UPDATE_CACHE_TTL_SECONDS = 6 * 3600
 _HTTP_TIMEOUT_SECONDS = 8.0

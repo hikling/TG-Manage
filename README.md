@@ -1,8 +1,9 @@
 <p align="center"><img src="docs/public/logo.svg" width="80" height="80" alt="TG Manage Logo"></p>
 <h1 align="center">TG Manage</h1>
 <p align="center">Telegram 多账号管理面板 · 内置 TeleBox</p>
+<p align="center"><a href="README.md"><kbd><strong>简体中文</strong></kbd></a> &nbsp; <a href="README_EN.md"><kbd>English</kbd></a></p>
 
-> 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，当前源码位于 [hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)。部署时从当前仓库构建；上游公开镜像不包含这里的界面和 TeleBox 集成。
+> 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，内置 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)，当前源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)。部署时从当前仓库构建；上游公开镜像不包含这里的界面和 TeleBox 集成。
 
 ## 目录
 
@@ -20,8 +21,8 @@
 
 | 范围 | 当前实现 |
 | --- | --- |
-| 管理页面 | 账号卡片展示主账号和 TeleBox 独立状态，支持检测、聊天、启动或停止 TeleBox、二步验证及退出 TeleBox 登录；保留仪表盘、账号、日志、设置等入口。 |
-| 资源监控 | 仪表盘实时显示当前进程内存；容器整体资源可用 `docker stats` 检查。 |
+| 管理页面 | 账号卡片在名称前展示手机号所属国家/地区旗帜（仅保存两位地区代码；无法识别时显示地球占位），展示主账号和 TeleBox 独立状态，支持检测、聊天、启动或停止 TeleBox、二步验证及退出 TeleBox 登录；保留仪表盘、账号、日志、设置等入口。 |
+| 资源监控与外观 | 仪表盘每 15 秒刷新当前进程内存；支持上传自定义封面、选择推荐或自定义主题色。容器整体资源可用 `docker stats` 检查。 |
 | 账号与聊天 | 账号管理支持手机验证码/二维码登录、状态检测、代理及登录时启用 TeleBox；聊天中心开启后按账号查看群组对话，显示 Telegram 头像、搜索/翻页、收发文字与附件、回复、编辑/删除消息、已读及归档等。 |
 | 机器人、代理 | 机器人中心位于系统设置，提供 Bot Token 接入及资料、命令、消息管理；账号代理可在账号资料中设置。Bot Token 在服务端加密存储。 |
 | 日志 | 按账号查看 TeleBox 进程输出；插件自身定时由 TeleBox 管理。 |
@@ -61,7 +62,7 @@ TeleBox 插件可能需要自己的外部服务配置；插件由 TeleBox 自身
 服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行：
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone https://github.com/hikling/TG-Manage.git && cd TG-Manage && bash scripts/install.sh
 ```
 
 脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
@@ -159,7 +160,7 @@ Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1
 
 ## 数据、升级与备份
 
-Compose 将宿主机 `./data` 挂载到容器 `/data`。数据库、账号会话、设置、日志、TeleBox 账号目录，以及 `data/.app_secret_key` 都在这个目录内。升级和迁移必须保留**整个目录**，包括隐藏文件；密钥丢失会导致已加密的账号凭据和 Bot Token 无法解密。面板备份和 WebDAV 备份同样含敏感凭据，请限制访问。
+Compose 将宿主机 `./data` 挂载到容器 `/data`。数据库、账号会话、设置、日志、TeleBox 账号目录、自定义仪表盘封面（`data/.tg_manage/appearance/`，旧部署可能在 `data/.signer/appearance/`），以及 `data/.app_secret_key` 都在这个目录内。升级和迁移必须保留**整个目录**，包括隐藏文件；密钥丢失会导致已加密的账号凭据和 Bot Token 无法解密。面板备份和 WebDAV 备份同样含敏感凭据，请限制访问。
 
 在服务器的仓库目录执行：
 

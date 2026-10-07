@@ -1,6 +1,6 @@
 # Docker 部署与升级
 
-本文适用于 [TG Manage 源码仓库](https://github.com/hikling/TG-SignPulse-Private) 的 `Dockerfile` 和 `docker-compose.yml`。Compose 使用 `build: .`，从当前源码构建镜像。
+本文适用于 [TG Manage 源码仓库](https://github.com/hikling/TG-Manage) 的 `Dockerfile` 和 `docker-compose.yml`。Compose 使用 `build: .`，从当前源码构建镜像。
 
 ## 部署前准备
 
@@ -12,8 +12,8 @@
 ## 首次安装
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git
-cd TG-SignPulse-Private
+git clone https://github.com/hikling/TG-Manage.git
+cd TG-Manage
 bash scripts/install.sh
 ```
 
@@ -23,7 +23,7 @@ bash scripts/install.sh
 
 | 配置 | 作用 |
 | --- | --- |
-| `./data:/data` | 宿主机持久化目录。包含 SQLite、会话、设置、密钥和 TeleBox 账号数据。 |
+| `./data:/data` | 宿主机持久化目录。包含 SQLite、会话、设置、密钥、TeleBox 账号数据和自定义仪表盘封面（`.tg_manage/appearance/` 或旧版 `.signer/appearance/`）。 |
 | `container_name: tg-manage` | 容器名称；使用 `docker stats tg-manage` 查看容器资源。 |
 | `read_only: true` 与 `/tmp` 临时卷 | 根文件系统只读；`/data` 必须可写。 |
 | `/readyz` 健康检查 | 确认服务启动完成。 |

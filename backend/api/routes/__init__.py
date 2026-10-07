@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from backend.api.routes import (
     accounts,
+    appearance,
     auth,
     bots,
     communications,
@@ -16,6 +17,7 @@ router = APIRouter()
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(user.router, prefix="/user", tags=["user"])
 router.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
+router.include_router(appearance.router, prefix="/appearance", tags=["appearance"])
 router.include_router(communications.router, tags=["communications"])
 router.include_router(bots.router, tags=["bots"])
 router.include_router(telebox.router, tags=["telebox"])

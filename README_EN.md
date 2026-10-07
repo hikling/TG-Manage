@@ -1,12 +1,15 @@
-# TG Manage — Telegram account management with integrated TeleBox
+<p align="center"><img src="docs/public/logo.svg" width="80" height="80" alt="TG Manage logo"></p>
+<h1 align="center">TG Manage</h1>
+<p align="center">Telegram account management with integrated TeleBox</p>
+<p align="center"><a href="README.md"><kbd>简体中文</kbd></a> &nbsp; <a href="README_EN.md"><kbd><strong>English</strong></kbd></a></p>
 
-TG Manage is based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse); its current source is [hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private). Build from this repository. For requirements, configuration, development, and verification details, see the [Chinese README](README.md).
+TG Manage is based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrates [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). Its current source is [hikling/TG-Manage](https://github.com/hikling/TG-Manage). Build from this repository. For requirements, configuration, development, and verification details, see the [Chinese README](README.md).
 
 ## Changes
 
 | Area | Current implementation |
 | --- | --- |
-| UI | Screenshot inspired sidebar, account cards, responsive layouts, light and dark themes. |
+| UI | Responsive sidebar collapsed by default, account cards with phone-region flags (only the two-letter region is stored), light and dark modes, custom accent colors, and a user-uploaded dashboard cover. |
 | Chats | Sidebar entry always visible. Its own switch defaults off, showing only official Telegram verification messages; when on, group dialogs, messages and avatars are displayed, with a 5 MB cache limit. |
 | Administration | Account proxies stay in account details. Bot registration, profile, commands, and messaging are under System Settings. |
 | TeleBox | Complete upstream 0.2.9 source pinned to the commit in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json); separate worker, data directory, status, logs and plugin controls per account. |
@@ -23,7 +26,7 @@ TG Manage is based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-S
 ## Deploy from source
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone https://github.com/hikling/TG-Manage.git && cd TG-Manage && bash scripts/install.sh
 ```
 
 The private repository requires GitHub access. Docker Compose builds from source and bind mounts `./data` at `/data`. The app secret is generated in `data/.app_secret_key`; the script prints a one-time setup token to set the admin password. For many accounts, set your own `TG_MANAGE_TG_API_ID/HASH` in a private server `.env`.
@@ -32,7 +35,7 @@ Open `http://YOUR_SERVER_IP:8080`, enter the one-time setup token and choose an 
 
 ## Upgrade without losing data
 
-From the existing repository directory, run `bash scripts/update.sh`. It checks the data directory, archives all of it to `backups/` without deleting older archives, pulls this repository with `git pull --ff-only`, then rebuilds and starts via `scripts/install.sh`. Preserve the `./data:/data` bind mount and the full `data/` directory, especially `.app_secret_key`, `sessions/`, and `telebox/`. For manual steps, rollback, and verification, see the [Docker guide](docs/deploy/docker.md#无损升级与回退). An external PostgreSQL database needs its own backup.
+From the existing repository directory, run `bash scripts/update.sh`. It checks the data directory, archives all of it to `backups/` without deleting older archives, pulls this repository with `git pull --ff-only`, then rebuilds and starts via `scripts/install.sh`. Preserve the `./data:/data` bind mount and the full `data/` directory, especially `.app_secret_key`, `sessions/`, `telebox/`, and the dashboard cover in `.tg_manage/appearance/` (or legacy `.signer/appearance/`). For manual steps, rollback, and verification, see the [Docker guide](docs/deploy/docker.md#无损升级与回退). An external PostgreSQL database needs its own backup.
 
 The bundled TeleBox runtime contains its system plugins and the native Panel. Community plugins live in the separate [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins) repository; use `.tpm install <name>` and `.tpm update` from Telegram Saved Messages. On upgrade, the core code is refreshed for existing accounts while their plugins and account data are preserved. Optional plugin settings can go in an account-local `data/telebox/<SHA-256 account name>/.env` (mode 600). Failed plugin actions are shown in the account's TeleBox logs.
 

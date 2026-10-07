@@ -64,7 +64,7 @@ describe('version-utils', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      url: 'https://github.com/hikling/TG-SignPulse-Private/releases/tag/v3.0.0',
+      url: 'https://github.com/hikling/TG-Manage/releases/tag/v3.0.0',
       headers: { get: () => null },
     })
     vi.stubGlobal('fetch', mockFetch)
@@ -83,7 +83,7 @@ describe('version-utils', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        url: 'https://github.com/hikling/TG-SignPulse-Private/releases/latest',
+        url: 'https://github.com/hikling/TG-Manage/releases/latest',
         headers: { get: () => null },
       })
       // API JSON 成功
@@ -93,7 +93,7 @@ describe('version-utils', () => {
         json: async () => ({
           tag_name: 'v3.1.0',
           html_url:
-            'https://github.com/hikling/TG-SignPulse-Private/releases/tag/v3.1.0',
+            'https://github.com/hikling/TG-Manage/releases/tag/v3.1.0',
         }),
       })
     vi.stubGlobal('fetch', mockFetch)
@@ -109,7 +109,7 @@ describe('version-utils', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          url: 'https://github.com/hikling/TG-SignPulse-Private/releases/latest',
+          url: 'https://github.com/hikling/TG-Manage/releases/latest',
           headers: { get: () => null },
         })
         .mockResolvedValueOnce({
@@ -124,7 +124,7 @@ describe('version-utils', () => {
   it('tagFromReleaseUrl extracts tag', () => {
     expect(
       tagFromReleaseUrl(
-        'https://github.com/hikling/TG-SignPulse-Private/releases/tag/v2.5.0',
+        'https://github.com/hikling/TG-Manage/releases/tag/v2.5.0',
       ),
     ).toBe('v2.5.0')
     expect(tagFromReleaseUrl('https://example.com/nope')).toBeNull()
@@ -147,7 +147,7 @@ describe('version-utils', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        url: 'https://github.com/hikling/TG-SignPulse-Private/releases/tag/v4.0.0',
+        url: 'https://github.com/hikling/TG-Manage/releases/tag/v4.0.0',
         headers: { get: () => null },
       }),
     )
@@ -203,7 +203,7 @@ describe('version-utils', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          url: 'https://github.com/hikling/TG-SignPulse-Private/releases/latest',
+          url: 'https://github.com/hikling/TG-Manage/releases/latest',
           headers: { get: () => null },
         })
         .mockResolvedValueOnce({

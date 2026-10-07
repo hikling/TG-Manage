@@ -9,6 +9,7 @@ import secrets
 import time
 from typing import Any, Dict, Optional
 
+from backend.services.telegram.accounts import remember_account_country
 from backend.services.telegram.sessions import (
     _cleanup_expired_login_sessions,
     _qr_login_sessions,
@@ -358,6 +359,7 @@ class TelegramQrLoginMixin:
             await self._persist_client_session(
                 client, data.get("account_name"), data.get("proxy")
             )
+            remember_account_country(data.get("account_name"), me)
         except SessionPasswordNeeded:
             data["status"] = "password_required"
             data["scan_seen"] = True
@@ -426,6 +428,7 @@ class TelegramQrLoginMixin:
         await self._persist_client_session(
             client, data.get("account_name"), data.get("proxy")
         )
+        remember_account_country(data.get("account_name"), me)
 
         self._log_qr_state(login_id, "success", data)
         return await self._finalize_qr_login_success(login_id, data, me)

@@ -6,11 +6,11 @@
     "description": "文档站发布的 OpenAPI 发现桩。完整、可交互的 OpenAPI 由你部署的面板实例在 {panel-origin}/openapi.json 提供。认证见 /auth.md。",
     "contact": {
       "name": "TG Manage",
-      "url": "https://github.com/hikling/TG-SignPulse-Private"
+      "url": "https://github.com/hikling/TG-Manage"
     },
     "license": {
       "name": "See repository LICENSE",
-      "url": "https://github.com/hikling/TG-SignPulse-Private/blob/main/LICENSE"
+      "url": "https://github.com/hikling/TG-Manage/blob/main/LICENSE"
     }
   },
   "servers": [

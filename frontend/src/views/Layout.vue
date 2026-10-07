@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { getAuthToken } from '../lib/api/core'
-import { getAppVersion } from '../lib/api'
+import { useRoute } from 'vue-router'
 import {
   LayoutDashboard,
   Users,
@@ -18,22 +16,23 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Palette,
 } from 'lucide-vue-next'
-import { useTheme } from '../composables/useTheme'
+import { ACCENT_PRESETS, useTheme } from '../composables/useTheme'
 import { useI18n } from '../composables/useI18n'
 import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
+import Modal from '../components/Modal.vue'
 import { createViewPrefetcher } from '../lib/view-prefetch'
 import { storageGetMigrated, storageSet } from '../lib/safe-storage'
 
 const route = useRoute()
-const router = useRouter()
-const { isDark, toggleTheme } = useTheme()
+const { isDark, toggleTheme, accentColor, setAccentColor } = useTheme()
 const { locale, toggleLanguage, t } = useI18n()
 const isMobileMenuOpen = ref(false)
 const showProfileModal = ref(false)
-const sidebarVersion = ref('')
-const sidebarCollapsed = ref(false)
+const showAppearanceModal = ref(false)
+const sidebarCollapsed = ref(true)
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
 
@@ -44,22 +43,6 @@ const onViewportChange = () => {
   isMobileView.value = mobileQuery.matches
 }
 const sidebarHidden = computed(() => isMobileView.value && !isMobileMenuOpen.value)
-
-const loadSidebarVersion = async () => {
-  const token = getAuthToken()
-  if (!token) return
-  try {
-    const info = await getAppVersion(token)
-    sidebarVersion.value = info.version ? `v${info.version}` : ''
-  } catch {
-    sidebarVersion.value = ''
-  }
-}
-
-const goSettingsAbout = () => {
-  isMobileMenuOpen.value = false
-  router.push({ name: 'settings' })
-}
 
 const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && isMobileMenuOpen.value) {
@@ -89,10 +72,9 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
-  sidebarCollapsed.value = storageGetMigrated('tg-manage-sidebar-collapsed', 'tg-sidebar-collapsed') === '1'
+  sidebarCollapsed.value = storageGetMigrated('tg-manage-sidebar-collapsed', 'tg-sidebar-collapsed') !== '0'
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
-  void loadSidebarVersion()
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
@@ -146,7 +128,7 @@ watch(
 )
 
 const openGithub = () => {
-  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
+  window.open('https://github.com/hikling/TG-Manage', '_blank', 'noopener,noreferrer')
 }
 
 const handleNavClick = () => {
@@ -171,19 +153,9 @@ const handleNavClick = () => {
       :inert="sidebarHidden || undefined"
     >
       <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
-        <div class="ui-brand-mark w-7 h-7 text-[11px] shrink-0">TG</div>
+        <img src="/favicon.svg" alt="" class="ui-brand-logo w-7 h-7 shrink-0" />
         <div class="sidebar-label min-w-0 flex-1">
           <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG Manage</div>
-          <div class="text-[10px] text-gray-400 mt-1 tracking-wide truncate">
-            <button
-              v-if="sidebarVersion"
-              type="button"
-              class="hover:text-sky-500 transition-colors"
-              :title="t('settings.aboutTitle')"
-              @click="goSettingsAbout"
-            >{{ sidebarVersion }}</button>
-            <span v-else>{{ t('common.brandSubtitle') }}</span>
-          </div>
         </div>
         <button type="button" class="sidebar-collapse-toggle hidden lg:inline-flex" :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar">
           <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" /><PanelLeftClose v-else class="w-4 h-4" />
@@ -222,6 +194,16 @@ const handleNavClick = () => {
       </nav>
 
       <div class="border-t border-[var(--tg-border)] p-3">
+        <button
+          type="button"
+          class="sidebar-link flex items-center w-full h-11 px-2.5 whitespace-nowrap rounded-xl"
+          title="自定义主题"
+          aria-label="自定义主题"
+          @click="showAppearanceModal = true; isMobileMenuOpen = false"
+        >
+          <span class="sidebar-link-icon"><Palette class="w-[19px] h-[19px]" stroke-width="1.9" aria-hidden="true" /></span>
+          <span class="sidebar-label ml-3 text-sm font-medium">自定义主题</span>
+        </button>
         <button
           type="button"
           class="sidebar-link flex items-center w-full h-11 px-2.5 whitespace-nowrap rounded-xl"
@@ -295,6 +277,18 @@ const handleNavClick = () => {
       </div>
 
       <UserProfileModal :isOpen="showProfileModal" @close="showProfileModal = false" />
+      <Modal :isOpen="showAppearanceModal" title="自定义主题" maxWidthClass="max-w-lg" @close="showAppearanceModal = false">
+        <div class="appearance-picker">
+          <p>选择一种 2026 趋势配色，或使用下方色盘。仅影响当前浏览器的界面，不改动账号数据。</p>
+          <div class="appearance-preset-grid" role="group" aria-label="2026 趋势配色">
+            <button v-for="preset in ACCENT_PRESETS" :key="preset.color" type="button" class="appearance-preset" :aria-pressed="accentColor === preset.color" @click="setAccentColor(preset.color)">
+              <span class="appearance-swatch" :style="{ backgroundColor: preset.color }" aria-hidden="true" />{{ preset.name }}
+            </button>
+          </div>
+          <label class="appearance-custom-label" for="accent-custom-color">自定义颜色</label>
+          <div class="appearance-custom-control"><input id="accent-custom-color" type="color" :value="accentColor" @input="setAccentColor(($event.target as HTMLInputElement).value)" /><code>{{ accentColor.toUpperCase() }}</code></div>
+        </div>
+      </Modal>
     </main>
   </div>
 </template>

@@ -20,4 +20,4 @@ Content-Type: application/json
 
 面板没有第三方 OAuth 客户端动态注册功能。具体 API 以当前部署的服务端路由为准；OpenAPI 文档仅在启用 `ENABLE_API_DOCS` 时可访问。
 
-源码：[hikling/TG-SignPulse-Private](https://github.com/hikling/TG-SignPulse-Private)。
+源码：[hikling/TG-Manage](https://github.com/hikling/TG-Manage)。

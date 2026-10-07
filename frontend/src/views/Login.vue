@@ -103,7 +103,7 @@ const handleLogin = async () => {
 }
 
 const openGithub = () => {
-  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
+  window.open('https://github.com/hikling/TG-Manage', '_blank', 'noopener,noreferrer')
 }
 </script>
 
@@ -121,7 +121,7 @@ const openGithub = () => {
       </aside>
     <div class="login-form-panel w-full max-w-sm ui-card shadow-[var(--tg-shadow-md)] px-8 py-10">
       <div class="mb-8 text-center">
-        <div class="ui-brand-mark w-12 h-12 mx-auto text-lg mb-4">TG</div>
+        <img src="/favicon.svg" alt="" class="ui-brand-logo w-12 h-12 mx-auto mb-4" />
         <h1 class="text-xl font-medium text-gray-900 dark:text-gray-100 tracking-[0.12em]">TG Manage</h1>
         <p class="text-xs text-gray-500 mt-2 leading-relaxed">{{ t('login.subtitle') }}</p>
       </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, RefreshCw, Users } from 'lucide-vue-next'
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, ImagePlus, RefreshCw, RotateCcw, Users } from 'lucide-vue-next'
 import { useAccountsStore } from '../stores/accounts'
 import { errorText } from '../composables/usePanelAccount'
 import { listTeleBoxAccounts, type TeleBoxAccount } from '../lib/api/telebox'
@@ -10,6 +10,7 @@ import type { AccountInfo } from '../lib/api'
 import { getMemoryStats } from '../lib/api/ops'
 import { getAuthToken } from '../lib/api/core'
 import { formatMemoryRssFromStats } from '../lib/memory-format'
+import { deleteHeroImage, getHeroImage, MAX_HERO_IMAGE_BYTES, uploadHeroImage } from '../lib/api/appearance'
 
 const store = useAccountsStore()
 const telebox = ref<TeleBoxAccount[]>([])
@@ -18,6 +19,11 @@ const error = ref('')
 const memoryRss = ref('读取中…')
 const memoryStatus = ref('正在获取当前服务进程内存')
 const memoryUpdatedAt = ref('')
+const heroImageUrl = ref('')
+const heroError = ref('')
+const heroBusy = ref(false)
+const heroInput = ref<HTMLInputElement | null>(null)
+let heroObjectUrl = ''
 let memoryTimer: ReturnType<typeof setTimeout> | undefined
 let memoryInFlight = false
 let active = true
@@ -79,23 +85,77 @@ function refreshDashboard() {
   void refreshMemory()
 }
 
+function showHeroBlob(blob: Blob) {
+  if (heroObjectUrl) URL.revokeObjectURL(heroObjectUrl)
+  heroObjectUrl = URL.createObjectURL(blob)
+  heroImageUrl.value = heroObjectUrl
+}
+
+async function loadHeroImage() {
+  try {
+    const blob = await getHeroImage()
+    if (active) showHeroBlob(blob)
+  } catch (cause) {
+    if (active && (cause as { status?: number }).status !== 404) heroError.value = '封面读取失败，请稍后重试'
+  }
+}
+
+async function onHeroSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > MAX_HERO_IMAGE_BYTES || file.size === 0) {
+    heroError.value = '请选择不超过 5 MB 的 JPEG、PNG 或 WebP 图片'
+    return
+  }
+  heroBusy.value = true
+  heroError.value = ''
+  try {
+    await uploadHeroImage(file)
+    const blob = await getHeroImage()
+    if (active) showHeroBlob(blob)
+  } catch {
+    heroError.value = '封面上传失败，请稍后重试'
+  } finally {
+    heroBusy.value = false
+  }
+}
+
+async function resetHeroImage() {
+  heroBusy.value = true
+  heroError.value = ''
+  try {
+    await deleteHeroImage()
+    if (heroObjectUrl) URL.revokeObjectURL(heroObjectUrl)
+    heroObjectUrl = ''
+    heroImageUrl.value = ''
+  } catch {
+    heroError.value = '恢复默认封面失败，请稍后重试'
+  } finally {
+    heroBusy.value = false
+  }
+}
+
 onMounted(() => {
   active = true
   document.addEventListener('visibilitychange', onVisibilityChange)
   void load()
+  void loadHeroImage()
   if (!document.hidden) void refreshMemory()
 })
 onUnmounted(() => {
   active = false
   document.removeEventListener('visibilitychange', onVisibilityChange)
   if (memoryTimer) clearTimeout(memoryTimer)
+  if (heroObjectUrl) URL.revokeObjectURL(heroObjectUrl)
 })
 </script>
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
-    <section class="dashboard-hero">
+    <section class="dashboard-hero" :class="{ 'dashboard-hero--custom': !!heroImageUrl }">
+      <div v-if="heroImageUrl" class="dashboard-hero-image" :style="{ backgroundImage: `url('${heroImageUrl}')` }" aria-hidden="true" />
       <div class="dashboard-hero-copy">
-        <p class="dashboard-kicker"><span class="dashboard-kicker-dot" /> TG MANAGE / CONTROL CENTER</p>
         <h2>一眼掌握，<br><span>每一次运行。</span></h2>
         <p>账号与 TeleBox 状态汇聚于此。需要处理的变化，随时清晰可见。</p>
         <div class="dashboard-hero-actions">
@@ -103,8 +163,14 @@ onUnmounted(() => {
           <button type="button" class="dashboard-hero-refresh" :disabled="loading" @click="refreshDashboard"><RefreshCw :size="16" :class="{ 'animate-spin': loading }" aria-hidden="true" />{{ loading ? '正在刷新' : '刷新数据' }}</button>
         </div>
       </div>
-      <div class="dashboard-hero-visual" aria-hidden="true"><div class="dashboard-orbit dashboard-orbit--outer" /><div class="dashboard-orbit dashboard-orbit--inner" /><div class="dashboard-core"><Activity :size="42" :stroke-width="1.4" /></div><span class="dashboard-satellite dashboard-satellite--one" /><span class="dashboard-satellite dashboard-satellite--two" /></div>
+      <div v-if="!heroImageUrl" class="dashboard-hero-visual" aria-hidden="true"><div class="dashboard-orbit dashboard-orbit--outer" /><div class="dashboard-orbit dashboard-orbit--inner" /><div class="dashboard-core"><Activity :size="42" :stroke-width="1.4" /></div><span class="dashboard-satellite dashboard-satellite--one" /><span class="dashboard-satellite dashboard-satellite--two" /></div>
+      <div class="dashboard-hero-customize">
+        <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" aria-label="选择仪表盘封面图片" @change="onHeroSelected" />
+        <button type="button" :disabled="heroBusy" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroImageUrl ? '更换封面' : '上传封面' }}</button>
+        <button v-if="heroImageUrl" type="button" :disabled="heroBusy" @click="resetHeroImage"><RotateCcw :size="15" aria-hidden="true" />恢复默认</button>
+      </div>
     </section>
+    <p v-if="heroError" class="panel-error" role="alert">{{ heroError }}</p>
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
     <section aria-label="运行概览" class="dashboard-metrics">
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--accounts"><span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span><span class="dashboard-metric-value">{{ store.accounts.length }}</span><span class="dashboard-metric-label">已登录账号</span><span class="dashboard-metric-foot">查看账号 <ArrowRight :size="14" aria-hidden="true" /></span></RouterLink>

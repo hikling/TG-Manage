@@ -91,6 +91,7 @@ export interface AccountInfo {
   status_checked_at?: string | null;
   needs_relogin?: boolean;
   tags?: string[];
+  country_code?: string | null;
 }
 
 export interface AccountStatusCheckRequest {

@@ -1,6 +1,6 @@
 import { defineConfig } from "vitepress";
 
-const repository = "hikling/TG-SignPulse-Private";
+const repository = "hikling/TG-Manage";
 const repositoryName = repository.split("/")[1];
 const isGitHubActions = process.env.GITHUB_ACTIONS === "true";
 const editBranch =
@@ -115,6 +115,7 @@ export default defineConfig({
 
     nav: [
       { text: "首页", link: "/" },
+      { text: "English README", link: `https://github.com/${repository}/blob/main/README_EN.md` },
       { text: "功能介绍", link: "/features" },
       { text: "快速开始", link: "/guide/quick-start" },
       {

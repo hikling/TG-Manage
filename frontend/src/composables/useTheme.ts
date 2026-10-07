@@ -16,6 +16,46 @@ const savedTheme = storageGet('theme')
 const prefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
 const initDark = savedTheme === 'dark' || (savedTheme === null && prefersDark)
 const isDark = ref(initDark)
+export const DEFAULT_ACCENT = '#3d6fa8'
+export const ACCENT_PRESETS = [
+  { name: '蓝韵', color: '#3d6fa8' },
+  { name: '潮汐青', color: '#247e83' },
+  { name: '电光紫红', color: '#a83d8f' },
+  { name: '柔雾紫', color: '#765ba7' },
+  { name: '可可棕', color: '#866044' },
+  { name: '暖沙金', color: '#9b702e' },
+] as const
+const validHex = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value)
+const savedAccent = storageGet('tg-manage-accent-color')
+const accentColor = ref(savedAccent && validHex(savedAccent) ? savedAccent.toLowerCase() : DEFAULT_ACCENT)
+
+function applyAccent(color: string) {
+  const channels = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16))
+  const luminanceOf = (rgb: number[]) => rgb.map(channel => {
+    const normalized = channel / 255
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+  }).reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0)
+  const luminance = luminanceOf(channels)
+  const foreground = 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.05 ? '#ffffff' : '#000000'
+  const surface = isDark.value ? [25, 40, 50] : [255, 255, 255]
+  const surfaceLuminance = luminanceOf(surface)
+  const contrast = (left: number, right: number) => (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05)
+  let textChannels = channels
+  if (contrast(luminance, surfaceLuminance) < 4.5) {
+    const target = isDark.value ? 255 : 0
+    for (let step = 1; step <= 20; step += 1) {
+      textChannels = channels.map(channel => Math.round(channel + (target - channel) * step / 20))
+      if (contrast(luminanceOf(textChannels), surfaceLuminance) >= 4.5) break
+    }
+  }
+  const textColor = `#${textChannels.map(channel => channel.toString(16).padStart(2, '0')).join('')}`
+  const root = document.documentElement.style
+  root.setProperty('--tg-accent', color)
+  root.setProperty('--tg-accent-text', textColor)
+  root.setProperty('--tg-accent-soft', `color-mix(in srgb, ${color} 15%, var(--tg-bg-elevated))`)
+  root.setProperty('--tg-on-accent', foreground)
+  root.setProperty('--tg-accent-hover', `color-mix(in srgb, ${color} 85%, ${foreground === '#ffffff' ? '#000000' : '#ffffff'})`)
+}
 
 if (initDark) {
   document.documentElement.classList.add('dark')
@@ -23,8 +63,16 @@ if (initDark) {
   document.documentElement.classList.remove('dark')
 }
 applyThemeColor(initDark)
+applyAccent(accentColor.value)
 
 export const useTheme = () => {
+  const setAccentColor = (color: string) => {
+    if (!validHex(color)) return false
+    accentColor.value = color.toLowerCase()
+    storageSet('tg-manage-accent-color', accentColor.value)
+    applyAccent(accentColor.value)
+    return true
+  }
   const toggleTheme = (event?: MouseEvent) => {
     const prefersReducedMotion = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const isAppearanceTransition = typeof document !== 'undefined' && typeof document.startViewTransition === 'function' && !prefersReducedMotion
@@ -77,7 +125,8 @@ export const useTheme = () => {
       storageSet('theme', 'light')
     }
     applyThemeColor(isDark.value)
+    applyAccent(accentColor.value)
   }
 
-  return { isDark, toggleTheme }
+  return { isDark, toggleTheme, accentColor, setAccentColor }
 }
