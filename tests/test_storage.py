@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from backend.core.config import Settings
 from backend.utils import storage
 
 
@@ -49,6 +50,30 @@ class TestDataDirOverride:
         target = tmp_path / "custom" / "override.txt"
         monkeypatch.setenv("APP_DATA_DIR_OVERRIDE_FILE", str(target))
         assert storage.get_data_dir_override_file() == target
+
+    def test_legacy_marker_is_read_without_rewriting_it(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("APP_DATA_DIR_OVERRIDE_FILE", raising=False)
+        current = tmp_path / ".tg_manage_data_dir"
+        legacy = tmp_path / ".tg_signpulse_data_dir"
+        monkeypatch.setattr(storage, "_DEFAULT_DATA_DIR_OVERRIDE_FILE", current)
+        monkeypatch.setattr(storage, "_LEGACY_DATA_DIR_OVERRIDE_FILE", legacy)
+        old_data = tmp_path / "old-data"
+        legacy.write_text(str(old_data), encoding="utf-8")
+        assert storage.load_data_dir_override() == old_data
+        assert not current.exists()
+        assert legacy.read_text(encoding="utf-8") == str(old_data)
+
+        new_data = tmp_path / "new-data"
+        storage.save_data_dir_override(new_data)
+        assert storage.load_data_dir_override() == new_data
+        assert legacy.read_text(encoding="utf-8") == str(old_data)
+
+    def test_explicit_marker_does_not_read_legacy_marker(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("APP_DATA_DIR_OVERRIDE_FILE", str(tmp_path / "custom"))
+        legacy = tmp_path / ".tg_signpulse_data_dir"
+        monkeypatch.setattr(storage, "_LEGACY_DATA_DIR_OVERRIDE_FILE", legacy)
+        legacy.write_text(str(tmp_path / "old-data"), encoding="utf-8")
+        assert storage.load_data_dir_override() is None
 
     def test_load_override_missing_file_returns_none(self, monkeypatch, tmp_path):
         monkeypatch.setattr(
@@ -135,5 +160,23 @@ class TestWritableBaseDir:
         base = storage.get_writable_base_dir()
         import tempfile
 
-        assert base == Path(tempfile.gettempdir()) / "tg-signpulse"
+        assert base in (
+            Path(tempfile.gettempdir()) / "tg-manage",
+            Path(tempfile.gettempdir()) / "tg-signpulse",
+        )
         assert base.exists()
+
+
+def test_workdir_uses_existing_legacy_data_without_moving_it(tmp_path):
+    old_workdir = tmp_path / ".signer"
+    old_workdir.mkdir()
+    (old_workdir / ".global_settings.json").write_text('{"log_retention_days": 5}')
+    settings = Settings(data_dir=tmp_path, secret_key="test-secret")
+    assert settings.resolve_workdir() == old_workdir
+    assert (old_workdir / ".global_settings.json").exists()
+    assert not (tmp_path / ".tg_manage").exists()
+
+
+def test_workdir_uses_new_name_on_fresh_install(tmp_path):
+    settings = Settings(data_dir=tmp_path, secret_key="test-secret")
+    assert settings.resolve_workdir() == tmp_path / ".tg_manage"

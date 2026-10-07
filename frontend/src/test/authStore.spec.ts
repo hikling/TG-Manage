@@ -12,6 +12,8 @@ describe('authStore', () => {
     localStorage.setItem('tg-signer-token', 'stored-token')
     const store = useAuthStore()
     expect(store.token).toBe('stored-token')
+    expect(localStorage.getItem('tg-manage-token')).toBe('stored-token')
+    expect(localStorage.getItem('tg-signer-token')).toBeNull()
   })
 
   it('初始无 token 时为 null', () => {
@@ -23,7 +25,7 @@ describe('authStore', () => {
     const store = useAuthStore()
     store.setToken('new-token')
     expect(store.token).toBe('new-token')
-    expect(localStorage.getItem('tg-signer-token')).toBe('new-token')
+    expect(localStorage.getItem('tg-manage-token')).toBe('new-token')
   })
 
   it('clearToken 同步清除 Store 和 localStorage', () => {
@@ -31,7 +33,7 @@ describe('authStore', () => {
     store.setToken('to-clear')
     store.clearToken()
     expect(store.token).toBeNull()
-    expect(localStorage.getItem('tg-signer-token')).toBeNull()
+    expect(localStorage.getItem('tg-manage-token')).toBeNull()
   })
 
   it('isAuthenticated 跟随 token 变化', () => {

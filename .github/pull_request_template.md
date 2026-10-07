@@ -22,7 +22,7 @@
 
 - [ ] 前端面板 (`frontend/`)
 - [ ] 后端 API (`backend/`)
-- [ ] 签到引擎 (`tg_signer/`)
+- [ ] 签到引擎 (`tg_manage/`)
 - [ ] 文档 (`docs/`)
 - [ ] 测试 (`tests/`)
 - [ ] CI / Docker

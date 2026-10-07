@@ -5,7 +5,7 @@ Python 支持 3.10–3.13；依赖及 Ruff 规则以 `pyproject.toml` 为准：`
 测试在 `tests/test_*.py`，对外部 Telegram/Bot API 使用 mock 或隔离 fixture，测试鉴权、非法参数、跨账号访问和敏感输出。前后端协同时核对路径、JSON 字段与 string 类型的 Telegram chat ID；不要将超过 JS 安全整数范围的 ID 转成 number。
 
 ```bash
-python3 -m ruff check backend tg_signer tests
+python3 -m ruff check backend tg_manage tests
 python3 -m pytest -q tests/test_telebox_tasks.py tests/test_chat_center_settings.py
 ```
 

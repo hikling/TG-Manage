@@ -62,13 +62,13 @@ describe('NotFound.vue 404 页面', () => {
     expect(githubBtn.exists()).toBe(true)
     await githubBtn.trigger('click')
 
-    expect(openSpy).toHaveBeenCalledWith('https://github.com/Silentely/TG-SignPulse', '_blank')
+    expect(openSpy).toHaveBeenCalledWith('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
     openSpy.mockRestore()
   })
 
   it('组件挂载时同步更新网页标题 document.title', () => {
     mount(NotFound)
-    expect(document.title).toBe('404 notFound.title - TG-SignPulse')
+    expect(document.title).toBe('404 notFound.title - TG Manage')
   })
 
   it('当存在浏览历史时支持点击返回上一页', async () => {

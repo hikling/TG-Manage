@@ -593,7 +593,7 @@
     "updateCheckDisabled": "服务端已关闭远程检查，已尝试浏览器直连 GitHub。",
     "updateCheckFailed": "无法检查更新：{error}",
     "openRelease": "查看发布页",
-    "upgradeDockerHint": "Docker 升级示例：docker pull ghcr.io/silentely/tg-signpulse:latest",
+    "upgradeDockerHint": "Docker 升级示例：docker pull ghcr.io/hikling/tg-manage:latest",
     "unknownValue": "未知",
     "advanced": "高级执行 / AI",
     "advancedDesc": "覆盖环境变量中的任务超时、冷却与 AI 视觉参数（与下方「保存 AI 配置」一并提交）",

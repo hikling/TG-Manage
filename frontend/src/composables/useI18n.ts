@@ -15,14 +15,14 @@ export function useI18n() {
     get: () => locale.value === 'zh-CN' ? 'zh' : 'en',
     set: (val: string) => {
       locale.value = val === 'en' ? 'en-US' : 'zh-CN'
-      storageSet('tg-signer-locale', val)
+      storageSet('tg-manage-locale', val)
     },
   })
 
   const toggleLanguage = () => {
     const newLocale = locale.value === 'zh-CN' ? 'en-US' : 'zh-CN'
     locale.value = newLocale
-    storageSet('tg-signer-locale', newLocale === 'zh-CN' ? 'zh' : 'en')
+    storageSet('tg-manage-locale', newLocale === 'zh-CN' ? 'zh' : 'en')
   }
 
   // 包装 vue-i18n 的 t 函数，支持嵌套 key 与命名插值

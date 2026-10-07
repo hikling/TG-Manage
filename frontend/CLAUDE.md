@@ -2,7 +2,7 @@
 
 # Frontend 模块
 
-> Vue 3 + TypeScript + Vite 构建的 TG-SignPulse Web 管理面板。
+> Vue 3 + TypeScript + Vite 构建的 TG Manage Web 管理面板。
 
 ## 变更记录 (Changelog)
 
@@ -253,7 +253,7 @@ Tasks.vue
 A: `/api` REST + 部分 WebSocket；开发期 Vite 代理到 `127.0.0.1:8080`。
 
 **Q: 登录态？**  
-A: localStorage 中 JWT（如 `tg-signer-token`），`Authorization: Bearer`。
+A: localStorage 中 JWT 使用 `tg-manage-token`，`Authorization: Bearer`。首次升级会从旧键 `tg-signer-token` 读取并迁移，保留现有登录态。
 
 **Q: 旧 Task API？**  
 A: 前端不得再调用 `/api/tasks`；类型上优先 `SignTask`。

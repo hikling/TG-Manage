@@ -8,7 +8,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-TEST_DATA_DIR = Path("/tmp/tg_signpulse_e2e")
+TEST_DATA_DIR = Path("/tmp/tg_manage_e2e")
 
 def cleanup_data_dir():
     if TEST_DATA_DIR.exists():

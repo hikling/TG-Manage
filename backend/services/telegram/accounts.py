@@ -291,7 +291,7 @@ class TelegramAccountsMixin:
         Raises:
             瞬时错误（网络/会话/限流）向上抛出，由调用方决定是否缓存判定
         """
-        from tg_signer.core import get_client
+        from tg_manage.core import get_client
 
         account_name = self._normalize_account_name(account_name)
 
@@ -368,7 +368,7 @@ class TelegramAccountsMixin:
         Raises:
             瞬时错误（网络/会话/限流）向上抛出，由调用方决定是否缓存判定
         """
-        from tg_signer.core import get_client
+        from tg_manage.core import get_client
 
         account_name = self._normalize_account_name(account_name)
 
@@ -451,7 +451,7 @@ class TelegramAccountsMixin:
 
         返回 (client, proxy_dict) 元组。
         """
-        from tg_signer.core import get_client
+        from tg_manage.core import get_client
 
         account_name = self._normalize_account_name(account_name)
 
@@ -509,7 +509,7 @@ class TelegramAccountsMixin:
         2. 使用单次 get_me 探活，避免执行重操作。
         3. 将“会话失效”与“临时网络错误”分开，前端可据此决定是否引导重新登录。
         """
-        from tg_signer.core import get_client
+        from tg_manage.core import get_client
 
         account_name = self._normalize_account_name(account_name)
         checked_at = utc_now_iso_z()
@@ -733,7 +733,7 @@ class TelegramAccountsMixin:
         """
         # 确保释放资源
         account_name = self._normalize_account_name(account_name)
-        from tg_signer.core import close_client_by_name
+        from tg_manage.core import close_client_by_name
 
         # 尝试关闭 active client
         try:
@@ -852,7 +852,7 @@ class TelegramAccountsMixin:
         first_lock = get_account_lock(ordered_names[0])
         second_lock = get_account_lock(ordered_names[-1])
 
-        from tg_signer.core import close_client_by_name
+        from tg_manage.core import close_client_by_name
 
         async def _perform_rename() -> None:
             await close_client_by_name(

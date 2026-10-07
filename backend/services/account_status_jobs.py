@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 from backend.core.config import get_settings
 from backend.services.background_job import BackgroundJobStore
 from backend.utils.names import validate_storage_name
-from tg_signer.utils import clamp
+from tg_manage.utils import clamp
 
 logger = logging.getLogger("backend.account_status_jobs")
 

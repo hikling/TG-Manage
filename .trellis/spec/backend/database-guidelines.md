@@ -12,4 +12,4 @@ if not first_user:
 
 `backend/models/user.py`、`account.py`、`login_log.py` 显式定义列、索引和表名；时间默认值用 `backend/utils/time.py` 的 UTC helper。启动时 `backend/main.py` 调用 `Base.metadata.create_all(bind=get_engine())`；代码里没有独立的 Alembic 迁移体系。`create_all` 不会替已有表自动增删列，变更现有模式必须查明已有升级逻辑和旧库兼容路径，不可只修改 ORM 声明。
 
-账号 session、工作台每日消息/插件任务及 TeleBox 状态并非全部存于 ORM：`backend/utils/tg_session.py`、`backend/services/telebox_tasks.py`、`backend/services/telebox.py` 分别处理这些文件。私有数据写入需沿用锁、原子替换、限制权限与账号隔离；不要把 Telegram 凭据暴露到 API 响应。
+账号 session、Telegram 客户端工作目录及 TeleBox 状态并非全部存于 ORM：`backend/utils/tg_session.py`、`backend/core/config.py::resolve_workdir`、`backend/services/telebox.py` 分别处理这些文件。现有 `.signer` 工作目录优先于新 `.tg_manage` 目录，升级时不可删除旧目录。私有数据写入需沿用锁、原子替换、限制权限与账号隔离；不要把 Telegram 凭据暴露到 API 响应。

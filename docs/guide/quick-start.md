@@ -1,31 +1,29 @@
-# 快速开始：TG-SignPulse + 内置 TeleBox
+# 快速开始：TG Manage
 
-> 此文档适用于本二改仓库。**不要使用**上游 `ghcr.io/silentely/tg-signpulse` 镜像；它不含聊天中心和 TeleBox 面板。完整改动、环境变量、本地开发与验证说明见仓库根目录 [README](../../README.md)。
+## 准备
 
-## 环境
+服务器需要 Docker Engine 24+、Docker Compose v2、Git、本[私有仓库](https://github.com/hikling/TG-SignPulse-Private)的读取权限，以及连接 Telegram 和下载构建依赖的网络。TeleBox 账号需要自己的 Telegram API ID/Hash。
 
-- Docker Engine 24+ 和 Docker Compose v2；能构建/下载 Node 与 Python 依赖。
-- 宿主机至少能运行当前 Compose 配置的 2 GiB 容器；多账号 TeleBox 每个账号另有 Node 进程。
-- 可连接 Telegram、能接收验证码/使用手机扫码的 Telegram 账号，以及你自己的 API ID/Hash。
-- Windows/macOS 建议 Docker Desktop；本地源码开发所需 Python 3.10–3.13、Node 22.23.1 和另一个 Node 24，详见 README。
-
-## 一条命令部署
-
-服务器准备 Docker Engine 24+、Compose v2、Git 和本私有仓库的读取权限。执行：
+## 安装
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone https://github.com/hikling/TG-SignPulse-Private.git
+cd TG-SignPulse-Private
+bash scripts/install.sh
 ```
 
-脚本构建镜像、启动容器、检测就绪并打印首次设置码。应用密钥自动生成并保存在 `data/.app_secret_key`。浏览器打开 `http://服务器IP:8080`，输入一次性设置码并自行设置管理员密码（至少 12 位）。不启用 TeleBox 且希望登录页免填 API 时，先在服务器私有 `.env` 设置 `SIGNPULSE_TG_API_ID/HASH`；Telegram 授权仍需应用凭据。已有账号不会被重置。公网访问请配置 HTTPS。
+安装脚本从源码构建镜像、启动容器、等待 `/readyz` 就绪，并输出一次性管理员设置码。打开 `http://服务器IP:8080`，用设置码创建至少 12 位的管理员密码。已有部署会保留原管理员密码。
 
-查看状态：`docker compose ps`；查看日志：`docker compose logs --tail=100 app`。克隆私有仓库需要 GitHub 授权。
+不启用 TeleBox 的普通账号也可使用服务器自己的 Telegram 应用凭据：在私有 `.env` 中设置 `TG_MANAGE_TG_API_ID` 和 `TG_MANAGE_TG_API_HASH`。旧版 `SIGNPULSE_TG_API_*`、`TG_API_*` 在升级时继续读取。
 
-## 4. 登录账号并试用
+## 开始使用
 
-1. “账号管理”：选择是否启用 TeleBox。勾选时输入该账号专属 API ID/Hash，登录后自动请求启动；不勾选时使用服务器私有凭据。再用手机验证码或二维码登录测试账号。
-2. 如需聊天中心，先在系统设置的“通用”中开启，然后选择账号查看带头像的群组对话。关闭时仅从账号管理读取 Telegram 官方验证码消息；工作台可手动填写目标并发送。
-3. “任务编排”：可选当前账号已加载的 TeleBox 插件命令。已移除的 Python 自定义插件动作不会自动迁移。
-4. “拓展插件”：查看独立会话状态、插件清单和错误阶段；如提示 `password_required`，输入 Telegram 两步验证密码。统一“日志”页也显示 TeleBox 运行记录。
+1. 在“账号管理”用手机验证码或二维码登录账号；需要 TeleBox 时填写该账号专属 API ID/Hash。
+2. 在账号卡片查看主会话和 TeleBox 的独立状态；出现两步验证提示时按页面要求补交密码。
+3. 在“聊天中心”按需开启聊天，先用自己的测试对话验证消息收发。
+4. 在“系统设置 → 机器人中心”管理 Bot Token、资料和命令。
+5. 在仪表盘查看当前进程内存，部署在容器内时再用 `docker stats --no-stream tg-manage` 查看总体内存。
 
-完整目录与升级/备份说明见 [README](../../README.md#数据升级与备份) 和 [Docker 部署](../deploy/docker.md)。真实 Telegram 授权、Bot API 和 TPM 远程安装需要在你自己的环境中检验。
+## 下次升级
+
+在原仓库目录执行 `bash scripts/update.sh`。脚本会短暂停机并备份整个 `data/`，再拉取当前仓库代码和重建。升级不会清空原挂载目录；检查与回退步骤见 [Docker 部署与升级](../deploy/docker.md#无损升级与回退)。

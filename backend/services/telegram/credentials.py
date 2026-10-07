@@ -34,6 +34,7 @@ def resolve_login_api_credentials(api_id: Any = None, api_hash: Any = None) -> t
         return validate_telegram_api_credentials(api_id, api_hash)
 
     for id_key, hash_key in (
+        ("TG_MANAGE_TG_API_ID", "TG_MANAGE_TG_API_HASH"),
         ("SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH"),
         ("TG_API_ID", "TG_API_HASH"),
     ):

@@ -1,15 +1,16 @@
 ---
 layout: home
-title: TG-SignPulse 文档
-description: Telegram 多账号面板、聊天中心与 TeleBox 插件任务
+
+title: TG Manage 文档
+description: Telegram 多账号面板、聊天中心与 TeleBox
 
 hero:
-  name: TG-SignPulse
-  text: Telegram 多账号自动化管理面板
-  tagline: 聊天中心 · 多账号工作台 · 任务编排 · 内置 TeleBox · 源码构建
+  name: TG Manage
+  text: Telegram 多账号管理面板
+  tagline: 账号管理 · 聊天中心 · 内置 TeleBox · 数据备份
   image:
     src: /logo.svg
-    alt: TG-SignPulse
+    alt: TG Manage
   actions:
     - theme: brand
       text: 快速开始
@@ -26,15 +27,15 @@ hero:
 
 features:
   - icon: 👥
-    title: 多账号工作台
-    details: 选择账号和目标对话，立即发送或创建每日定时消息。
-  - icon: 🧩
-    title: TeleBox 插件任务
-    details: 识别账号运行时的 KITT 与新安装插件命令，手动执行并查看运行日志。
+    title: 多账号管理
+    details: 查看账号、代理与会话状态，并按账号运行 TeleBox。
   - icon: 💬
-    title: 按需开启聊天中心
-    details: 默认仅读取 Telegram 官方验证码；开启后查看普通会话，聊天缓存限制为 5 MB。
+    title: 聊天中心
+    details: 按需开启群组会话，查看和发送消息。
+  - icon: 🤖
+    title: 机器人中心
+    details: 在系统设置中管理 Bot Token、资料、命令和消息。
   - icon: 🐳
-    title: 源码构建部署
-    details: 本仓库支持 Docker Compose 构建与持久化数据目录。
+    title: 源码部署
+    details: Docker Compose 从当前仓库构建，数据保存在独立挂载目录。
 ---

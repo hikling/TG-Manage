@@ -22,7 +22,7 @@ except ImportError:  # pragma: no cover - pydantic v1 compatibility
 
 _PYDANTIC_V2 = hasattr(BaseModel, "model_validate")
 
-from tg_signer.compat import (  # noqa: E402
+from tg_manage.compat import (  # noqa: E402
     _PYROGRAM_IMPORT_ERROR,
     BaseClient,
     Chat,
@@ -131,13 +131,13 @@ async def _patched_invoke(self, query, *args, **kwargs):
 
 BaseClient.invoke = _patched_invoke
 
-logger = logging.getLogger("tg-signer")
+logger = logging.getLogger("tg-manage")
 
 DICE_EMOJIS = ("🎲", "🎯", "🏀", "⚽", "🎳", "🎰")
 
 Session.START_TIMEOUT = 5  # 原始超时时间为2秒，但一些代理访问会超时，所以这里调大一点
 
-OPENAI_USE_PROMPT = "当前任务需要配置大模型，请确保运行前正确设置`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`等环境变量，或通过`tg-signer llm-config`持久化配置。"
+OPENAI_USE_PROMPT = "当前任务需要配置大模型，请确保运行前正确设置 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL` 等环境变量，或通过 TG Manage 设置页保存配置。"
 
 
 def _is_callback_data_invalid(exc: BaseException) -> bool:
@@ -202,7 +202,7 @@ class Client(BaseClient):
         if _PYROGRAM_IMPORT_ERROR is not None:
             _raise_pyrogram_import_error()
         key = kwargs.pop("key", None)
-        self._tg_signpulse_no_updates = kwargs.get("no_updates")
+        self._tg_manage_no_updates = kwargs.get("no_updates")
         super().__init__(name, *args, **kwargs)
         self.key = key or str(pathlib.Path(self.workdir).joinpath(self.name).resolve())
         if self.in_memory and not self.session_string:
@@ -406,7 +406,7 @@ def get_client(
     if key in _CLIENT_INSTANCES:
         existing = _CLIENT_INSTANCES[key]
         requested_no_updates = kwargs.get("no_updates")
-        existing_no_updates = getattr(existing, "_tg_signpulse_no_updates", None)
+        existing_no_updates = getattr(existing, "_tg_manage_no_updates", None)
         refs = _CLIENT_REFS.get(key, 0)
         if (
             requested_no_updates is not None

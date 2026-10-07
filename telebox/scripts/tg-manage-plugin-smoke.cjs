@@ -14,17 +14,17 @@ async function main() {
     index: '1',
     tasks: [{ id: '1', remark: 'integration smoke', status: '1',
       match: "return msg.message === 'integration-smoke'",
-      action: 'globalThis.__signpulseKittAction = (globalThis.__signpulseKittAction || 0) + 1',
+      action: 'globalThis.__tgManageKittAction = (globalThis.__tgManageKittAction || 0) + 1',
     }],
   }));
   try {
     const plugin = require('../src/plugin/kitt.ts').default;
     await plugin.listenMessageHandler({ message: 'integration-smoke', client: null });
-    assert.equal(globalThis.__signpulseKittAction, 1, 'matched plugin must execute its action');
+    assert.equal(globalThis.__tgManageKittAction, 1, 'matched plugin must execute its action');
   } finally {
     if (previous) fs.writeFileSync(filename, previous);
     else fs.unlinkSync(filename);
-    delete globalThis.__signpulseKittAction;
+    delete globalThis.__tgManageKittAction;
   }
 }
 

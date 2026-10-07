@@ -6,7 +6,7 @@ map $http_upgrade $connection_upgrade {
     ''      close;
 }
 
-upstream tg_signpulse {
+upstream tg_manage {
     server 127.0.0.1:8080;
     keepalive 16;
 }
@@ -18,7 +18,7 @@ server {
     client_max_body_size 20m;
 
     location / {
-        proxy_pass http://tg_signpulse;
+        proxy_pass http://tg_manage;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -28,7 +28,7 @@ server {
     }
 
     location ~ ^/api/sign-tasks/ws/ {
-        proxy_pass http://tg_signpulse;
+        proxy_pass http://tg_manage;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
@@ -41,7 +41,7 @@ server {
     }
 
     location /api/events/ {
-        proxy_pass http://tg_signpulse;
+        proxy_pass http://tg_manage;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -56,12 +56,12 @@ server {
     }
 
     location = /readyz {
-        proxy_pass http://tg_signpulse;
+        proxy_pass http://tg_manage;
         access_log off;
     }
 
     location = /healthz {
-        proxy_pass http://tg_signpulse;
+        proxy_pass http://tg_manage;
         access_log off;
     }
 }

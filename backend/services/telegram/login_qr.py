@@ -20,7 +20,7 @@ from backend.utils.tg_session import (
     get_session_mode,
 )
 from backend.utils.time import utc_from_timestamp_iso_z
-from tg_signer.async_utils import create_logged_task
+from tg_manage.async_utils import create_logged_task
 
 logger = logging.getLogger("backend.telegram.login_qr")
 
@@ -483,7 +483,7 @@ class TelegramQrLoginMixin:
         from pyrogram import Client, handlers, raw
         from pyrogram.errors import FloodWait
 
-        from tg_signer.core import close_client_by_name
+        from tg_manage.core import close_client_by_name
 
         await _cleanup_expired_login_sessions()
 

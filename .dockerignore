@@ -76,6 +76,7 @@ logs/
 
 # Data
 .signer/
+.tg_manage/
 sessions/
 data/
 *.session
@@ -83,6 +84,7 @@ data/
 .local-data/
 .local-login-data/
 .tg_signpulse_data_dir
+.tg_manage_data_dir
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal

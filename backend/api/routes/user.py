@@ -242,7 +242,7 @@ def get_totp_qrcode(
         )
 
     totp = pyotp.TOTP(secret)
-    uri = totp.provisioning_uri(name=current_user.username, issuer_name="tg-signer")
+    uri = totp.provisioning_uri(name=current_user.username, issuer_name="TG Manage")
 
     if qrcode is None:
         img_io = io.BytesIO(_FALLBACK_PNG)

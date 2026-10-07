@@ -2,8 +2,8 @@
 services:
   app:
     build: .
-    image: tg-signpulse-telebox:local
-    container_name: tg-signer-panel
+    image: tg-manage-telebox:local
+    container_name: tg-manage-panel
     environment:
       - APP_HOST=0.0.0.0
       - APP_PORT=3000
@@ -11,9 +11,8 @@ services:
       - APP_DATA_DIR=/data
       - TZ=Asia/Shanghai
       - LOG_LEVEL=INFO
-      # 生产务必设置；不设则首次启动随机密码写入 data/.admin_bootstrap_password
-      # - APP_SECRET_KEY=
-      # - ADMIN_PASSWORD=
+      # APP_SECRET_KEY 首次启动自动生成并写入 data/.app_secret_key。
+      # 管理员在首次网页设置流程中设定密码。
       # 单实例保持 1；多 API 副本时仅写节点持锁
       - APP_SCHEDULER_LOCK=1
       - TG_GLOBAL_CONCURRENCY=${TG_GLOBAL_CONCURRENCY:-2}
@@ -21,12 +20,14 @@ services:
       - TB_PREFIX=${TB_PREFIX:-}
       - TB_LISTENER_HANDLE_EDITED=${TB_LISTENER_HANDLE_EDITED:-}
       - TB_CMD_IGNORE_EDITED=${TB_CMD_IGNORE_EDITED:-}
+      - TG_MANAGE_TG_API_ID=${TG_MANAGE_TG_API_ID:-}
+      - TG_MANAGE_TG_API_HASH=${TG_MANAGE_TG_API_HASH:-}
       - SIGNPULSE_TG_API_ID=${SIGNPULSE_TG_API_ID:-}
       - SIGNPULSE_TG_API_HASH=${SIGNPULSE_TG_API_HASH:-}
       - TG_API_ID=${TG_API_ID:-}
       - TG_API_HASH=${TG_API_HASH:-}
       # 可选：Postgres
-      # - APP_DATABASE_URL=postgresql+psycopg2://user:pass@db:5432/tg_signpulse
+      # - APP_DATABASE_URL=postgresql+psycopg2://user:pass@db:5432/tg_manage
       # 可选：监听分片（多实例时）
       # - APP_MONITOR_SHARD=0/2
       # - APP_MONITOR_ACCOUNT_ALLOWLIST=

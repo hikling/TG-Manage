@@ -1,6 +1,6 @@
 ---
 name: Bug 报告
-about: 报告一个 Bug 帮助我们改进 TG-SignPulse
+about: 报告一个 Bug 帮助我们改进 TG Manage
 title: '[Bug] '
 labels: bug
 assignees: ''
@@ -36,7 +36,7 @@ assignees: ''
 | 项目 | 值 |
 |------|-----|
 | 操作系统 | [例如 macOS 15 / Windows 11 / Ubuntu 24.04] |
-| TG-SignPulse 版本 | [例如 v2.2.2，可在设置-关于页面查看] |
+| TG Manage 版本 | [例如 v2.2.2，可在设置-关于页面查看] |
 | Python 版本 | [例如 3.11] |
 | Node.js 版本 | [例如 22.x] |
 | 部署方式 | [Docker / 直接运行 / 其他] |

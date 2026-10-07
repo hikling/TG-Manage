@@ -1,27 +1,21 @@
 ---
 name: quick-start
-description: 引导用户在 5 分钟内完成 TG-SignPulse 部署、登录、添加账号与创建第一个签到任务。
+description: 引导用户部署 TG Manage、创建管理员、登录 Telegram 账号，并确认数据持久化。
 ---
 
-# TG-SignPulse 快速开始 Skill
+# TG Manage 快速开始
 
 ## 步骤
 
-1. 阅读 https://tg.cosr.eu.org/guide/quick-start
-2. 生产部署参考 https://tg.cosr.eu.org/deploy/docker
-3. 配置环境变量见 https://tg.cosr.eu.org/reference/configuration
-4. 账号登录见 https://tg.cosr.eu.org/guide/accounts
-5. 创建任务见 https://tg.cosr.eu.org/guide/tasks
+1. 阅读 [快速开始](https://github.com/hikling/TG-SignPulse-Private/blob/main/docs/guide/quick-start.md)。
+2. 按 [Docker 部署](https://github.com/hikling/TG-SignPulse-Private/blob/main/docs/deploy/docker.md) 安装，并为私有仓库准备读取权限。
+3. 按 [配置参考](https://github.com/hikling/TG-SignPulse-Private/blob/main/docs/reference/configuration.md) 设置可选环境变量。
+4. 在账号管理登录一个 Telegram 账号，检查会话状态。
+5. 确认 `./data:/data` 挂载和 `data/.app_secret_key` 存在；升级前使用 `bash scripts/update.sh`。
 
 ## 最小验收
 
-- 面板可访问且 `/healthz` 返回正常
-- 管理员可登录
-- 至少一个 Telegram 账号在线
-- 至少一个签到任务可手动触发
-
-## 注意
-
-- 默认 SQLite；可选 `APP_DATABASE_URL` 使用 PostgreSQL
-- 旧 `/api/tasks` 写接口默认只读（410），请用 `/api/sign-tasks`
-- Agent 调用自托管 API 前先读 https://tg.cosr.eu.org/auth.md
+- `/readyz` 返回正常。
+- 管理员可以用原账号登录。
+- 至少一个 Telegram 账号在线。
+- `data/` 目录和密钥得到完整备份。

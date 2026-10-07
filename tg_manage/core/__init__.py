@@ -1,7 +1,7 @@
 """Shared Telegram client lifecycle for account management."""
 from __future__ import annotations
 
-from tg_signer.core.client import (
+from tg_manage.core.client import (
     _CLIENT_ASYNC_LOCKS,
     _CLIENT_INSTANCES,
     _CLIENT_REFS,

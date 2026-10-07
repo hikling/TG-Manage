@@ -289,7 +289,7 @@ async def test_server_chan_channel():
     from backend.services.push_notifications import send_keyword_push
 
     with patch(
-        "tg_signer.notification.server_chan.sc_send", new_callable=AsyncMock
+        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         m.return_value = {"code": 0}
         await send_keyword_push(
@@ -316,7 +316,7 @@ async def test_keyword_push_respects_quiet_hours():
         "timezone": "UTC",
     }
     with patch(
-        "tg_signer.notification.server_chan.sc_send", new_callable=AsyncMock
+        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         await send_keyword_push(cfg, {"title": "hit", "body": "body"})
         m.assert_not_awaited()
@@ -340,7 +340,7 @@ async def test_keyword_push_outside_quiet_hours():
         "backend.services.push_notifications.is_in_quiet_hours",
         return_value=False,
     ), patch(
-        "tg_signer.notification.server_chan.sc_send", new_callable=AsyncMock
+        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         m.return_value = {"code": 0}
         await send_keyword_push(cfg, {"title": "hit", "body": "body"})
@@ -351,7 +351,7 @@ async def test_keyword_push_outside_quiet_hours():
         "backend.services.push_notifications.is_in_quiet_hours",
         return_value=True,
     ), patch(
-        "tg_signer.notification.server_chan.sc_send", new_callable=AsyncMock
+        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         await send_keyword_push(cfg, {"title": "hit", "body": "body"})
         m.assert_not_awaited()

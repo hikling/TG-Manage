@@ -1,6 +1,6 @@
 # 后端目录结构
 
-`backend/main.py` 负责 FastAPI 入口、路由挂载与 lifespan；`backend/api/routes/` 放 HTTP 输入校验和响应转换，`backend/services/` 放业务与 Telegram 调用，`backend/core/` 放配置、认证、数据库，`backend/models/` 是 SQLAlchemy 表，`backend/schemas/` 是共享 Pydantic 模型，`backend/utils/` 放可复用的存储、时间、账号锁等辅助代码。定时任务在 `backend/scheduler/`；底层 Telegram 行为在 `tg_signer/`。
+`backend/main.py` 负责 FastAPI 入口、路由挂载与 lifespan；`backend/api/routes/` 放 HTTP 输入校验和响应转换，`backend/services/` 放业务与 Telegram 调用，`backend/core/` 放配置、认证、数据库，`backend/models/` 是 SQLAlchemy 表，`backend/schemas/` 是共享 Pydantic 模型，`backend/utils/` 放可复用的存储、时间、账号锁等辅助代码。定时任务在 `backend/scheduler/`；底层 Telegram 行为在 `tg_manage/`。
 
 ## 实例
 

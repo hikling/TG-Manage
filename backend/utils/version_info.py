@@ -2,7 +2,7 @@
 
 版本真相源：
 1. 环境变量 APP_VERSION（镜像/CI 注入）
-2. 回退 tg_signer.__version__
+2. 回退 tg_manage.__version__
 
 构建元数据：GIT_SHA / GIT_BRANCH / BUILD_TIME（可选）
 远程检查：可关，失败 soft-fail。
@@ -32,10 +32,10 @@ from backend.utils.time import utc_now_iso
 logger = logging.getLogger("backend.version_info")
 
 DEFAULT_UPDATE_CHECK_URL = (
-    "https://api.github.com/repos/Silentely/TG-SignPulse/releases/latest"
+    "https://api.github.com/repos/hikling/TG-SignPulse-Private/releases/latest"
 )
 DEFAULT_GITHUB_HTML_LATEST = (
-    "https://github.com/Silentely/TG-SignPulse/releases/latest"
+    "https://github.com/hikling/TG-SignPulse-Private/releases/latest"
 )
 UPDATE_CACHE_TTL_SECONDS = 6 * 3600
 _HTTP_TIMEOUT_SECONDS = 8.0
@@ -150,7 +150,7 @@ def validate_update_check_url(url: str) -> str:
 
 def get_local_version_info() -> Dict[str, Any]:
     """收集本进程版本与构建信息（无网络）。"""
-    from tg_signer import __version__ as package_version
+    from tg_manage import __version__ as package_version
 
     version = resolve_app_version(
         str(package_version),
@@ -165,7 +165,7 @@ def get_local_version_info() -> Dict[str, Any]:
 
         app_name = get_settings().app_name
     except Exception:
-        app_name = _read_env("APP_APP_NAME", "APP_NAME", default="tg-signer-panel")
+        app_name = _read_env("APP_APP_NAME", "APP_NAME", default="TG Manage")
 
     import platform
     return {
@@ -220,7 +220,7 @@ def _request_headers(*, accept: str = "application/vnd.github+json") -> Dict[str
     headers = {
         "Accept": accept,
         # 固定 UA，避免部分站点对空/默认 UA 拦截
-        "User-Agent": "TG-SignPulse-VersionCheck/1.0",
+        "User-Agent": "TG-Manage-VersionCheck/1.0",
     }
     token = _github_token()
     if token:
@@ -298,7 +298,7 @@ def _fetch_via_html_redirect(html_latest_url: str) -> Dict[str, Any]:
     # HTML 站不需要 Authorization，避免误带 Token
     headers = {
         "Accept": "text/html,application/xhtml+xml",
-        "User-Agent": "TG-SignPulse-VersionCheck/1.0",
+        "User-Agent": "TG-Manage-VersionCheck/1.0",
     }
     # 不跟随跳转，只读 Location
     with httpx.Client(timeout=_HTTP_TIMEOUT_SECONDS, follow_redirects=False) as client:

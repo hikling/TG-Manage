@@ -93,7 +93,7 @@ export function buildBackupPayload(s: SettingsFormState) {
     webdav_username: s.webdavUsername || null,
     // 空密码表示不覆盖服务端已有值
     ...(s.webdavPassword ? { webdav_password: s.webdavPassword } : {}),
-    webdav_remote_dir: s.webdavRemoteDir || 'tg-signpulse-backups',
+    webdav_remote_dir: s.webdavRemoteDir || 'tg-manage-backups',
   }
 }
 
@@ -226,7 +226,7 @@ export function applyGlobalSettingsToForm(
   s.webdavUrl = res.webdav_url || ''
   s.webdavUsername = res.webdav_username || ''
   s.webdavPassword = ''
-  s.webdavRemoteDir = res.webdav_remote_dir || 'tg-signpulse-backups'
+  s.webdavRemoteDir = res.webdav_remote_dir || 'tg-manage-backups'
   return {
     botTokenSet: !!res.telegram_bot_token_set,
     webdavPasswordSet: !!res.webdav_password_set,

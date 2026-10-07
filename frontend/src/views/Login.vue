@@ -103,26 +103,26 @@ const handleLogin = async () => {
 }
 
 const openGithub = () => {
-  window.open('https://github.com/Silentely/TG-SignPulse', '_blank')
+  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
 }
 </script>
 
 <template>
   <div class="login-shell min-h-screen flex items-center justify-center font-sans px-4 py-10">
     <div class="login-layout">
-      <aside class="login-intro" aria-label="SignPulse">
-        <span class="login-intro-mark">SP <span>／</span> 01</span>
+      <aside class="login-intro" aria-label="TG Manage">
+        <span class="login-intro-mark">TG <span>／</span> 01</span>
         <div class="login-intro-copy">
           <p>YOUR TELEGRAM CONTROL CENTER</p>
           <h2>让每个信号，<br><em>都有回应。</em></h2>
-          <span>集中管理账号、任务与运行状态。<br>从连接到执行，一切尽在掌握。</span>
+          <span>集中管理账号、聊天与运行状态。<br>从连接到执行，一切尽在掌握。</span>
         </div>
-        <div class="login-intro-foot"><span class="login-intro-pulse" /> SIGNPULSE CONSOLE</div>
+        <div class="login-intro-foot"><span class="login-intro-pulse" /> TG MANAGE CONSOLE</div>
       </aside>
-    <div class="login-form-panel w-full max-w-sm ui-card shadow-[var(--sp-shadow-md)] px-8 py-10">
+    <div class="login-form-panel w-full max-w-sm ui-card shadow-[var(--tg-shadow-md)] px-8 py-10">
       <div class="mb-8 text-center">
-        <div class="ui-brand-mark w-12 h-12 mx-auto text-lg mb-4">SP</div>
-        <h1 class="text-xl font-medium text-gray-900 dark:text-gray-100 tracking-[0.2em]">SIGNPULSE</h1>
+        <div class="ui-brand-mark w-12 h-12 mx-auto text-lg mb-4">TG</div>
+        <h1 class="text-xl font-medium text-gray-900 dark:text-gray-100 tracking-[0.12em]">TG Manage</h1>
         <p class="text-xs text-gray-500 mt-2 leading-relaxed">{{ t('login.subtitle') }}</p>
       </div>
 
@@ -166,7 +166,7 @@ const openGithub = () => {
             >
             <button
               type="button"
-              class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded"
+              class="absolute right-0 top-1/2 -translate-y-1/2 w-11 h-11 inline-flex items-center justify-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 rounded"
               :aria-label="showPassword ? t('login.hidePassword') : t('login.showPassword')"
               @click="showPassword = !showPassword"
             >

@@ -1,7 +1,7 @@
 """
 分级日志文件过滤语义测试
 
-覆盖 tg_signer/logger.py 的 configure_logger：
+覆盖 tg_manage/logger.py 的 configure_logger：
 - warn.log 应收 WARNING 及以上（含 ERROR/CRITICAL，完整问题视图）
 - error.log 应收 ERROR 及以上
 - 两文件均不混入 INFO/DEBUG
@@ -11,7 +11,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from tg_signer.logger import MinLevelFilter, configure_logger
+from tg_manage.logger import MinLevelFilter, configure_logger
 
 
 def _read_lines(path: Path) -> list[str]:

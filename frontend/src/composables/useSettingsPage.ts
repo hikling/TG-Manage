@@ -60,7 +60,7 @@ export function useSettingsPage() {
     webdavUrl: '',
     webdavUsername: '',
     webdavPassword: '',
-    webdavRemoteDir: 'tg-signpulse-backups',
+    webdavRemoteDir: 'tg-manage-backups',
   })
 
   // 时区选项列表

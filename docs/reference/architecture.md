@@ -1,161 +1,24 @@
 # 系统架构
 
-## 总览
+TG Manage 由 Vue 3 管理界面、FastAPI API、Telegram 账号服务、每账号独立的 TeleBox Node 运行时，以及持久化数据目录组成。
 
-TG-SignPulse 二改版由五个核心部分组成：
+## 请求路径
 
-1. Vue 3 前端面板
-2. FastAPI 后端 API
-3. 调度与任务服务
-4. `tg_signer` Telegram 执行引擎
-5. 内置 TeleBox 源码与按账号隔离的 Node 运行时
+| 组件 | 职责 |
+| --- | --- |
+| 前端 | 登录、仪表盘、账号与聊天、系统设置中的机器人中心、日志。 |
+| FastAPI | 鉴权、账号和消息 API、Bot API、TeleBox 进程管理、备份及运维。 |
+| Telegram 账号服务 | 管理主账号的授权、会话、代理和消息操作。 |
+| TeleBox | 每个启用账号使用独立的 Node 进程、Telegram 会话和插件目录。 |
 
-## 前端
+主要 API 前缀包括 `/api/auth`、`/api/accounts`、`/api/communications`、`/api/bots`、`/api/telebox`、`/api/config`、`/api/ops` 和 `/api/logs`。当前版本不运行旧签到、关键词监听或 AI 动作链路。
 
-前端负责：
+## 数据与密钥
 
-- 登录与鉴权
-- 账号管理
-- 任务创建与编辑
-- 聊天中心、账号工作台、群聊和机器人管理
-- TeleBox 插件清单与运行状态
-- 全局设置
-- 运行日志展示
+Compose 把宿主机 `./data` 挂载到容器 `/data`。SQLite 默认保存在数据目录内；`sessions/` 保存主账号会话，`telebox/` 为各账号提供独立数据目录。账号 API 凭据和 Bot Token 由 `data/.app_secret_key` 加密。升级时保留整个挂载目录，详见 [无损升级](../deploy/docker.md#无损升级与回退)。
 
-开发模式默认运行在：
+外部 PostgreSQL 可通过 `APP_DATABASE_URL` 配置；此时还需单独备份数据库。单个 Telegram 账号的会话不应由多个写入进程同时使用。
 
-```text
-http://localhost:5173
-```
+## 资源
 
-## 后端 API
-
-主要路由包括：
-
-- `/api/auth` — 认证与登录
-- `/api/user` — 用户管理
-- `/api/accounts` — 账号管理
-- `/api/communications` — 账号会话、消息和群聊
-- `/api/bots` — Bot Token 和资料/命令管理
-- `/api/telebox` — 按账号管理 TeleBox 进程及插件
-- `/api/sign-tasks` — 签到任务配置（**主路径**，文件存储）
-- `/api/batch/sign-tasks` — 签到任务批量操作（enable/disable/delete/run）
-- `/api/ops` — 运维：调度预览、备份状态/导出、内存统计
-- `/api/logs` — 执行日志
-- `/api/config` — 系统配置
-- `/api/events` — 签到历史 SSE 事件流
-- `/api/tasks` — **已移除**（请用 `/api/sign-tasks`）
-- `/api/batch/tasks` — **已移除**（请用 `/api/batch/sign-tasks`）
-
-后端负责：
-
-- JWT 鉴权
-- 数据库存储
-- 账号登录流程
-- 任务增删改查
-- 调度同步
-- 关键词监听生命周期管理
-- TeleBox 独立进程生命周期、插件操作与日志
-
-## 调度层
-
-调度层基于 APScheduler。
-
-主要职责：
-
-- 读取已启用任务
-- 为 `fixed` 与 `range` 任务生成调度
-- 在任务变更后同步调度项
-- `listen` 模式则交给关键词监听服务，而不是普通 Cron
-
-## 任务服务
-
-`SignTaskService` 负责：
-
-- 任务创建、更新、删除
-- 共享任务的账号聚合
-- 手动执行任务
-- 历史记录和流程日志
-- 失败通知
-
-执行细节由 `sign_task_runner.execute_sign_task` 分阶段完成（账号锁、冷却、重试、超时、落历史）；取消（`CancelledError`）不写失败历史、不发失败通知。开发者地图见仓库 [`backend/CLAUDE.md`](../../backend/CLAUDE.md)。
-
-历史列表依赖 `history/_recent_index.jsonl` 轻量索引（供 SSE / 最近日志），详情仍读各任务 history JSON。
-
-## 关键词监听服务
-
-`KeywordMonitorService` 负责：
-
-- 从任务配置中提取监听规则
-- 挂载 Telegram message handler
-- 匹配关键词、正则和话题
-- 触发通知、转发或继续动作
-- 在任务变化后重建监听器
-- 按 (账号, 会话) 持久化已处理消息水位（`seen.json`），避免重连补投重复命中
-- 命中后的标准 continue 动作在 `continue_actions` 模块执行；历史 AI 动作须检查并迁移
-
-分片与 allowlist 见环境变量 `APP_MONITOR_SHARD`、`APP_MONITOR_ACCOUNT_ALLOWLIST`。
-
-## 执行引擎
-
-`tg_signer` 负责真正和 Telegram 交互：
-
-- 发送文本
-- 发送骰子
-- 点击按钮
-- 等待消息变化
-- 对旧任务中的 AI 动作保留历史解析路径；新任务界面不再提供全局 AI 模型配置
-- 处理 FloodWait、重试和部分异常恢复
-
-## 数据流
-
-### 定时任务
-
-```text
-Scheduler
-  -> SignTaskService
-  -> tg_signer core
-  -> Telegram
-  -> Log / History / Notification
-```
-
-### 监听任务
-
-```text
-Telegram Update
-  -> KeywordMonitorService
-  -> Keyword Match
-  -> Push / Forward / Continue Actions
-  -> Log / History
-```
-
-## 存储层
-
-主要存储分为三部分：
-
-- `db.sqlite`：面板数据库
-- `sessions/`：Telegram 会话
-- `.signer/`：任务配置与运行相关数据
-- `telebox/`：每账号隔离的 TeleBox 插件和运行数据
-
-全局设置保存在数据目录中；账号专属 Telegram API ID/Hash 加密保存在 `sessions/accounts.json`，加密根密钥是 `data/.app_secret_key`。旧版 AI 与共享 Telegram API 配置文件若存在，仅作为历史数据保留，不再由面板读写。
-
-## 设计特点
-
-- 前后端可一体容器化部署
-- 任务与账号关系支持从单账号扩展到多账号共享
-- 监听任务与定时任务共用动作模型
-- TeleBox 插件按账号隔离运行，不共用面板的任务配置
-- 数据目录与运行目录分离，便于迁移与备份
-
-## 扩展约束
-
-当前部署模型以**单写主实例**为主：APScheduler、Telegram 客户端会话和关键词监听器默认在持有调度锁的进程内协调。
-
-- **数据库**：**默认仍是 SQLite（WAL）**，并未取消或强制迁走。可通过 `APP_DATABASE_URL` / `DATABASE_URL` **可选**切换到 PostgreSQL 等（SQLAlchemy URL，需对应驱动）。面板元数据可外置，但 **Telegram session 仍不宜多进程共享同一账号文件**。
-- **调度锁**：启动时尝试获取 `data/.scheduler.lock`（`APP_SCHEDULER_LOCK=0` 可关闭）。仅锁持有者注册 `sign-` 业务 job（旧 ORM `db-` job 已随旧任务体系移除），降低多副本重复签到风险。
-- **监听分片**：`APP_MONITOR_SHARD=i/n` + 可选 `APP_MONITOR_ACCOUNT_ALLOWLIST`，按账号拆分关键词监听；**同一账号的 session 仍只能由一个进程持有**。
-- **旧任务 API**：`/api/tasks` 已移除，统一 `/api/sign-tasks`。
-- **任务队列**：完整队列化（Celery/RQ 等）尚未内置；当前以进程内 APScheduler + 文件锁 + 监听分片为过渡方案。
-- 数据库锁定的排查步骤见 [运维手册 - 场景 2：数据库锁定](ops.md#场景-2数据库锁定)。
-- 反向代理可以扩展入口流量，但不等同于后端多副本扩展。
+默认 Compose 限制容器使用 2 GiB 内存和 2 CPU。仪表盘显示当前进程内存，容器总内存还包括各账号 TeleBox 子进程。部署多个常驻账号时，按实际运行情况观察 `docker stats` 并调整资源。

@@ -233,7 +233,7 @@ const displayValue = computed(() => {
     <Transition name="dropdown">
       <div
         v-if="isOpen"
-        class="absolute z-[60] mt-1 ui-card shadow-[var(--sp-shadow-md)] p-3 w-[272px] right-0"
+        class="absolute z-[60] mt-1 ui-card shadow-[var(--tg-shadow-md)] p-3 w-[272px] right-0"
         role="dialog"
         :aria-label="monthLabel"
       >

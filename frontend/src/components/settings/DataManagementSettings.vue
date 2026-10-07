@@ -163,7 +163,7 @@ const formatBytes = (n?: number | null) => {
       </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="webdav-remote-dir">{{ t('settings.webdavRemoteDir') }}</label>
-        <input id="webdav-remote-dir" :value="modelValue.webdavRemoteDir" @input="onStringInput('webdavRemoteDir', $event)" type="text" placeholder="tg-signpulse-backups" class="ui-input">
+        <input id="webdav-remote-dir" :value="modelValue.webdavRemoteDir" @input="onStringInput('webdavRemoteDir', $event)" type="text" placeholder="tg-manage-backups" class="ui-input">
       </div>
       <div class="flex flex-col sm:flex-row gap-2">
         <button

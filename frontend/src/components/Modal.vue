@@ -175,7 +175,7 @@ onUnmounted(() => {
           tabindex="-1"
           :aria-label="title"
           :class="[
-            'relative w-full ui-card shadow-[var(--sp-shadow-md)] overflow-hidden flex flex-col max-h-[90vh]',
+            'relative w-full ui-card shadow-[var(--tg-shadow-md)] overflow-hidden flex flex-col max-h-[90vh]',
             maxWidthClass,
           ]"
         >

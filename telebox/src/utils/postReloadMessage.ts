@@ -80,7 +80,7 @@ export async function reloadAndFinalize(
     reload?: () => Promise<unknown>;
   },
 ): Promise<void> {
-  // SignPulse panel transport: progress belongs to IPC, never a Telegram peer.
+  // TG Manage panel transport: progress belongs to IPC, never a Telegram peer.
   if ((statusMsg as unknown as { __panelStatus?: boolean }).__panelStatus) {
     const reload = options?.reload ?? (async () => {
       const { loadPlugins } = require("./pluginManager") as typeof import("./pluginManager");

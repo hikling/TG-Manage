@@ -1,17 +1,27 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, RefreshCw, Users } from 'lucide-vue-next'
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, RefreshCw, Users } from 'lucide-vue-next'
 import { useAccountsStore } from '../stores/accounts'
 import { errorText } from '../composables/usePanelAccount'
 import { listTeleBoxAccounts, type TeleBoxAccount } from '../lib/api/telebox'
 import { isAccountHealthy } from '../lib/account-list-map'
 import type { AccountInfo } from '../lib/api'
+import { getMemoryStats } from '../lib/api/ops'
+import { getAuthToken } from '../lib/api/core'
+import { formatMemoryRssFromStats } from '../lib/memory-format'
 
 const store = useAccountsStore()
 const telebox = ref<TeleBoxAccount[]>([])
 const loading = ref(false)
 const error = ref('')
+const memoryRss = ref('读取中…')
+const memoryStatus = ref('正在获取当前服务进程内存')
+const memoryUpdatedAt = ref('')
+let memoryTimer: ReturnType<typeof setTimeout> | undefined
+let memoryInFlight = false
+let active = true
+const MEMORY_REFRESH_MS = 15_000
 const runningCount = computed(() => telebox.value.filter(item => item.status === 'running').length)
 const healthyCount = computed(() => store.accounts.filter(isAccountHealthy).length)
 const attention = computed(() => store.accounts.filter(item => !isAccountHealthy(item)).slice(0, 8))
@@ -32,18 +42,65 @@ async function load() {
   } catch (cause) { error.value = errorText(cause) }
   finally { loading.value = false }
 }
-onMounted(() => void load())
+
+async function refreshMemory() {
+  if (memoryInFlight) return
+  memoryInFlight = true
+  if (memoryTimer) clearTimeout(memoryTimer)
+  try {
+    const response = await getMemoryStats(getAuthToken())
+    if (!active) return
+    const value = response.available ? formatMemoryRssFromStats(response.stats, '') : ''
+    memoryRss.value = value || '不可用'
+    memoryStatus.value = value ? '当前服务进程 RSS' : '服务未提供内存数据'
+    memoryUpdatedAt.value = value ? new Date().toLocaleTimeString() : ''
+  } catch {
+    if (!active) return
+    memoryRss.value = '获取失败'
+    memoryStatus.value = '内存数据暂不可用，请稍后刷新'
+    memoryUpdatedAt.value = ''
+  } finally {
+    memoryInFlight = false
+    if (active && !document.hidden) memoryTimer = setTimeout(() => void refreshMemory(), MEMORY_REFRESH_MS)
+  }
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    if (memoryTimer) clearTimeout(memoryTimer)
+    memoryTimer = undefined
+  } else if (active) {
+    void refreshMemory()
+  }
+}
+
+function refreshDashboard() {
+  void load()
+  void refreshMemory()
+}
+
+onMounted(() => {
+  active = true
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  void load()
+  if (!document.hidden) void refreshMemory()
+})
+onUnmounted(() => {
+  active = false
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+  if (memoryTimer) clearTimeout(memoryTimer)
+})
 </script>
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
     <section class="dashboard-hero">
       <div class="dashboard-hero-copy">
-        <p class="dashboard-kicker"><span class="dashboard-kicker-dot" /> TG SIGNPULSE / CONTROL CENTER</p>
+        <p class="dashboard-kicker"><span class="dashboard-kicker-dot" /> TG MANAGE / CONTROL CENTER</p>
         <h2>一眼掌握，<br><span>每一次运行。</span></h2>
         <p>账号与 TeleBox 状态汇聚于此。需要处理的变化，随时清晰可见。</p>
         <div class="dashboard-hero-actions">
           <RouterLink to="/accounts" class="dashboard-hero-primary">管理账号 <ArrowUpRight :size="17" aria-hidden="true" /></RouterLink>
-          <button type="button" class="dashboard-hero-refresh" :disabled="loading" @click="load"><RefreshCw :size="16" :class="{ 'animate-spin': loading }" aria-hidden="true" />{{ loading ? '正在刷新' : '刷新数据' }}</button>
+          <button type="button" class="dashboard-hero-refresh" :disabled="loading" @click="refreshDashboard"><RefreshCw :size="16" :class="{ 'animate-spin': loading }" aria-hidden="true" />{{ loading ? '正在刷新' : '刷新数据' }}</button>
         </div>
       </div>
       <div class="dashboard-hero-visual" aria-hidden="true"><div class="dashboard-orbit dashboard-orbit--outer" /><div class="dashboard-orbit dashboard-orbit--inner" /><div class="dashboard-core"><Activity :size="42" :stroke-width="1.4" /></div><span class="dashboard-satellite dashboard-satellite--one" /><span class="dashboard-satellite dashboard-satellite--two" /></div>
@@ -53,6 +110,12 @@ onMounted(() => void load())
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--accounts"><span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span><span class="dashboard-metric-value">{{ store.accounts.length }}</span><span class="dashboard-metric-label">已登录账号</span><span class="dashboard-metric-foot">查看账号 <ArrowRight :size="14" aria-hidden="true" /></span></RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--telebox"><span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Activity :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span><span class="dashboard-metric-value">{{ runningCount }}</span><span class="dashboard-metric-label">运行中的 TeleBox</span><span class="dashboard-metric-foot">管理账号 <ArrowRight :size="14" aria-hidden="true" /></span></RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--tasks"><span class="dashboard-metric-top"><span class="dashboard-metric-icon"><CheckCircle2 :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span><span class="dashboard-metric-value">{{ healthyCount }}</span><span class="dashboard-metric-label">状态正常的账号</span><span class="dashboard-metric-foot">查看状态 <ArrowRight :size="14" aria-hidden="true" /></span></RouterLink>
+      <div class="dashboard-metric dashboard-metric--memory" aria-label="当前服务进程内存">
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><HardDrive :size="21" aria-hidden="true" /></span><span class="dashboard-live-badge">每 15 秒更新</span></span>
+        <span class="dashboard-metric-value dashboard-memory-value">{{ memoryRss }}</span>
+        <span class="dashboard-metric-label">当前服务进程 RSS</span>
+        <span class="dashboard-metric-foot">{{ memoryStatus }}<span v-if="memoryUpdatedAt"> · {{ memoryUpdatedAt }}</span></span>
+      </div>
     </section>
     <section class="dashboard-activity panel-card" aria-labelledby="recent-activity-title">
       <div class="dashboard-section-heading"><div><p class="panel-eyebrow">ACCOUNTS / 健康状态</p><h3 id="recent-activity-title">需要关注的账号</h3></div><RouterLink to="/accounts" class="panel-button">查看全部账号 <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>

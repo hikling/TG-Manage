@@ -34,13 +34,13 @@ async function runE2ETests() {
 
     const hasUsernameInput = await evaluate(cdp, '!!document.querySelector("#login-username")');
     const hasPasswordInput = await evaluate(cdp, '!!document.querySelector("#login-password")');
-    const brandText = await evaluate(cdp, 'document.body.innerText.includes("SIGNPULSE")');
+    const brandText = await evaluate(cdp, 'document.body.innerText.includes("TG Manage")');
 
     if (!hasUsernameInput || !hasPasswordInput) {
       throw new Error('未在页面中找到登录输入框 (#login-username, #login-password)');
     }
     if (!brandText) {
-      throw new Error('未在页面中检测到 SIGNPULSE 品牌字样');
+      throw new Error('未在页面中检测到 TG Manage 品牌字样');
     }
 
     const loginShotPath = `${ARTIFACTS_DIR}/e2e_login.png`;
@@ -62,7 +62,7 @@ async function runE2ETests() {
     let token = null;
     for (let i = 0; i < 20; i++) {
       await wait(300);
-      token = await evaluate(cdp, 'localStorage.getItem("tg-signer-token")');
+      token = await evaluate(cdp, 'localStorage.getItem("tg-manage-token")');
       if (token) break;
     }
 

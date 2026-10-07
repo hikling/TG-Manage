@@ -199,7 +199,7 @@ class TestEnsureDataDirs:
         base = tmp_path / "data"
         settings = MagicMock()
         settings.resolve_base_dir.return_value = base
-        settings.resolve_workdir.return_value = base / ".signer"
+        settings.resolve_workdir.return_value = base / ".tg_manage"
         settings.resolve_session_dir.return_value = base / "sessions"
         settings.resolve_logs_dir.return_value = base / "logs"
         settings.resolve_db_path.return_value = base / "db.sqlite"
@@ -221,7 +221,7 @@ class TestEnsureDataDirs:
         settings = self._make_settings(tmp_path)
         ensure_data_dirs(settings)
 
-        assert (tmp_path / "data" / ".signer").is_dir()
+        assert (tmp_path / "data" / ".tg_manage").is_dir()
 
     def test_creates_session_dir(self, tmp_path: Path):
         """必须创建会话目录"""

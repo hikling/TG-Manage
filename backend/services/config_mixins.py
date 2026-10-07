@@ -81,7 +81,7 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     # WebDAV 目录：去空白，空值回落默认目录
     if "webdav_remote_dir" in normalized:
         stripped = (normalized["webdav_remote_dir"] or "").strip()
-        normalized["webdav_remote_dir"] = stripped or "tg-signpulse-backups"
+        normalized["webdav_remote_dir"] = stripped or "tg-manage-backups"
 
     return normalized
 
@@ -100,7 +100,7 @@ class ConfigExportMixin:
             if settings.get(key):
                 settings[key] = "***MASKED***"
         return json.dumps({
-            "_meta": {"format": "tg-signpulse-config-export", "version": 2,
+            "_meta": {"format": "tg-manage-config-export", "version": 2,
                       "includes": ["settings"],
                       "webdav_password_masked": masked["webdav_password"],
                       "telegram_bot_token_masked": masked["telegram_bot_token"],
@@ -206,7 +206,7 @@ class GlobalSettingsMixin:
             "webdav_url": None,
             "webdav_username": None,
             "webdav_password": None,
-            "webdav_remote_dir": "tg-signpulse-backups",
+            "webdav_remote_dir": "tg-manage-backups",
         }
 
         settings = self._read_json_file(config_file)
@@ -289,7 +289,10 @@ class GlobalSettingsMixin:
         # Apply the resolved limit as well when an explicit panel value is cleared.
         if "tg_global_concurrency" in settings:
             try:
-                from backend.utils.tg_session import _resolve_concurrency_limit, update_global_semaphore
+                from backend.utils.tg_session import (
+                    _resolve_concurrency_limit,
+                    update_global_semaphore,
+                )
                 update_global_semaphore(_resolve_concurrency_limit())
             except Exception as exc:
                 # 已写盘成功但运行时未生效，必须可观测，避免面板显示与运行不一致

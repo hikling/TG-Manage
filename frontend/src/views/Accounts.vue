@@ -485,10 +485,10 @@ const goLogs = (name: string) => {
     <div class="fixed ui-safe-fab z-40 flex flex-col items-end gap-2">
       <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-2" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 translate-y-2">
         <div v-if="showAddMenu" class="flex flex-col gap-1.5 mb-1">
-          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--sp-shadow-md)]" @click="openAddModal('qr')">
+          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--tg-shadow-md)]" @click="openAddModal('qr')">
             <QrCode class="w-4 h-4 text-gray-500" /> {{ t('accounts.qrLogin') }}
           </button>
-          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--sp-shadow-md)]" @click="openAddModal('code')">
+          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--tg-shadow-md)]" @click="openAddModal('code')">
             <Phone class="w-4 h-4 text-gray-500" /> {{ t('accounts.codeLogin') }}
           </button>
         </div>

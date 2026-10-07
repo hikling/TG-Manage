@@ -12,7 +12,7 @@ const { locale, toggleLanguage, t } = useI18n()
 const { isDark, toggleTheme } = useTheme()
 
 watchEffect(() => {
-  document.title = `404 ${t('notFound.title')} - TG-SignPulse`
+  document.title = `404 ${t('notFound.title')} - TG Manage`
 })
 
 const isAuthed = computed(() => {
@@ -38,13 +38,13 @@ const handleGoBack = () => {
 }
 
 const openGithub = () => {
-  window.open('https://github.com/Silentely/TG-SignPulse', '_blank')
+  window.open('https://github.com/hikling/TG-SignPulse-Private', '_blank', 'noopener,noreferrer')
 }
 </script>
 
 <template>
   <main class="min-h-screen flex flex-col items-center justify-center font-sans px-4 py-10" role="main">
-    <div class="w-full max-w-sm ui-card shadow-[var(--sp-shadow-md)] px-8 py-10 text-center">
+    <div class="w-full max-w-sm ui-card shadow-[var(--tg-shadow-md)] px-8 py-10 text-center">
       <div class="w-14 h-14 bg-gray-100 dark:bg-gray-800/80 mx-auto flex items-center justify-center text-gray-700 dark:text-gray-200 mb-6 rounded-full">
         <FileQuestion class="w-7 h-7 stroke-[1.5]" />
       </div>

@@ -106,7 +106,7 @@ def get_default_secret_key(env: Optional[Mapping[str, str]] = None) -> str:
 
 
 class Settings(BaseModel):
-    app_name: str = "tg-signer-panel"
+    app_name: str = "TG Manage"
     host: str = "127.0.0.1"
     port: int = 3000
     cors_allow_origins_raw: str = (
@@ -119,7 +119,7 @@ class Settings(BaseModel):
     db_path: Optional[Path] = None
     # 可选完整 SQLAlchemy URL；设置后优先于 sqlite 文件路径（支持 Postgres 等）
     database_url_override: Optional[str] = None
-    signer_workdir: Optional[Path] = None
+    manage_workdir: Optional[Path] = None
     session_dir: Optional[Path] = None
     logs_dir: Optional[Path] = None
     log_level: str = "INFO"
@@ -129,7 +129,7 @@ class Settings(BaseModel):
     def from_environment(cls) -> "Settings":
         env = _merged_env()
         return cls(
-            app_name=_read_env(env, "APP_APP_NAME", "APP_NAME", default="tg-signer-panel"),
+            app_name=_read_env(env, "APP_APP_NAME", "APP_NAME", default="TG Manage"),
             host=_read_env(env, "APP_HOST", default="127.0.0.1"),
             port=_read_int_env(env, "APP_PORT", default=3000),
             cors_allow_origins_raw=_read_env(
@@ -149,7 +149,7 @@ class Settings(BaseModel):
             database_url_override=_read_env(
                 env, "APP_DATABASE_URL", "DATABASE_URL", default=None
             ),
-            signer_workdir=_read_path_env(env, "APP_SIGNER_WORKDIR"),
+            manage_workdir=_read_path_env(env, "APP_TG_MANAGE_WORKDIR", "APP_SIGNER_WORKDIR"),
             session_dir=_read_path_env(env, "APP_SESSION_DIR"),
             logs_dir=_read_path_env(env, "APP_LOGS_DIR"),
             log_level=_read_env(env, "LOG_LEVEL", "APP_LOG_LEVEL", default="INFO"),
@@ -171,7 +171,13 @@ class Settings(BaseModel):
         return self.db_path or self.resolve_base_dir() / "db.sqlite"
 
     def resolve_workdir(self) -> Path:
-        return self.signer_workdir or self.resolve_base_dir() / ".signer"
+        if self.manage_workdir:
+            return self.manage_workdir
+        base = self.resolve_base_dir()
+        current = base / ".tg_manage"
+        legacy = base / ".signer"
+        # Keep existing account metadata, bot registry and avatar cache in place.
+        return legacy if legacy.exists() else current
 
     def resolve_session_dir(self) -> Path:
         return self.session_dir or self.resolve_base_dir() / "sessions"
@@ -201,7 +207,7 @@ def get_settings() -> Settings:
 
 # 向引擎注册默认密钥提供者：引擎加密模块不再反向依赖 backend
 def _register_secret_provider() -> None:
-    from tg_signer.security import register_secret_key_provider
+    from tg_manage.security import register_secret_key_provider
 
     register_secret_key_provider(get_default_secret_key)
 

@@ -74,7 +74,7 @@ class TestLoginFlow:
         token = _login(api_client)
         svc = _svc()
         monkeypatch.setattr(credentials, "get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
-        for name in ("SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
+        for name in ("TG_MANAGE_TG_API_ID", "TG_MANAGE_TG_API_HASH", "SIGNPULSE_TG_API_ID", "SIGNPULSE_TG_API_HASH", "TG_API_ID", "TG_API_HASH"):
             monkeypatch.delenv(name, raising=False)
         with _patch_svc(svc):
             response = api_client.post(endpoint, json=payload, headers=_auth(token))

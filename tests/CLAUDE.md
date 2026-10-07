@@ -2,7 +2,7 @@
 
 # Tests 模块
 
-> 仓库根级 pytest 套件：覆盖 backend、tg_signer 与部分集成路径。
+> 仓库根级 pytest 套件：覆盖 backend、tg_manage 与部分集成路径。
 
 ## 变更记录 (Changelog)
 
@@ -11,8 +11,8 @@
 ## 模块职责
 
 - 后端 API / 服务 / 工具单元与集成测试
-- `tg_signer` 核心与配置兼容测试
-- 关键词监听、签到 runner、通知、SSE 等回归
+- `tg_manage` 核心与配置兼容测试
+- 账号、聊天、TeleBox、通知与备份等回归
 - 通过 factories / fixtures / mocks 降低真实 Telegram 依赖
 
 ## 入口与运行
@@ -49,11 +49,10 @@ tests/
 | 前缀 / 文件 | 覆盖域 |
 |-------------|--------|
 | `test_api*` / `test_*_routes*` | HTTP 路由与鉴权边界 |
-| `test_sign_*` / `test_task_runner*` | 签到 CRUD、runner、batch、历史 |
-| `test_keyword_monitor*` / `test_keyword_hits*` / `test_monitor_sharding*` | 监听、命中、分片、去重 |
-| `test_events_*` | SSE |
+| `test_accounts*` / `test_telebox*` | 账号与 TeleBox 生命周期 |
+| `test_backup*` / `test_webdav*` | 本地及远端备份 |
 | `test_device_keepalive*` / `test_ops_*` | 保活与运维 |
-| `test_core*` / `test_config*` / `test_ai_*` / `test_signer*` | tg_signer 与配置 |
+| `test_tg_manage*` / `test_config*` | tg_manage 与配置 |
 | `test_*utils*` / `test_atomic_io*` / `test_cache*` / `test_tg_session*` | 工具层 |
 
 ## 编写约定
@@ -61,7 +60,7 @@ tests/
 1. **优先本地替身**：`mocks/telegram.py` 等，避免真实网络与 session 文件
 2. **异步**：`pytest-asyncio`；与生产相同的 async 入口
 3. **隔离数据目录**：用例应使用临时目录 / fixture，不写生产 `APP_DATA_DIR`
-4. **改 runner / keyword_monitor / 路由**：至少补对应 `test_*.py` 再声称完成
+4. **改账号 / TeleBox / 路由**：至少补对应 `test_*.py` 再声称完成
 5. **前端测试不在此目录**：见 `frontend/src/test/*.spec.ts`（vitest）
 
 ## 常见问题 (FAQ)

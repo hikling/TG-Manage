@@ -38,7 +38,7 @@ elif command -v uvx &>/dev/null; then
     RUFF="uvx ruff@0.15"
 fi
 if [ -n "$RUFF" ]; then
-    if $RUFF check backend/ tg_signer/ tests/; then
+    if $RUFF check backend/ tg_manage/ tests/; then
         echo "   ✅ Ruff 检查通过"
     else
         echo "   ❌ Ruff 检查失败，请修复后再推送"
@@ -74,9 +74,9 @@ echo ""
 echo "🧪 [3/3] 后端测试..."
 # 检测是否有后端相关文件变更
 BACKEND_CHANGED=0
-if git diff --name-only HEAD@{1}..HEAD 2>/dev/null | grep -qE "^(backend/|tg_signer/|tests/|pyproject\.toml)" || \
-   git diff --cached --name-only | grep -qE "^(backend/|tg_signer/|tests/|pyproject\.toml)" || \
-   [ -n "$(git status --porcelain backend/ tg_signer/ tests/ 2>/dev/null)" ]; then
+if git diff --name-only HEAD@{1}..HEAD 2>/dev/null | grep -qE "^(backend/|tg_manage/|tests/|pyproject\.toml)" || \
+   git diff --cached --name-only | grep -qE "^(backend/|tg_manage/|tests/|pyproject\.toml)" || \
+   [ -n "$(git status --porcelain backend/ tg_manage/ tests/ 2>/dev/null)" ]; then
     BACKEND_CHANGED=1
 fi
 

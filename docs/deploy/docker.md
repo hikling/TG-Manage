@@ -1,81 +1,78 @@
-# Docker 部署：TG-SignPulse 二改版
+# Docker 部署与升级
 
-> 本文档针对当前仓库的 `Dockerfile` 和 `docker-compose.yml`。不要使用上游公开镜像或旧文档中的 `docker compose pull` 更新本版本。完整改动、首次使用、本地开发及环境变量见 [README](../../README.md)。
+本文适用于 [TG Manage 源码仓库](https://github.com/hikling/TG-SignPulse-Private) 的 `Dockerfile` 和 `docker-compose.yml`。Compose 使用 `build: .`，从当前源码构建镜像。
 
-## 前置环境
+## 部署前准备
 
-- Docker Engine 24+、Docker Compose v2，且主机能访问 npm/PyPI、Telegram；受限网络需为 Telegram 配置代理。
-- Compose 默认限制容器使用 2 GiB 内存、2 CPU；构建阶段还需额外磁盘及内存。每运行一个 TeleBox 账号会再启动 Node 进程，应随账号数调高资源。
-- Telegram 授权始终需要有效 API ID/Hash：启用 TeleBox 时在账号登录表单填写；不启用时可在服务器私有 `.env` 预设 `SIGNPULSE_TG_API_ID/HASH`，登录页面免填。
+- Linux 主机安装 Docker Engine 24+、Docker Compose v2 和 Git；主机需能下载 Python/npm 依赖并连接 Telegram。
+- 私有仓库需要对应 GitHub 读取权限。
+- Compose 默认限制容器为 2 GiB 内存和 2 CPU；每个运行中的 TeleBox 账号还会启动独立 Node 进程。
+- 需要自己的 Telegram API ID/Hash 时，在未提交的 `.env` 中设置 `TG_MANAGE_TG_API_ID` 和 `TG_MANAGE_TG_API_HASH`。旧部署的 `SIGNPULSE_TG_API_*`、`TG_API_*` 仍可读取。
 
-Dockerfile 的三个阶段分别为 Node 22.23.1 构建 Vue 前端、Node 24 编译/安装 TeleBox 原生依赖、Python 3.11 运行 FastAPI。生产镜像包含 Node 24 与 TeleBox 源码、插件和依赖。项目默认持久化目录为容器 `/data`。
-
-## 部署步骤
-
-安装 Docker Engine 24+、Docker Compose v2 和 Git，确保服务器有私有仓库读取权限及构建网络。执行：
+## 首次安装
 
 ```bash
-git clone https://github.com/hikling/TG-SignPulse-Private.git && cd TG-SignPulse-Private && bash scripts/install.sh
+git clone https://github.com/hikling/TG-SignPulse-Private.git
+cd TG-SignPulse-Private
+bash scripts/install.sh
 ```
 
-脚本构建、启动、检测 `/readyz` 并输出首次设置码；网页 `http://服务器IP:8080` 用设置码设置 `admin` 密码，至少 12 位。程序自动在 `/data/.app_secret_key` 保存应用密钥，已有管理员保留原密码。不启用 TeleBox 且要免填账号 API 时，在构建前复制 `.env.example` 为 `.env` 并填入 `SIGNPULSE_TG_API_ID/HASH`，文件只留在服务器，不提交仓库。域名和 TLS 见 [Nginx 示例](nginx.md)。
+安装脚本执行 `docker compose up -d --build`，等待 `/readyz` 就绪，并输出一次性管理员设置码。浏览器打开 `http://服务器IP:8080`，用设置码创建至少 12 位的管理员密码。已有管理员账号不会被重置。公网访问请配置 [HTTPS 反向代理](nginx.md)。
 
-## Compose 约定
+当前 Compose 的关键约定：
 
-| 配置 | 当前值与含义 |
+| 配置 | 作用 |
 | --- | --- |
-| `build: .` | 每次 `--build` 从当前源码构建，不使用上游公开镜像。 |
-| `./data:/data` | 数据库、session、任务数据、TeleBox 的每账号配置和插件都依赖此卷。 |
-| `PORT=8080`, `TZ=Asia/Shanghai` | 容器端口与调度时区。 |
-| `mem_limit: 2g`, `cpus: 2.0` | 单容器默认资源上限；多账号运行时评估增长。 |
-| `read_only: true`, `tmpfs`, `cap_drop: ALL` | 根文件系统只读，临时目录可写，移除 Linux capabilities。 |
-| `healthcheck` | `/readyz` 返回服务就绪状态后标记健康。 |
-| `restart: unless-stopped` | 异常退出/重启主机后拉起服务。 |
+| `./data:/data` | 宿主机持久化目录。包含 SQLite、会话、设置、密钥和 TeleBox 账号数据。 |
+| `container_name: tg-manage` | 容器名称；使用 `docker stats tg-manage` 查看容器资源。 |
+| `read_only: true` 与 `/tmp` 临时卷 | 根文件系统只读；`/data` 必须可写。 |
+| `/readyz` 健康检查 | 确认服务启动完成。 |
 
-应用密钥和管理员密码不需注入。可选的服务器 Telegram 应用凭据通过 Compose 从私有 `.env` 注入，仅供关闭 TeleBox 的账号登录。首次启动在 `data/` 生成持久密钥和一次性管理员设置码。备份整个 `data/`，尤其是密钥文件。
+首次启动自动创建 `data/.app_secret_key`。它用于解密账号凭据和 Bot Token，必须与数据库及会话一起保留。
 
-## 首次登录与 TeleBox
+## 无损升级与回退
 
-1. 用安装脚本显示的一次性设置码在网页登录页设置 `admin` 密码，可启用 TOTP。
-2. 在账号管理选择是否启用 TeleBox；勾选时输入该账号 API ID/Hash，登录成功后自动请求独立会话。不勾选时若服务器已配应用凭据，表单无需填写。
-3. 先在聊天中心用测试会话检查头像、消息读写。启用 TeleBox 的账号在拓展插件页查看启动状态、错误阶段、两步验证及插件。
-4. 任务编排可选择已加载的插件命令，日志页提供 TeleBox 日志标签。命令投递不等同于插件执行完成；其数据在 `data/telebox/`，另有 `data/sessions/` 中的面板会话。
+先确认当前仓库使用的 `./data:/data` 挂载及实际数据目录。若自定义了数据目录或使用外部 PostgreSQL，分别确认挂载源与数据库备份方案。不要只备份 `db.sqlite`，也不要遗漏隐藏文件。
 
-## 升级、备份和恢复
+在原仓库目录执行：
 
 ```bash
-# 更新之前，先停止并备份整个 ./data
-docker compose stop
-# 使用自己的备份工具保存 data/；不要将其上传公开仓库
-
-# 从本私有仓库更新源码后重新构建
-docker compose up -d --build
+bash scripts/update.sh
 ```
 
-`docker compose down` 删除容器和网络，但不会删除绑定挂载的 `./data`；切勿误删 `data/`。恢复时还原完整数据目录（含 `.app_secret_key`），然后重建容器。若 Telegram session 失效，需要在面板重新授权账号。
+脚本会短暂停止应用，避免 SQLite 文件及 WAL 在备份期间继续写入。随后检查现有数据目录，调用 `scripts/backup.sh` 将**整个目录**归档到 `backups/tg-manage-data-<时间>.tar.gz`，再运行 `git pull --ff-only` 和 `scripts/install.sh`。备份或拉取失败时会尝试重启原有服务。旧备份不会自动删除；请检查磁盘余量。`git pull --ff-only` 遇到本地提交冲突时会停止，不会强行覆盖。更新后原有 `./data:/data` 挂载保持不变。
+
+若手动升级，顺序相同：停服务、完整备份 `data/`、从本仓库更新代码、运行 `docker compose up -d --build`。`docker compose down` 会删除容器和网络，但不会删除绑定挂载的 `./data`；不可使用 `down -v` 来代替常规升级。
+
+升级后核查：
+
+```bash
+docker compose ps
+docker compose logs --tail=100 app
+curl -fsS http://127.0.0.1:8080/readyz
+docker stats --no-stream tg-manage
+```
+
+再用原管理员账号登录，检查账号列表、Telegram 会话、系统设置和各账号 TeleBox 状态。仪表盘的当前进程内存可用于观察应用自身占用；容器总体内存以 `docker stats` 为准。
+
+需要回退时，先 `docker compose stop app`，切回升级前的代码提交，恢复备份中的**完整**数据目录（包括 `.app_secret_key`、`sessions/`、`telebox/` 和隐藏文件），再执行 `docker compose up -d --build`。归档由 `backup.sh` 在数据目录的父目录打包；解压前先用 `tar -tzf <备份文件>` 核对顶层目录，避免解压到错误层级。回退旧代码可能无法读取新版本写入的数据，因此优先使用升级前的整目录备份。使用 PostgreSQL 时还要恢复同一时间点的数据库备份。
+
+## 常用命令
+
+```bash
+docker compose ps
+docker compose logs --tail=200 app
+docker compose stop app
+docker compose start app
+```
 
 ## 排查
 
 | 现象 | 检查项 |
 | --- | --- |
-| 构建失败 | Docker 可用磁盘/内存、npm/PyPI 网络，以及 TeleBox 原生模块在 Node 24 构建阶段的错误。 |
-| `/readyz` 未就绪 | `docker compose ps`、`docker compose logs --tail=200 app`、`./data` 是否可写。 |
-| 无法登录 Telegram | API ID/Hash、验证码/2FA、服务器访问 Telegram 的网络与代理。 |
-| TeleBox 提示未安装依赖 | 必须从本仓库 `docker compose up -d --build`，不要换成上游旧镜像。 |
-| TeleBox 报 `Directory import ... teleproto/sessions` | 旧启动器在 Node ESM 中导入了目录。更新包含修复的功能分支，执行 `git pull && docker compose up -d --build`；账号目录的启动器会自动刷新，保留插件和会话配置。API ID/Hash 不会引起此错误。 |
-| TeleBox 内存不足 | 提高宿主机可用内存及 Compose `mem_limit`，减少同时运行的账号数。 |
-| 旧自定义插件任务失败 | 旧 Python 任务体系已移除；备份后手工选择 TeleBox 已加载的插件命令。 |
+| 构建失败 | Docker 磁盘/内存、npm/PyPI 网络和 TeleBox 原生模块错误。 |
+| `/readyz` 未就绪 | `docker compose ps`、应用日志及 `./data` 的可写权限。 |
+| Telegram 登录失败 | API ID/Hash、验证码/2FA、服务器网络及账号代理。 |
+| TeleBox 内存不足 | 观察 `docker stats`、仪表盘和各账号日志；按实际负载调高内存或减少常驻账号。 |
 
-真实 Telegram 授权、Bot API、TPM 安装和完整 Docker 构建尚需在目标环境逐项验证，不应把离线测试当作上线验收。
-
-### TeleBox 构建提示 npm ci 缺少锁文件
-
-若 `docker compose ps -a` 没有容器，安装时 TeleBox 阶段报 `npm error code EUSAGE` 并提示需要 `package-lock.json`，镜像尚未构建完成，网页服务也没有启动。这时先修复构建，无需先安装 UFW。
-
-本版本应提交 `telebox/package-lock.json`，且 Dockerfile 显式复制两个依赖文件。更新包含此修复的代码后，在原项目目录执行：
-
-```bash
-bash scripts/install.sh
-```
-
-不要删除 `data/`。若再次报错，保留构建末尾的错误信息；本机 `http://127.0.0.1:8080/` 可访问后再排查公网 TCP 8080 的安全组和防火墙。
+真实 Telegram 授权、Bot API 和 TeleBox 远程插件安装需要在目标环境验证。

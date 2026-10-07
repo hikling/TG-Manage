@@ -19,8 +19,8 @@ CRITICAL_MODULES = [
     "backend.api.routes.telebox",
     "backend.services.telebox",
     "backend.services.telegram",
-    "tg_signer.core",
-    "tg_signer.core.client",
+    "tg_manage.core",
+    "tg_manage.core.client",
 ]
 
 
@@ -31,16 +31,16 @@ def test_critical_module_imports(module_name: str):
 
 def test_core_package_reexports_client_identity():
     """账号客户端包级导出与实现保持同一对象。"""
-    client = importlib.import_module("tg_signer.core.client")
-    core = importlib.import_module("tg_signer.core")
+    client = importlib.import_module("tg_manage.core.client")
+    core = importlib.import_module("tg_manage.core")
     assert core.Client is client.Client
     assert core.get_client is client.get_client
 
 
-def test_backend_and_tg_signer_package_walk_imports():
+def test_backend_and_tg_manage_package_walk_imports():
     """全量 walk import：任一子模块 import 失败即视为带病。"""
     failed: list[str] = []
-    for pkg_name in ("backend", "tg_signer"):
+    for pkg_name in ("backend", "tg_manage"):
         pkg = importlib.import_module(pkg_name)
         if not hasattr(pkg, "__path__"):
             continue

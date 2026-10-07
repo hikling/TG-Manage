@@ -38,7 +38,7 @@ def node_heap_limit_mb() -> int:
 
 
 def worker_environment(directory: Path) -> dict[str, str]:
-    """Pass upstream TeleBox settings without exposing SignPulse secrets."""
+    """Pass upstream TeleBox settings without exposing TG Manage secrets."""
     inherited = {"PATH", "LANG", "TZ", "LD_LIBRARY_PATH", "SSL_CERT_FILE", "SSL_CERT_DIR",
                  "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
                  "http_proxy", "https_proxy", "no_proxy", "all_proxy"}
@@ -83,7 +83,7 @@ class TeleBoxService:
         return self.root / hashlib.sha256(account.encode()).hexdigest()
 
     def rename_account_data(self, old: str, new: str) -> None:
-        """Move account-local TeleBox state after SignPulse account rename succeeds."""
+        """Move account-local TeleBox state after TG Manage account rename succeeds."""
         old_dir, new_dir = self.directory(old), self.directory(new)
         if old_dir.exists():
             if new_dir.exists():

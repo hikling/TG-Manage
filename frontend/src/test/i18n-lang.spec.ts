@@ -21,6 +21,8 @@ describe('i18n html lang 同步', () => {
     document.documentElement.lang = ''
     await import('../i18n')
     expect(document.documentElement.lang).toBe('en-US')
+    expect(localStorage.getItem('tg-manage-locale')).toBe('en')
+    expect(localStorage.getItem('tg-signer-locale')).toBeNull()
   })
 
   it('localStorage 存 zh 时保持 zh-CN（非法值回落默认）', async () => {

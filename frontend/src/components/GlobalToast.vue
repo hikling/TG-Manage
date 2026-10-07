@@ -24,14 +24,14 @@ const { t } = useI18n()
           :role="toast.type === 'error' ? 'alert' : 'status'"
           :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
           aria-atomic="true"
-          class="pointer-events-auto flex items-start gap-2.5 px-3.5 py-2.5 text-sm shadow-[var(--sp-shadow-md)] border backdrop-blur-sm"
+          class="pointer-events-auto flex items-start gap-2.5 px-3.5 py-2.5 text-sm shadow-[var(--tg-shadow-md)] border backdrop-blur-sm"
           @mouseenter="pause(toast.id)"
           @mouseleave="resume(toast.id)"
           @touchstart="pause(toast.id)"
           @touchend="resume(toast.id)"
           @touchcancel="resume(toast.id)"
           :class="{
-            'bg-white/95 dark:bg-[var(--sp-bg-elevated)]/95 border-gray-200 dark:border-[var(--sp-border)] text-gray-900 dark:text-gray-100': toast.type === 'info',
+            'bg-white/95 dark:bg-[var(--tg-bg-elevated)]/95 border-gray-200 dark:border-[var(--tg-border)] text-gray-900 dark:text-gray-100': toast.type === 'info',
             'bg-emerald-50/95 dark:bg-emerald-950/80 border-emerald-200 dark:border-emerald-800/50 text-emerald-800 dark:text-emerald-300': toast.type === 'success',
             'bg-rose-50/95 dark:bg-rose-950/80 border-rose-200 dark:border-rose-800/50 text-rose-800 dark:text-rose-300': toast.type === 'error',
             'bg-amber-50/95 dark:bg-amber-950/80 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300': toast.type === 'warning',

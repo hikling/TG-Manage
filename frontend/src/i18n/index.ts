@@ -2,10 +2,10 @@ import { createI18n } from 'vue-i18n'
 import { watch } from 'vue'
 import zhCN from '../locales/zh-CN.json'
 import enUS from '../locales/en-US.json'
-import { storageGet } from '../lib/safe-storage'
+import { storageGetMigrated } from '../lib/safe-storage'
 
 // 从 localStorage 读取用户语言偏好，默认中文（存储不可用环境回退默认）
-const savedLocale = storageGet('tg-signer-locale') || 'zh'
+const savedLocale = storageGetMigrated('tg-manage-locale', 'tg-signer-locale') || 'zh'
 
 const i18n = createI18n({
   legacy: false, // 使用 Composition API 模式

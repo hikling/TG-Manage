@@ -1,4 +1,4 @@
-/** SignPulse integration adapter. Original runtime/TPM remain authoritative. */
+/** TG Manage integration adapter. Original runtime/TPM remain authoritative. */
 import fs from "node:fs";
 import readline from "node:readline";
 import util from "node:util";
@@ -63,7 +63,7 @@ async function initialize(input: any) {
   const config = { ...old, api_id: input.api_id, api_hash: input.api_hash, proxy: input.proxy || undefined };
   fs.writeFileSync("config.json", JSON.stringify(config), { mode: 0o600 });
   const client = new TelegramClient(new StringSession(old.session || ""), input.api_id, input.api_hash, {
-    connectionRetries: 3, deviceModel: "SignPulse TeleBox", proxy: config.proxy,
+    connectionRetries: 3, deviceModel: "TG Manage TeleBox", proxy: config.proxy,
   });
   try {
     stage = "连接 Telegram";
