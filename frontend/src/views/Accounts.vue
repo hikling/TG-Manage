@@ -24,7 +24,6 @@ import FilterEmptyState from '../components/FilterEmptyState.vue'
 import { devLog } from '../lib/devLog'
 import { AVATAR_FETCH_CONCURRENCY, mapPool } from '../lib/async-pool'
 import { AvatarUrlCache } from '../lib/avatar-cache'
-import { countryFlag } from '../lib/country-flag'
 import {
   filterAccountsByQuery,
   mapAccountInfoToUiItem,
@@ -194,18 +193,6 @@ const loadAvatars = async (list: AccountUiItem[]) => {
   await mapPool(list, AVATAR_FETCH_CONCURRENCY, async (acc) => {
     await loadAvatar(acc)
   })
-  if (disposed || !list.length) return
-  try {
-    // 头像读取时顺便识别旧账号的地区；刷新一次轻量列表即可显示国旗。
-    const refreshed = await accountsStore.refreshAccounts()
-    if (disposed) return
-    const regions = new Map(refreshed.map(item => [item.name, item.country_code]))
-    for (const account of accounts.value) {
-      if (regions.has(account.name)) account.raw.country_code = regions.get(account.name)
-    }
-  } catch {
-    // 地区补全失败不影响账号卡片和头像。
-  }
 }
 
 onMounted(async () => {
@@ -466,7 +453,7 @@ const goLogs = (name: string) => {
             <span v-else>{{ acc.name.substring(0, 2) }}</span>
           </div>
         </div>
-        <div class="account-tile-info"><h2 :title="acc.name"><span class="account-country-flag" role="img" :aria-label="acc.raw.country_code ? `国家/地区：${acc.raw.country_code}` : '国家/地区未知'" :title="acc.raw.country_code || '国家/地区未知'">{{ countryFlag(acc.raw.country_code) }}</span>{{ acc.name }}</h2><p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p></div>
+        <div class="account-tile-info"><h2 :title="acc.name">{{ acc.name }}</h2><p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p></div>
         <div class="account-tile-actions" @click.stop>
           <button type="button" class="account-more" :aria-label="`${acc.name} 操作`" :title="`${acc.name} 操作`" :aria-expanded="openActionsName === acc.name" aria-haspopup="true" @click="openActionsName = openActionsName === acc.name ? null : acc.name"><MoreVertical class="w-5 h-5" /></button>
           <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="`${acc.name} 操作`">

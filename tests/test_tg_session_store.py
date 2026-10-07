@@ -215,6 +215,7 @@ class TestAccountStoreCRUD:
                             "status_checked_at": "2026-01-01T00:00:00Z",
                             "needs_relogin": 1,
                             "invalid_notified_at": "2026-01-02T00:00:00Z",
+                            "country_code": "CN",
                         }
                     }
                 }
@@ -225,6 +226,9 @@ class TestAccountStoreCRUD:
         assert profile["remark"] == "备注"
         assert profile["needs_relogin"] is True
         assert profile["invalid_notified_at"] == "2026-01-02T00:00:00Z"
+        assert "country_code" not in profile
+        tg_session.set_account_profile("a", remark="新备注")
+        assert json.loads(path.read_text(encoding="utf-8"))["accounts"]["a"]["country_code"] == "CN"
 
     def test_get_account_proxy_only_non_blank_str(self, tmp_path, monkeypatch):
         path = _monkeypatch_store(tmp_path, monkeypatch)

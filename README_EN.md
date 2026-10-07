@@ -9,7 +9,7 @@ TG Manage is based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-S
 
 | Area | Current implementation |
 | --- | --- |
-| UI | Responsive sidebar collapsed by default, account cards with phone-region flags (only the two-letter region is stored), light and dark modes, custom accent colors, and a user-uploaded dashboard cover. |
+| UI | Responsive sidebar collapsed by default, account cards, light and dark modes, custom accent colors, and a user-uploaded dashboard cover. |
 | Chats | Sidebar entry always visible. Its own switch defaults off, showing only official Telegram verification messages; when on, group dialogs, messages and avatars are displayed, with a 5 MB cache limit. |
 | Administration | Account proxies stay in account details. Bot registration, profile, commands, and messaging are under System Settings. |
 | TeleBox | Complete upstream 0.2.9 source pinned to the commit in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json); separate worker, data directory, status, logs and plugin controls per account. |

@@ -41,7 +41,6 @@ dependencies = [
     "filelock",
     "aiofiles",
     "psutil>=5.9.0",
-    "phonenumbers>=9.0,<10",
 ]
 
 [project.optional-dependencies]

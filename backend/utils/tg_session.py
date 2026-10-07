@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -293,7 +292,6 @@ def get_account_profile(account_name: str) -> dict[str, Any]:
         "needs_relogin": bool(entry.get("needs_relogin", False)),
         "invalid_notified_at": entry.get("invalid_notified_at"),
         "tags": list(entry.get("tags") or []),
-        "country_code": entry.get("country_code"),
     }
 
 
@@ -326,24 +324,6 @@ def set_account_profile(
     entry["updated_at"] = utc_now_iso()
     accounts[account_name] = entry
     _save_account_store(data)
-
-
-def set_account_country(account_name: str, country_code: str) -> bool:
-    """Persist only the region, never the phone number; avoid redundant writes."""
-    if not isinstance(country_code, str) or not re.fullmatch(r"[A-Z]{2}", country_code):
-        return False
-    data = _load_account_store()
-    accounts = data["accounts"]
-    entry = accounts.get(account_name)
-    if not isinstance(entry, dict):
-        entry = {}
-    if entry.get("country_code") == country_code:
-        return False
-    entry["country_code"] = country_code
-    entry["updated_at"] = utc_now_iso()
-    accounts[account_name] = entry
-    _save_account_store(data)
-    return True
 
 
 def get_account_status(account_name: str) -> dict[str, Any]:
