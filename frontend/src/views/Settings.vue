@@ -3,19 +3,8 @@ import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
 import DataManagementSettings from '../components/settings/DataManagementSettings.vue'
 import AboutSettings from '../components/settings/AboutSettings.vue'
-import BotCenterSettings from '../components/settings/BotCenterSettings.vue'
 import PageRetry from '../components/PageRetry.vue'
 import { useSettingsPage } from '../composables/useSettingsPage'
-import { useRoute } from 'vue-router'
-import { nextTick, ref, watch } from 'vue'
-
-const route = useRoute()
-const botCenterRef = ref<HTMLDetailsElement | null>(null)
-const botCenterOpen = ref(false)
-
-function onBotCenterToggle(event: Event) {
-  botCenterOpen.value = (event.target as HTMLDetailsElement).open
-}
 
 const {
   t,
@@ -47,6 +36,7 @@ const {
   remoteWebdavMessage,
   webdavPasswordSet,
   botTokenSet,
+  botCodeStatus,
   remoteDownloadName,
   saveSettings,
   runKeepaliveNow,
@@ -65,18 +55,6 @@ const {
   reload: reloadData,
 } = useSettingsPage()
 
-watch(
-  () => [route.query.section, pageLoading.value] as const,
-  async ([section, isLoading]) => {
-    if (section !== 'bots' || isLoading) return
-    await nextTick()
-    if (botCenterRef.value) {
-      botCenterRef.value.open = true
-      botCenterRef.value.querySelector('summary')?.focus()
-    }
-  },
-  { immediate: true },
-)
 </script>
 
 <template>
@@ -157,6 +135,7 @@ watch(
           <BotNotifySettings
             v-model="settings"
             :bot-token-set="botTokenSet"
+            :code-status="botCodeStatus"
             :reveal="{ botToken: revealSecrets.botToken }"
             :bot-loading="botLoading"
             :bot-test-loading="botTestLoading"
@@ -164,10 +143,6 @@ watch(
             @test="testBot"
             @toggle-reveal="toggleReveal"
           />
-        </details>
-        <details id="bot-center" ref="botCenterRef" class="settings-accordion" @toggle="onBotCenterToggle">
-          <summary>机器人中心 <span>接入机器人、编辑资料与命令、发送消息</span></summary>
-          <BotCenterSettings v-if="botCenterOpen" />
         </details>
       </div>
 

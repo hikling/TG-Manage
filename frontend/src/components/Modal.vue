@@ -44,7 +44,7 @@ const FOCUSABLE =
 // 首焦点优先落表单输入框：DOM 序第一个是 header 的关闭按钮，
 // 对表单型弹窗（任务/账号配置）而言落在关闭键上纯属多余一次 Tab
 const FORM_FIELD =
-  'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([disabled]), textarea:not([disabled]), select:not([disabled])'
+  'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([disabled]):not([tabindex="-1"]), textarea:not([disabled]):not([tabindex="-1"]), select:not([disabled]):not([tabindex="-1"])'
 
 const getFocusable = () =>
   panelRef.value

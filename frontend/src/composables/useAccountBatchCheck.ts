@@ -22,6 +22,7 @@ export function useAccountBatchCheck(options: {
   filteredAccounts: ComputedRef<AccountUiItem[]>
   searchQuery: Ref<string>
   loadAccounts: () => Promise<void>
+  invalidateAvatars: (names: string[]) => void
 }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -96,7 +97,11 @@ export function useAccountBatchCheck(options: {
     lastBatchFailedNames.value = (job.results || [])
       .filter((item) => item && !item.ok && item.account_name)
       .map((item) => item.account_name)
+    options.invalidateAvatars((job.results || []).filter(item => item.avatar_refreshed).map(item => item.account_name))
     await options.loadAccounts()
+    if ((job.results || []).some(item => item.avatar_refresh_error)) {
+      toast.warning('部分账号头像刷新失败，已保留旧头像')
+    }
     const summary = job.summary || {}
     const ok = Number(summary.ok ?? job.progress?.ok ?? 0)
     const failed = Number(summary.fail ?? job.progress?.fail ?? 0)
@@ -195,11 +200,13 @@ export function useAccountBatchCheck(options: {
     checkingAccount.value = name
     try {
       const res = await checkAccountsStatus(token, { account_names: [name] })
+      options.invalidateAvatars(res.results.filter(item => item.avatar_refreshed).map(item => item.account_name))
       await options.loadAccounts()
       const result = res.results?.[0]
       if (result) {
         if (result.ok) {
-          toast.success(`${name}: ${t('accounts.checkOk')}`)
+          if (result.avatar_refresh_error) toast.warning(`${name}: 状态正常，但头像刷新失败，已保留旧头像`)
+          else toast.success(`${name}: ${t('accounts.checkOk')}`)
         } else {
           toast.error(`${name}: ${result.message || t('accounts.loginExpiredAction')}`)
         }
@@ -260,10 +267,12 @@ export function useAccountBatchCheck(options: {
       }
 
       const res = await checkAccountsStatus(token, { account_names: names, timeout_seconds: 8 })
+      options.invalidateAvatars(res.results.filter(item => item.avatar_refreshed).map(item => item.account_name))
       lastBatchFailedNames.value = res.results
         .filter((item) => !item.ok && item.account_name)
         .map((item) => item.account_name)
       await options.loadAccounts()
+      if (res.results.some(item => item.avatar_refresh_error)) toast.warning('部分账号头像刷新失败，已保留旧头像')
       const ok = res.results.filter((item) => item.ok).length
       const failed = res.results.length - ok
       if (failed === 0) {

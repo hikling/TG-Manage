@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import i18n from '../i18n'
 import AboutSettings from '../components/settings/AboutSettings.vue'
+import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
 import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import type { SettingsFormState } from '../lib/settings-form'
 
@@ -14,6 +15,7 @@ const settingsState = (): SettingsFormState => ({
   deviceKeepaliveIntervalDays: 30,
   botEnabled: false,
   botLoginNotify: false,
+  botCodeEnabled: false,
   quietEnabled: false,
   quietStart: '23:00',
   quietEnd: '07:00',
@@ -67,5 +69,21 @@ describe('设置页拆分组件契约', () => {
     const updates = wrapper.emitted('update:modelValue')
     expect(updates).toBeTruthy()
     expect((updates?.at(-1)?.[0] as SettingsFormState).logDays).toBe('')
+  })
+
+  it('BotNotifySettings 的私人验证码选项支持英文界面', () => {
+    const previousLocale = i18n.global.locale.value
+    i18n.global.locale.value = 'en-US'
+    try {
+      const wrapper = mount(BotNotifySettings, {
+        props: { modelValue: { ...settingsState(), botCodeEnabled: true }, reveal: { botToken: false } },
+        global: { plugins: [i18n] },
+      })
+      expect(wrapper.text()).toContain('Enable private code bot')
+      expect(wrapper.text()).toContain('Enter a positive private user ID')
+      expect(wrapper.text()).not.toContain('启用私人验证码机器人')
+    } finally {
+      i18n.global.locale.value = previousLocale
+    }
   })
 })

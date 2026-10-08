@@ -22,6 +22,7 @@ const props = defineProps<{
   botLoading?: boolean
   /** 测试 Bot 中 */
   botTestLoading?: boolean
+  codeStatus?: string
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +44,11 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
 
 const onCheckbox = (key: keyof SettingsFormState, e: Event) => {
   update(key, (e.target as HTMLInputElement).checked as never)
+}
+
+const isPrivateTarget = (value: string) => {
+  const trimmed = value.trim()
+  return /^[1-9][0-9]{0,18}$/.test(trimmed) && BigInt(trimmed) <= 9223372036854775807n
 }
 </script>
 
@@ -88,7 +94,8 @@ const onCheckbox = (key: keyof SettingsFormState, e: Event) => {
       </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="bot-chat-id">{{ t('settings.targetChatId') }}</label>
-        <input id="bot-chat-id" :value="modelValue.botChatId" @input="onStringInput('botChatId', $event)" type="text" placeholder="-1001234567890" class="ui-input">
+        <input id="bot-chat-id" :value="modelValue.botChatId" @input="onStringInput('botChatId', $event)" type="text" inputmode="numeric" aria-describedby="bot-chat-id-help" :placeholder="modelValue.botCodeEnabled ? t('settings.privateTargetPlaceholder') : '-1001234567890'" class="ui-input">
+        <p id="bot-chat-id-help" class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.privateTargetHint') }}</p>
       </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="bot-thread-id">{{ t('settings.threadId') }}</label>
@@ -99,6 +106,15 @@ const onCheckbox = (key: keyof SettingsFormState, e: Event) => {
           <input :checked="modelValue.botLoginNotify" @change="onCheckbox('botLoginNotify', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">
           <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">{{ t('settings.loginFailNotify') }}</span>
         </label>
+      </div>
+      <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-2">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input :checked="modelValue.botCodeEnabled" @change="onCheckbox('botCodeEnabled', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 rounded">
+          <span class="text-sm text-gray-700 dark:text-gray-200">{{ t('settings.privateCodeBot') }}</span>
+        </label>
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.privateCodeBotHint') }}</p>
+        <p v-if="modelValue.botCodeEnabled && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
+        <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-gray-500 dark:text-gray-400" role="status">{{ t('settings.privateCodeStatus', { status: codeStatus }) }}</p>
       </div>
       <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
         <div class="flex items-center justify-between gap-3">

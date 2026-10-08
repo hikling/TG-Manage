@@ -1,7 +1,7 @@
 import { fetchWithAuth, getAuthToken, request, requestBlob } from './core'
 
 const PATH = '/appearance/hero-image'
-export const MAX_HERO_IMAGE_BYTES = 5 * 1024 * 1024
+export const MAX_HERO_IMAGE_BYTES = 1 * 1024 * 1024
 
 export function getHeroImage(): Promise<Blob> {
   return requestBlob(PATH, {}, getAuthToken())

@@ -173,6 +173,8 @@ class AccountStatusItem(BaseModel):
     checked_at: Optional[str] = None
     needs_relogin: bool = False
     user_id: Optional[int] = None
+    avatar_refreshed: bool = False
+    avatar_refresh_error: bool = False
 
 
 class AccountStatusCheckResponse(BaseModel):

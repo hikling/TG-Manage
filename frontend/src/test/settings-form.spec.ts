@@ -22,6 +22,7 @@ const baseSettings = (): SettingsFormState => ({
   deviceKeepaliveIntervalDays: 30,
   botEnabled: false,
   botLoginNotify: false,
+  botCodeEnabled: false,
   quietEnabled: false,
   quietStart: '23:00',
   quietEnd: '07:00',
@@ -92,6 +93,17 @@ describe('settings-form', () => {
     const p = buildBotPayload(s)
     expect(p.telegram_bot_message_thread_id).toBe(42)
     expect(p.telegram_bot_notify_enabled).toBe(true)
+    expect(p.telegram_bot_code_enabled).toBe(false)
+  })
+
+  it('keeps private code bot opt-in separate from general notifications', () => {
+    const s = baseSettings()
+    s.botCodeEnabled = true
+    s.botChatId = '123456789'
+    const p = buildBotPayload(s)
+    expect(p.telegram_bot_code_enabled).toBe(true)
+    expect(p.telegram_bot_notify_enabled).toBe(false)
+    expect(p.telegram_bot_chat_id).toBe('123456789')
   })
 
   it('buildBotPayload omits empty token (keep server value)', () => {

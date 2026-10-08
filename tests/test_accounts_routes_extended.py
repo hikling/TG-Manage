@@ -461,17 +461,21 @@ class TestDevicesAndOfficialMessages:
 
 
 class TestAvatarCache:
-    def test_download_then_cache_hit(self, api_client, db):  # noqa: F811
+    def test_check_refreshes_avatar_then_cache_only_get(self, api_client, db):  # noqa: F811
         token = _login(api_client)
         svc = _svc()
         with _patch_svc(svc):
+            missing = api_client.get("/api/accounts/ava_a/avatar", headers=_auth(token))
+            checked = api_client.post("/api/accounts/status/check", json={"account_names": ["ava_a"]}, headers=_auth(token))
             first = api_client.get("/api/accounts/ava_a/avatar", headers=_auth(token))
             second = api_client.get("/api/accounts/ava_a/avatar", headers=_auth(token))
+        assert missing.status_code == 404
+        assert checked.json()["results"][0]["avatar_refreshed"] is True
         assert first.status_code == 200
         assert first.headers["content-type"] == "image/jpeg"
         assert first.content == b"\xff\xd8\xffavatar"
         assert second.status_code == 200
-        # 第二次命中磁盘缓存，不再调用下载
+        # 两次 GET 只读磁盘，下载只发生在明确检测动作中。
         assert svc.download_account_avatar.await_count == 1
 
     def test_no_avatar_marked_then_404_fast(self, api_client, db):  # noqa: F811
@@ -479,11 +483,13 @@ class TestAvatarCache:
         svc = _svc()
         svc.download_account_avatar.return_value = None
         with _patch_svc(svc):
+            checked = api_client.post("/api/accounts/status/check", json={"account_names": ["ava_b"]}, headers=_auth(token))
             first = api_client.get("/api/accounts/ava_b/avatar", headers=_auth(token))
             second = api_client.get("/api/accounts/ava_b/avatar", headers=_auth(token))
+        assert checked.status_code == 200
         assert first.status_code == 404
         assert second.status_code == 404
-        # 标记生效后第二次直接 404，不再下载
+        # 无头像标记由检测写入，GET 不会下载。
         assert svc.download_account_avatar.await_count == 1
 
     def test_download_error_falls_back_404(self, api_client, db):  # noqa: F811
@@ -493,7 +499,8 @@ class TestAvatarCache:
         with _patch_svc(svc):
             resp = api_client.get("/api/accounts/ava_c/avatar", headers=_auth(token))
         assert resp.status_code == 404
-        # 瞬时错误不写"无头像"标记：下次请求仍会重试下载
+        svc.download_account_avatar.assert_not_awaited()
+        # 普通 GET 不会把瞬时错误误标记为无头像。
         from backend.core.config import get_settings
 
         marker = get_settings().resolve_workdir() / "avatars" / "ava_c.no_avatar"
@@ -732,14 +739,14 @@ class TestErrorBranchesRound2:
 
 
 class TestAvatarStaleCache:
-    def test_download_error_with_expired_cache_serves_stale(self, api_client, db):  # noqa: F811
+    def test_expired_cache_still_served_without_download(self, api_client, db):  # noqa: F811
         import os
 
         token = _login(api_client)
         svc = _svc()
         with _patch_svc(svc):
-            first = api_client.get("/api/accounts/ava_e/avatar", headers=_auth(token))
-        assert first.status_code == 200
+            checked = api_client.post("/api/accounts/status/check", json={"account_names": ["ava_e"]}, headers=_auth(token))
+        assert checked.status_code == 200
         # 把缓存文件 mtime 拨到 8 天前，使新鲜期失效
         from backend.core.config import get_settings
 
@@ -751,9 +758,10 @@ class TestAvatarStaleCache:
         svc.download_account_avatar.side_effect = RuntimeError("flood wait")
         with _patch_svc(svc):
             resp = api_client.get("/api/accounts/ava_e/avatar", headers=_auth(token))
-        # 下载失败但有过期缓存 → 回退提供旧图
+        # 普通 GET 永远只读磁盘，即使缓存较旧。
         assert resp.status_code == 200
         assert resp.content == b"\xff\xd8\xffavatar"
+        assert svc.download_account_avatar.await_count == 1
 
     def test_expired_no_avatar_marker_ignored(self, api_client, db):  # noqa: F811
         import os
@@ -762,9 +770,11 @@ class TestAvatarStaleCache:
         svc = _svc()
         svc.download_account_avatar.return_value = None
         with _patch_svc(svc):
+            checked = api_client.post("/api/accounts/status/check", json={"account_names": ["ava_f"]}, headers=_auth(token))
             first = api_client.get("/api/accounts/ava_f/avatar", headers=_auth(token))
+        assert checked.status_code == 200
         assert first.status_code == 404
-        # 把无头像标记拨到 8 天前：应被视为过期并重新尝试下载
+        # 把无头像标记拨到 8 天前：普通 GET 仍不应重新下载。
         from backend.core.config import get_settings
 
         marker = (
@@ -775,7 +785,11 @@ class TestAvatarStaleCache:
         svc.download_account_avatar.return_value = b"\xff\xd8\xffnew"
         svc.download_account_avatar.side_effect = None
         with _patch_svc(svc):
+            missing = api_client.get("/api/accounts/ava_f/avatar", headers=_auth(token))
+            checked = api_client.post("/api/accounts/status/check", json={"account_names": ["ava_f"]}, headers=_auth(token))
             resp = api_client.get("/api/accounts/ava_f/avatar", headers=_auth(token))
+        assert missing.status_code == 404
+        assert checked.status_code == 200
         assert resp.status_code == 200
         assert resp.content == b"\xff\xd8\xffnew"
 

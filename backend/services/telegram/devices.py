@@ -130,22 +130,22 @@ class TelegramDevicesMixin:
         lock = get_account_lock(account_name)
 
         async def _read_messages() -> List[Dict[str, Any]]:
-            if not getattr(client, "is_connected", False):
-                await client.connect()
-
             messages: List[Dict[str, Any]] = []
-            async for msg in client.get_chat_history(777000, limit=limit):
-                text = getattr(msg, "text", None) or getattr(msg, "caption", None) or ""
-                messages.append(
-                    {
-                        "id": getattr(msg, "id", None),
-                        "date": utc_from_timestamp_iso_z(int(msg.date.timestamp()))
-                        if getattr(msg, "date", None)
-                        else None,
-                        "text": text,
-                        "outgoing": bool(getattr(msg, "outgoing", False)),
-                    }
-                )
+            # Use Client's ref-counted context: periodic code polling must not
+            # leave every account session connected after each history read.
+            async with client:
+                async for msg in client.get_chat_history(777000, limit=limit):
+                    text = getattr(msg, "text", None) or getattr(msg, "caption", None) or ""
+                    messages.append(
+                        {
+                            "id": getattr(msg, "id", None),
+                            "date": utc_from_timestamp_iso_z(int(msg.date.timestamp()))
+                            if getattr(msg, "date", None)
+                            else None,
+                            "text": text,
+                            "outgoing": bool(getattr(msg, "outgoing", False)),
+                        }
+                    )
             return messages
 
         async with lock:

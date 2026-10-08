@@ -17,6 +17,8 @@ import {
   PanelLeftOpen,
   X,
   Palette,
+  ImagePlus,
+  RotateCcw,
 } from 'lucide-vue-next'
 import { ACCENT_PRESETS, useTheme } from '../composables/useTheme'
 import { useI18n } from '../composables/useI18n'
@@ -24,6 +26,7 @@ import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import Modal from '../components/Modal.vue'
 import { createViewPrefetcher } from '../lib/view-prefetch'
+import { deleteHeroImage, getHeroImage, MAX_HERO_IMAGE_BYTES, uploadHeroImage } from '../lib/api/appearance'
 
 const route = useRoute()
 const { isDark, toggleTheme, accentColor, setAccentColor } = useTheme()
@@ -31,6 +34,10 @@ const { locale, toggleLanguage, t } = useI18n()
 const isMobileMenuOpen = ref(false)
 const showProfileModal = ref(false)
 const showAppearanceModal = ref(false)
+const heroInput = ref<HTMLInputElement | null>(null)
+const heroBusy = ref(false)
+const heroPresent = ref(false)
+const heroFeedback = ref('')
 const sidebarCollapsed = ref(true)
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
@@ -42,6 +49,53 @@ const onViewportChange = () => {
   isMobileView.value = mobileQuery.matches
 }
 const sidebarHidden = computed(() => isMobileView.value && !isMobileMenuOpen.value)
+
+async function refreshHeroPresence() {
+  try {
+    await getHeroImage()
+    heroPresent.value = true
+  } catch {
+    heroPresent.value = false
+  }
+}
+
+async function onHeroSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size === 0 || file.size > MAX_HERO_IMAGE_BYTES) {
+    heroFeedback.value = '请选择不超过 1 MB 的 JPEG、PNG 或 WebP 图片'
+    return
+  }
+  heroBusy.value = true
+  heroFeedback.value = '正在上传封面…'
+  try {
+    await uploadHeroImage(file)
+    heroPresent.value = true
+    heroFeedback.value = '封面已更新'
+    window.dispatchEvent(new Event('tg-manage:hero-changed'))
+  } catch {
+    heroFeedback.value = '封面上传失败，请稍后重试'
+  } finally {
+    heroBusy.value = false
+  }
+}
+
+async function resetHeroImage() {
+  heroBusy.value = true
+  heroFeedback.value = '正在恢复默认封面…'
+  try {
+    await deleteHeroImage()
+    heroPresent.value = false
+    heroFeedback.value = '已恢复默认封面'
+    window.dispatchEvent(new Event('tg-manage:hero-changed'))
+  } catch {
+    heroFeedback.value = '恢复默认封面失败，请稍后重试'
+  } finally {
+    heroBusy.value = false
+  }
+}
 
 const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape' && isMobileMenuOpen.value) {
@@ -71,6 +125,7 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
+  void refreshHeroPresence()
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
 })
@@ -282,6 +337,16 @@ const handleNavClick = () => {
           </div>
           <label class="appearance-custom-label" for="accent-custom-color">自定义颜色</label>
           <div class="appearance-custom-control"><input id="accent-custom-color" type="color" :value="accentColor" @input="setAccentColor(($event.target as HTMLInputElement).value)" /><code>{{ accentColor.toUpperCase() }}</code></div>
+          <div class="appearance-cover-control">
+            <h3 class="text-sm font-medium">仪表盘封面</h3>
+            <p class="text-xs">支持 JPEG、PNG、WebP，新上传图片不超过 1 MB。</p>
+            <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" aria-label="选择仪表盘封面图片" @change="onHeroSelected" />
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroPresent ? '更换封面' : '上传封面' }}</button>
+              <button v-if="heroPresent" type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="resetHeroImage"><RotateCcw :size="16" aria-hidden="true" />恢复默认</button>
+            </div>
+            <p v-if="heroFeedback" id="hero-cover-feedback" class="text-xs" :class="heroFeedback.includes('失败') || heroFeedback.includes('请选择') ? 'panel-error' : 'text-[var(--tg-text-muted)]'" :role="heroFeedback.includes('失败') || heroFeedback.includes('请选择') ? 'alert' : 'status'" aria-live="polite">{{ heroFeedback }}</p>
+          </div>
         </div>
       </Modal>
     </main>

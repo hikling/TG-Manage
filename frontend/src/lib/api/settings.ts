@@ -60,6 +60,8 @@ export interface GlobalSettings {
   device_keepalive_interval_days?: number;
   telegram_bot_notify_enabled?: boolean;
   telegram_bot_login_notify_enabled?: boolean;
+  telegram_bot_code_enabled?: boolean;
+  telegram_bot_code_status?: string;
   telegram_bot_quiet_hours_enabled?: boolean;
   telegram_bot_quiet_hours_start?: string | null;
   telegram_bot_quiet_hours_end?: string | null;

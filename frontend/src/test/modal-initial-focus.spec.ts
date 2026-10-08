@@ -51,4 +51,15 @@ describe('Modal 初始焦点', () => {
     expect((document.activeElement as HTMLElement)?.id).toBe('ta')
     wrapper.unmount()
   })
+
+  it('不可 Tab 的封面上传输入框不应抢占首焦点', async () => {
+    const wrapper = mount(Modal, {
+      props: { title: '自定义主题', isOpen: true },
+      slots: { default: '<input type="file" tabindex="-1" class="sr-only" /><button>上传封面</button>' },
+      attachTo: document.body,
+    })
+    await wrapper.vm.$nextTick()
+    expect((document.activeElement as HTMLElement)?.getAttribute('aria-label')).toBe('common.close')
+    wrapper.unmount()
+  })
 })

@@ -35,7 +35,7 @@ def test_rejects_invalid_or_large_upload(content):
 
 
 def test_rejects_oversized_image():
-    content = b"\x89PNG\r\n\x1a\n" + b"x" * appearance.MAX_HERO_BYTES
+    content = b"\x89PNG\r\n\x1a\n" + b"x" * appearance.MAX_HERO_UPLOAD_BYTES
     with pytest.raises(ValueError, match="JPEG、PNG 或 WebP"):
         appearance.save_hero(content)
 
@@ -43,3 +43,11 @@ def test_rejects_oversized_image():
 def test_accepts_jpeg_and_webp():
     assert appearance.image_media_type(b"\xff\xd8\xffrest") == "image/jpeg"
     assert appearance.image_media_type(b"RIFF\x00\x00\x00\x00WEBPmore") == "image/webp"
+
+
+def test_existing_large_cover_remains_readable(cover_workdir):
+    content = b"\x89PNG\r\n\x1a\n" + b"x" * (appearance.MAX_HERO_UPLOAD_BYTES + 1)
+    path = cover_workdir / "appearance" / "dashboard-hero.bin"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(content)
+    assert appearance.read_hero() == (content, "image/png")

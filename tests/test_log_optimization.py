@@ -199,6 +199,33 @@ class TestBackendLoggingConfig:
         except ImportError as e:
             pytest.skip(f"无法导入 backend.main: {e}")
 
+    def test_bot_token_urls_are_not_logged_at_info_or_debug(self, monkeypatch):
+        """httpx/httpcore must not log Bot API URLs containing the token."""
+        try:
+            from backend.main import _configure_backend_logging
+        except ImportError as e:
+            pytest.skip(f"无法导入 backend.main: {e}")
+
+        monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+        names = ("", "backend", "uvicorn", "uvicorn.access", "httpx", "httpcore")
+        loggers = {name: logging.getLogger(name) for name in names}
+        previous = {
+            name: (logger.level, list(logger.handlers), list(logger.filters), logger.disabled, logger.propagate)
+            for name, logger in loggers.items()
+        }
+        try:
+            _configure_backend_logging()
+            assert loggers["httpx"].getEffectiveLevel() >= logging.WARNING
+            assert loggers["httpcore"].getEffectiveLevel() >= logging.WARNING
+        finally:
+            for name, logger in loggers.items():
+                level, handlers, filters, disabled, propagate = previous[name]
+                logger.setLevel(level)
+                logger.handlers[:] = handlers
+                logger.filters[:] = filters
+                logger.disabled = disabled
+                logger.propagate = propagate
+
     def test_log_level_env_var(self):
         """测试 LOG_LEVEL 环境变量读取"""
         original_value = os.environ.get("LOG_LEVEL")

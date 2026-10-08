@@ -23,7 +23,7 @@ def get_hero_image():
 @router.put("/hero-image", status_code=204)
 async def put_hero_image(file: UploadFile = File(...)):
     try:
-        data = await file.read(appearance.MAX_HERO_BYTES + 1)
+        data = await file.read(appearance.MAX_HERO_UPLOAD_BYTES + 1)
     finally:
         await file.close()
     try:

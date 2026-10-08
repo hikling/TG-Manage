@@ -64,6 +64,17 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
         else:
             normalized["telegram_bot_token"] = str(tok).strip()
 
+    if "telegram_bot_code_enabled" in normalized:
+        value = normalized["telegram_bot_code_enabled"]
+        if isinstance(value, str):
+            if value.strip().lower() not in {"true", "false", "1", "0"}:
+                raise ValueError("验证码机器人开关必须是布尔值")
+            normalized["telegram_bot_code_enabled"] = value.strip().lower() in {"true", "1"}
+        else:
+            normalized["telegram_bot_code_enabled"] = bool(value)
+    if "telegram_bot_chat_id" in normalized and normalized["telegram_bot_chat_id"] is not None:
+        normalized["telegram_bot_chat_id"] = str(normalized["telegram_bot_chat_id"]).strip() or None
+
     # WebDAV 密码：空串不修改；保留原值（不去空白，避免改动密码本身）
     if "webdav_password" in normalized:
         pwd = normalized["webdav_password"]
@@ -194,6 +205,7 @@ class GlobalSettingsMixin:
             "device_keepalive_interval_days": 30,
             "telegram_bot_notify_enabled": False,
             "telegram_bot_login_notify_enabled": False,
+            "telegram_bot_code_enabled": False,
             "telegram_bot_quiet_hours_enabled": False,
             "telegram_bot_quiet_hours_start": "23:00",
             "telegram_bot_quiet_hours_end": "07:00",
@@ -250,6 +262,13 @@ class GlobalSettingsMixin:
         config_file = self._get_global_settings_file()
         merged = dict(self.get_global_settings())
         merged.update(settings)
+        if merged.get("telegram_bot_code_enabled"):
+            from backend.services.official_code_bot import private_target
+
+            if private_target(merged) is None:
+                raise ValueError("验证码机器人需要正整数的私人目标 ID")
+            if not merged.get("telegram_bot_token"):
+                raise ValueError("验证码机器人需要先设置 Bot Token")
         for key in list(merged):
             if _is_retired_setting(key):
                 merged.pop(key)

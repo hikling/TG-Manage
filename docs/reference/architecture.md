@@ -6,12 +6,12 @@ TG Manage 由 Vue 3 管理界面、FastAPI API、Telegram 账号服务、每账�
 
 | 组件 | 职责 |
 | --- | --- |
-| 前端 | 登录、仪表盘、账号与聊天、系统设置中的机器人中心、日志。 |
-| FastAPI | 鉴权、账号和消息 API、Bot API、TeleBox 进程管理、备份及运维。 |
+| 前端 | 登录、仪表盘、账号与聊天、系统设置中的机器人通知、日志。 |
+| FastAPI | 鉴权、账号和消息 API、私人验证码机器人、TeleBox 进程管理、备份及运维。 |
 | Telegram 账号服务 | 管理主账号的授权、会话、代理和消息操作。 |
 | TeleBox | 每个启用账号使用独立的 Node 进程、Telegram 会话和插件目录。 |
 
-主要 API 前缀包括 `/api/auth`、`/api/accounts`、`/api/communications`、`/api/bots`、`/api/telebox`、`/api/config`、`/api/ops` 和 `/api/logs`。当前版本不运行旧签到、关键词监听或 AI 动作链路。
+主要 API 前缀包括 `/api/auth`、`/api/accounts`、`/api/communications`、`/api/telebox`、`/api/config`、`/api/ops` 和 `/api/logs`。当前版本不运行旧签到、关键词监听或 AI 动作链路。机器人中心接口已移除，但升级不会删除工作目录中的历史机器人登记数据。
 
 ## 数据与密钥
 

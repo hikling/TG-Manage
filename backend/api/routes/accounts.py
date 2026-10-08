@@ -372,6 +372,16 @@ async def check_accounts_status(
                 item = await service.check_account_status(
                     name, timeout_seconds=timeout_seconds
                 )
+                if item.get("ok"):
+                    from backend.services.avatar_cache import refresh_account_avatar
+                    try:
+                        await refresh_account_avatar(
+                            name, lambda account=name: service.download_account_avatar(account)
+                        )
+                        item["avatar_refreshed"] = True
+                    except Exception:
+                        logger.warning("刷新账号头像失败 account=%s", name)
+                        item["avatar_refresh_error"] = True
             except Exception as exc:
                 item = build_status_check_error_item(name, exc)
             results.append(AccountStatusItem(**item))
@@ -600,34 +610,13 @@ async def get_account_avatar(
     cache_file = avatar_cache_dir / f"{account_name}.jpg"
     no_avatar_marker = avatar_cache_dir / f"{account_name}.no_avatar"
 
-    # 如果已标记为无头像（7天内），直接返回 404
+    # 普通页面访问只读取磁盘缓存，绝不连接 Telegram。
     if avatar_cache.marker_hits_no_avatar(no_avatar_marker):
         raise HTTPException(status_code=404, detail="No avatar available")
 
-    # 如果缓存存在且不超过 7 天，直接返回
-    cached = avatar_cache.read_cached_avatar(cache_file)
+    cached = avatar_cache.read_avatar_file(cache_file)
     if cached is not None:
         return Response(content=cached, media_type="image/jpeg")
-
-    # 尝试下载头像
-    try:
-        avatar_bytes = await avatar_cache.get_avatar_bytes(
-            cache_file,
-            no_avatar_marker,
-            lambda: get_telegram_service().download_account_avatar(account_name),
-        )
-        if avatar_bytes:
-            return Response(content=avatar_bytes, media_type="image/jpeg")
-        else:
-            # 明确判定无头像才写标记
-            avatar_cache.mark_no_avatar(no_avatar_marker)
-    except Exception:
-        # 瞬时下载失败：回退缓存即可，不写"无头像"标记，下次请求重试
-        logger.warning("获取账号头像失败 account=%s", account_name, exc_info=True)
-        stale = avatar_cache.read_avatar_file(cache_file)
-        if stale is not None:
-            return Response(content=stale, media_type="image/jpeg")
-
     raise HTTPException(status_code=404, detail="No avatar available")
 
 

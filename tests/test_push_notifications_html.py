@@ -6,6 +6,7 @@ import httpx
 import pytest
 
 from backend.services.push_notifications import (
+    TelegramBotDeliveryError,
     _html_escape,
     _safe_msg_truncate,
     build_html_notification,
@@ -213,9 +214,31 @@ class TestParseModePropagation:
                 return _FakeResp(400)
 
         monkeypatch.setattr("httpx.AsyncClient", _FakeClient, raising=False)
-        with pytest.raises(httpx.HTTPStatusError):
+        with pytest.raises(TelegramBotDeliveryError, match="HTTP 400"):
             await send_telegram_bot_message(bot_token="tok", chat_id="chat", text="hi")
         assert calls["n"] == 1
+
+    @pytest.mark.asyncio()
+    async def test_network_failure_never_exposes_bot_token(self, monkeypatch, caplog):
+        token = "12345:private-token"
+
+        class _FakeClient:
+            async def post(self, url, json=None):
+                request = httpx.Request("POST", url)
+                raise httpx.ConnectError(f"failed to connect to {url}", request=request)
+
+        async def _noop_sleep(_seconds):
+            return None
+
+        monkeypatch.setattr(
+            "backend.services.push_notifications._get_shared_http_client",
+            lambda: _FakeClient(),
+        )
+        monkeypatch.setattr("asyncio.sleep", _noop_sleep)
+        with pytest.raises(TelegramBotDeliveryError) as error:
+            await send_telegram_bot_message(bot_token=token, chat_id="12345", text="hi")
+        assert token not in str(error.value)
+        assert token not in caplog.text
 
 
 class TestNotificationTimeLabels:

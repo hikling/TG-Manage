@@ -12,6 +12,7 @@ export type SettingsFormState = {
   deviceKeepaliveIntervalDays: number | ''
   botEnabled: boolean
   botLoginNotify: boolean
+  botCodeEnabled: boolean
   quietEnabled: boolean
   quietStart: string
   quietEnd: string
@@ -73,6 +74,7 @@ export function buildBotPayload(s: SettingsFormState) {
   return {
     telegram_bot_notify_enabled: s.botEnabled,
     telegram_bot_login_notify_enabled: s.botLoginNotify,
+    telegram_bot_code_enabled: s.botCodeEnabled,
     telegram_bot_quiet_hours_enabled: s.quietEnabled,
     telegram_bot_quiet_hours_start: s.quietStart || '23:00',
     telegram_bot_quiet_hours_end: s.quietEnd || '07:00',
@@ -122,6 +124,7 @@ export function snapSection(
       return JSON.stringify({
         botEnabled: s.botEnabled,
         botLoginNotify: s.botLoginNotify,
+        botCodeEnabled: s.botCodeEnabled,
         quietEnabled: s.quietEnabled,
         quietStart: s.quietStart,
         quietEnd: s.quietEnd,
@@ -187,6 +190,7 @@ export function applyGlobalSettingsToForm(
     device_keepalive_interval_days?: number
     telegram_bot_notify_enabled?: boolean
     telegram_bot_login_notify_enabled?: boolean
+    telegram_bot_code_enabled?: boolean
     telegram_bot_quiet_hours_enabled?: boolean
     telegram_bot_quiet_hours_start?: string | null
     telegram_bot_quiet_hours_end?: string | null
@@ -211,6 +215,7 @@ export function applyGlobalSettingsToForm(
   s.deviceKeepaliveIntervalDays = res.device_keepalive_interval_days || 30
   s.botEnabled = res.telegram_bot_notify_enabled || false
   s.botLoginNotify = res.telegram_bot_login_notify_enabled || false
+  s.botCodeEnabled = res.telegram_bot_code_enabled || false
   s.quietEnabled = res.telegram_bot_quiet_hours_enabled || false
   s.quietStart = res.telegram_bot_quiet_hours_start || '23:00'
   s.quietEnd = res.telegram_bot_quiet_hours_end || '07:00'
