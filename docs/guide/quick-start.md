@@ -2,7 +2,7 @@
 
 ## 准备
 
-服务器需要 Docker Engine 24+、Docker Compose v2、Git、本[私有仓库](https://github.com/hikling/TG-Manage)的读取权限，以及连接 Telegram 和下载构建依赖的网络。TeleBox 账号需要自己的 Telegram API ID/Hash。
+服务器需要 Docker Engine 24+、Docker Compose v2、Git，以及连接 Telegram 和下载构建依赖的网络。TeleBox 账号需要自己的 Telegram API ID/Hash。
 
 ## 安装
 
@@ -21,7 +21,7 @@ bash scripts/install.sh
 1. 在“账号管理”用手机验证码或二维码登录账号；需要 TeleBox 时填写该账号专属 API ID/Hash。
 2. 在账号卡片查看主会话和 TeleBox 的独立状态；出现两步验证提示时按页面要求补交密码。
 3. 在“聊天中心”按需开启聊天，先用自己的测试对话验证消息收发。
-4. 如需私人验证码通知，在“系统设置 → 机器人通知”填写 Bot Token 和正整数的私人目标 ID，启用验证码机器人；仅该 ID 可以用 `/code 账号名` 查询最近 5 分钟的官方验证码。
+4. 如需私人机器人，在“系统设置 → 机器人通知”填写 Bot Token 和正整数的私人目标 ID，启用后仅该 ID 可以用 `/code 账号名` 查询最近 5 分钟的官方验证码，或用 `/me` 查看账号名称和备注。空闲时不轮询账号消息。
 5. 在仪表盘查看当前进程内存，部署在容器内时再用 `docker stats --no-stream tg-manage` 查看总体内存。
 
 ## 下次升级

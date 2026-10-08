@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -365,6 +366,11 @@ async def check_accounts_status(
             request.account_names,
             fallback_names=fallback,
         )
+        if request.refresh_avatar and len(names) != 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="头像刷新只允许单个账号检测",
+            )
         timeout_seconds = clamp_status_check_timeout(request.timeout_seconds)
         results: list[AccountStatusItem] = []
         for idx, name in enumerate(names):
@@ -372,7 +378,7 @@ async def check_accounts_status(
                 item = await service.check_account_status(
                     name, timeout_seconds=timeout_seconds
                 )
-                if item.get("ok"):
+                if item.get("ok") and request.refresh_avatar:
                     from backend.services.avatar_cache import refresh_account_avatar
                     try:
                         await refresh_account_avatar(
@@ -389,6 +395,8 @@ async def check_accounts_status(
                 await asyncio.sleep(0.15)
 
         return AccountStatusCheckResponse(results=results)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("账号状态检测失败: %s", e, exc_info=True)
         raise HTTPException(
@@ -478,6 +486,12 @@ async def delete_account(
         success = await get_telegram_service().delete_account(account_name)
 
         if success:
+            from backend.core.config import get_settings
+
+            avatar_dir = get_settings().resolve_workdir() / "avatars"
+            for suffix in (".jpg", ".no_avatar"):
+                with contextlib.suppress(OSError):
+                    (avatar_dir / f"{account_name}{suffix}").unlink(missing_ok=True)
             return DeleteAccountResponse(
                 success=True, message=f"账号 {account_name} 已删除"
             )

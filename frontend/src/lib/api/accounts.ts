@@ -96,6 +96,7 @@ export interface AccountInfo {
 export interface AccountStatusCheckRequest {
   account_names?: string[];
   timeout_seconds?: number;
+  refresh_avatar?: boolean;
 }
 
 export interface AccountStatusItem {

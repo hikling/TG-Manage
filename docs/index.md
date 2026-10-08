@@ -34,7 +34,7 @@ features:
     details: 按需开启群组会话，查看和发送消息。
   - icon: 🤖
     title: 私人机器人通知
-    details: 只向配置的私人 ID 推送或提供 777000 的短时验证码。
+    details: 仅供配置的私人 ID 按需查询 777000 的短时验证码和本地账号清单。
   - icon: 🐳
     title: 源码部署
     details: Docker Compose 从当前仓库构建，数据保存在独立挂载目录。

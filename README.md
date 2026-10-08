@@ -1,211 +1,127 @@
-<p align="center"><img src="docs/public/logo.svg" width="80" height="80" alt="TG Manage Logo"></p>
-<h1 align="center">TG Manage</h1>
-<p align="center">Telegram 多账号管理面板 · 内置 TeleBox</p>
-<p align="center"><a href="README.md"><kbd><strong>简体中文</strong></kbd></a> &nbsp; <a href="README_EN.md"><kbd>English</kbd></a></p>
+<p align="center"><img src="docs/public/logo.svg" width="80" height="80" alt="TG Manage 图标"></p>
+<h1 align="center">🚀 TG Manage</h1>
+<p align="center">一个清爽的 Telegram 多账号管理面板，内置独立运行的 TeleBox。</p>
+<p align="center"><a href="README.md"><strong>简体中文</strong></a> · <a href="README_EN.md">English</a></p>
+<p align="center"><a href="#features">✨ 功能</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
 
-> 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，内置 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)，当前源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)。部署时从当前仓库构建；上游公开镜像不包含这里的界面和 TeleBox 集成。
+> 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，集成 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)。当前项目源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；请从本仓库构建，上游镜像不包含这里的界面和集成改动。
 
-## 目录
+<a id="features"></a>
+## ✨ 核心功能
 
-- [当前功能](#当前功能)
-- [运行环境](#运行环境)
-- [Docker Compose 搭建](#docker-compose-搭建推荐)
-- [首次使用](#首次使用)
-- [本地源码开发](#本地源码开发)
-- [环境变量](#环境变量)
-- [数据、升级与备份](#数据升级与备份)
-- [验证与已知限制](#验证与已知限制)
-- [项目结构与开发规范](#项目结构与开发规范)
+- **👥 多账号管理** — 手机验证码或二维码登录，按需检测账号、刷新头像、配置代理；账号卡片集中展示状态和操作。
+- **💬 聊天中心** — 按账号浏览群组对话，搜索、收发附件、回复、编辑和删除消息；聊天功能可独立开启或关闭。
+- **🤖 私人机器人** — 只有配置的私人目标 ID 能用 `/code 账号名` 按需查询 `777000` 最近 5 分钟内的验证码，或用 `/me` 查看本地账号名称和备注；空闲时不扫描账号消息。
+- **🎨 仪表盘与外观** — 查看当前进程内存、切换主题色，并在自定义主题中上传或恢复仪表盘封面。
+- **🔌 内置 TeleBox** — 每个启用的账号使用独立 Telegram 会话和运行目录；可在账号卡片查看状态、日志以及启动、停止和退出登录。上游版本见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。
 
-## 当前功能
+> **会话边界：**退出 TeleBox 只清除它的独立授权，不会退出账号管理中的主账号；不要手工合并两套 session 文件。
 
-| 范围 | 当前实现 |
+<a id="quick-start"></a>
+## 🚀 快速部署
+
+准备好 Docker Engine、Compose v2 和 Git，确保服务器可以访问 Telegram 及构建依赖，然后运行：
+
+```bash
+git clone https://github.com/hikling/TG-Manage.git
+cd TG-Manage
+bash scripts/install.sh
+```
+
+安装脚本会从本仓库源码构建、启动服务并输出一次性设置码。打开 `http://服务器IP:8080`，输入设置码并设置至少 12 位的管理员密码。对外开放前请配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
+
+> **⚠️ 已有部署升级时不要重新初始化或删除数据。**在原仓库目录运行 `bash scripts/update.sh`；脚本会先备份，再快进拉取、重建并启动。务必保留完整的 `data/`，包括隐藏文件 `data/.app_secret_key`、数据库、账号会话和 TeleBox 数据。详情见下方「数据、升级与备份」。
+
+<a id="first-use"></a>
+## 🧭 首次使用
+
+1. **🔐 设置管理员：**使用安装时显示的一次性设置码；已有部署仍用原账号登录，建议启用面板 TOTP。
+2. **➕ 添加账号：**在「账号管理」选择验证码或二维码登录。普通账号可免填 API ID/Hash；启用 TeleBox 时，请填写该账号的专属 API ID/Hash，并按提示完成二步验证。
+3. **🗂️ 按需使用：**账号卡片可检测状态和刷新头像，也可管理独立的 TeleBox 进程。「聊天中心」打开后再启用聊天；关闭时仅处理官方验证码消息。
+
+TeleBox 的插件和命令由 TeleBox 自身管理。内置系统插件随镜像提供；社区插件见 [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins)，具体使用方式见 [`telebox/README.md`](telebox/README.md)。
+
+<a id="guides"></a>
+## 📚 使用与部署指南
+
+- **📦 [Docker 部署与无损升级](docs/deploy/docker.md)** — 安装、检查、备份、回退与构建排查。
+- **🧭 [快速入门](docs/guide/quick-start.md)** — 首次设置和账号接入。
+- **⚙️ [配置参考](docs/reference/configuration.md)** — 环境变量与数据目录。
+- **🛠️ [本地开发](docs/reference/development.md)** — 源码运行和开发命令。
+
+<a id="reference"></a>
+## 🧰 技术参考
+
+以下内容默认收起，需要时点击展开。
+
+<a id="environment"></a>
+<details>
+<summary><strong>⚙️ 环境变量</strong></summary>
+
+| 变量 | 用途 |
 | --- | --- |
-| 管理页面 | 账号卡片展示主账号和 TeleBox 独立状态，支持检测、聊天、启动或停止 TeleBox、二步验证及退出 TeleBox 登录；保留仪表盘、账号、日志、设置等入口。 |
-| 资源监控与外观 | 仪表盘每 15 秒刷新当前进程内存；自定义主题中可上传不超过 1 MiB 的新封面、恢复默认封面和选择主题色。已有较大的封面仍可显示。容器整体资源可用 `docker stats` 检查。 |
-| 账号与聊天 | 账号管理支持手机验证码/二维码登录、状态检测、代理及登录时启用 TeleBox；聊天中心开启后按账号查看群组对话，显示 Telegram 头像、搜索/翻页、收发文字与附件、回复、编辑/删除消息、已读及归档等。 |
-| 机器人、代理 | 系统设置中的机器人通知支持私人验证码推送与 `/code 账号名` 按需查询，仅接受配置的私人目标 ID，验证码仅取自 777000 且有效 5 分钟；账号代理可在账号资料中设置。升级不会删除原机器人中心的历史登记数据。 |
-| 日志 | 按账号查看 TeleBox 进程输出；插件自身定时由 TeleBox 管理。 |
-| 内置 TeleBox | 保留 TeleBox 0.2.9 的上游源码、内置插件和 TPM；登录账号时选择启用并自动请求独立会话，在账号管理查看状态并操作。上游固定提交见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。 |
-| 清理旧功能 | 移除面板的拓展插件、任务编排、每日消息调度及其专用接口和测试；原有持久数据不自动删除。 |
-| 开发流程 | 接入 Trellis 的任务记录、后端/前端规范、Codex 技能与 hooks；搭建过程见 [bootstrap 记录](.trellis/tasks/00-bootstrap-guidelines/progress.md)。 |
+| `TG_MANAGE_TG_API_ID/HASH` | 可选的服务器私有 Telegram 应用凭据；普通账号可免填，启用 TeleBox 时应使用账号专属凭据。 |
+| `SIGNPULSE_TG_API_ID/HASH`、`TG_API_ID/HASH` | 旧部署兼容别名，升级后仍可读取。 |
+| `APP_SECRET_KEY` | 凭据加密和认证密钥；默认持久化为 `data/.app_secret_key`，必须随数据备份。 |
+| `APP_DATA_DIR` | 数据库、会话、日志及 TeleBox 数据目录；Compose 使用 `/data`。 |
+| `TG_PROXY` | Telegram 全局代理；账号代理也可在界面中单独设置。 |
+| `APP_DATABASE_URL` | 覆盖默认 SQLite 数据库连接。 |
+| `TG_GLOBAL_CONCURRENCY` | Telegram 操作的并发上限，与已登录账号总数无关。 |
+| `TELEBOX_NODE` | 本地开发时指定 TeleBox 使用的 Node 24 可执行文件。 |
 
-**模块边界：**TeleBox 是另一套独立 Telegram 会话与插件运行时。退出 TeleBox 只清除其独立授权，不会退出账号管理中的主账号。不要把两个进程的 session 文件手工合并。
+完整选项和默认值以 [`backend/core/config.py`](backend/core/config.py) 及 [配置参考](docs/reference/configuration.md) 为准。不要把真实密钥、session、Bot Token 或备份提交到 Git。
 
-## 运行环境
+</details>
 
-| 项目 | Docker Compose（推荐） | 不使用 Docker 时 |
-| --- | --- | --- |
-| 系统 | 支持 Docker Engine 和 Compose v2 的 Linux；Windows/macOS 可使用 Docker Desktop | 建议 Linux；macOS/Windows 建议先使用 Docker，TeleBox 运行时依赖原生模块和 POSIX 文件锁 |
-| Docker | 建议 Engine 24+、`docker compose` v2 | 不需要 |
-| Python | 镜像内 Python 3.11 | Python >=3.10,<3.14，推荐 3.11/3.12 |
-| 前端 Node | 构建阶段 Node 22.23.1 | Node 22.23.1，见根目录 `.nvmrc` |
-| TeleBox Node | 构建/运行阶段 Node 24 | 另外安装 Node 24.x，并用 `TELEBOX_NODE` 指定可执行文件 |
-| 资源 | 当前 `docker-compose.yml` 设置 2 GiB 容器内存与 2 CPU；构建时还需要额外内存和磁盘 | 每增加一个运行中的 TeleBox 账号都会启动一个独立 Node 进程；按账号数量预留内存 |
-| 网络与账号 | 能访问 Telegram、npm/PyPI（构建时）；至少一个可完成验证的 Telegram 账号 | 同左；受限网络需先配置 Telegram 代理 |
-| Telegram API | 普通账号可免填，兼容旧版内置应用凭据；启用 TeleBox 时填写专属 API ID/Hash | 同左；建议用自有凭据，避免多个账号共享公开应用的限额 |
+<a id="data-upgrade-backup"></a>
+<details>
+<summary><strong>💾 数据、升级与备份</strong></summary>
 
-面板的头像下载并发为 2，单张只在不超过 128 KiB 时保存在浏览器，本页头像 URL 总量最多 2 MiB，离开页面即释放；界面只按需加载页面模块。每个 TeleBox Node 工作进程的 V8 老生代默认上限为 128 MiB，可通过 `TELEBOX_NODE_HEAP_MB` 在 64–512 MiB 间调整。
+Compose 把宿主机 `./data` 挂载到容器 `/data`。数据库、账号会话、设置、日志、TeleBox 每账号目录、自定义封面及 `data/.app_secret_key` 均在其中。旧部署的封面也可能位于 `data/.signer/appearance/`。**保留整个目录及隐藏文件**；密钥丢失会导致已加密的账号凭据和 Bot Token 无法解密。
 
-### 2 核 2 GiB 运行 20 个账号
-
-`docker-compose.yml` 将 Telegram 操作并发默认限制为 2；这限制的是同时连接/执行的数量，并不限制已登录账号总数。可以先添加 20 个主账号，按需检测和使用；首次批量检测会逐个排队完成。保持 `TG_GLOBAL_CONCURRENCY=2`，不要为了账号总数把它改成 20。面板中的并发数留空时采用环境变量，其次才按容器 CPU 配额计算；若在面板明确设值，则以面板设置为准。
-
-TeleBox 与主账号分开计费资源：每个**运行中的** TeleBox 账号都有一个常驻 Node 进程和独立 Telegram 会话。128 MiB 只限制 V8 老生代，不限制整个进程的 RSS。2 GiB 是否容得下 20 个同时运行的 TeleBox，必须在你的服务器用实际账号和插件观察，无法凭账号数量或堆上限保证。只为确实需要 TeleBox 功能的账号启动它；若所有 20 个都需要常驻，应根据实际总内存和 OOM 记录增加内存或分散到多台服务器。
-
-上线后可在仪表盘查看当前进程内存，并用 `docker stats --no-stream tg-manage` 查看整个容器的内存/CPU，用 `docker inspect -f '{{.State.OOMKilled}}' tg-manage` 检查是否触发 OOM。分批启动 TeleBox，给系统和容器留出余量。`docker-compose.panel.yml` 同样从本仓库源码构建，按 2 CPU / 2 GiB 配置。
-
-TeleBox 插件可能需要自己的外部服务配置；插件由 TeleBox 自身管理。
-
-## Docker Compose 搭建（推荐）
-
-服务器已安装 Docker Engine 和 Compose v2、Git，并拥有此私有仓库的读取权限后，复制这一行执行：
-
-```bash
-git clone https://github.com/hikling/TG-Manage.git && cd TG-Manage && bash scripts/install.sh
-```
-
-脚本从源码构建并启动服务、等待就绪、输出首次设置码。私有仓库克隆会要求 GitHub 授权；服务器也必须能下载 Python/npm 构建依赖并连接 Telegram。打开 `http://服务器IP:8080`，粘贴设置码并自行设定至少 12 位管理员密码。`APP_SECRET_KEY` 首次启动生成到 `data/.app_secret_key`，以后自动复用。已有管理员不会重置密码，也不会显示设置码。公开访问前应配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
-
-脚本调用 `docker compose up -d --build`；查看运行状态用 `docker compose ps`，日志用 `docker compose logs --tail=100 app`。首次构建 TeleBox 的原生模块可能较久。TeleBox 的 `package-lock.json` 必须随仓库提交；若构建报 `npm ci` 缺少锁文件，先更新包含锁文件修复的版本，参见 [构建排查](docs/deploy/docker.md#telebox-构建提示-npm-ci-缺少锁文件)。
-
-### 停止与重启
-
-```bash
-docker compose stop       # 暂停服务，保留容器和数据
-docker compose start      # 恢复
-docker compose down       # 删除容器和网络，保留 ./data
-docker compose up -d --build  # 代码更新后重新构建
-```
-
-不要删除 `./data`；这里包含数据库、账号会话和 TeleBox 每账号数据。
-
-## 首次使用
-
-1. 首次打开网页，填入安装脚本输出的设置码，自行设置 `admin` 密码；完成后设置码失效。已有部署用原账号登录。建议启用面板 TOTP。
-2. 在“账号管理”选择是否启用 TeleBox。勾选时填写该账号 API ID/Hash；不勾选时可直接用验证码或二维码登录普通账号。普通登录优先使用服务器私有 `TG_MANAGE_TG_API_ID/HASH`，并兼容旧版 `SIGNPULSE_TG_API_ID/HASH`、`TG_API_ID/HASH`、此前保存的 `.telegram_api.json` 和旧版内置公开凭据。建议有较多账号时设置自有应用凭据，以减少共享应用的限额影响。
-3. 启用 TeleBox 的账号在登录成功后自动申请**独立的新 Telegram 会话**。在“账号管理”的账号卡片查看状态；如要求两步验证密码，在卡片上填写。可通过卡片菜单停止运行或退出 TeleBox 登录；后者会尝试撤销远端会话并清除本地独立授权。离线时仅能确认本地清除。
-4. 左侧“聊天中心”始终可进入，在页面内选择是否开启聊天。关闭时该页只读取 Telegram 官方验证码消息 `777000`；开启后显示群组对话。聊天缓存超过 5 MB 会强制清理。账号管理页平时只显示本地缓存的头像；点击“检测账号”后才从 Telegram 刷新头像，无照片时显示文字占位。发送、删除、编辑消息会触发真实 Telegram 请求。
-
-每个账号的 TeleBox 数据独立保存在 `data/telebox/` 的散列目录中，不能共用同一个工作目录。TeleBox 上游命令/插件仍受其自身许可及运行规则约束，详见 [`telebox/README.md`](telebox/README.md)。
-
-TeleBox 原生系统插件随镜像提供；官方社区插件由独立的 [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins) 仓库维护，可在 Telegram 收藏夹用 `.tpm install 插件名` 安装、`.tpm update` 更新、`.tpm ls` 查看。更新保留用户改过的插件并由 TPM 热重载。升级本项目后，已有账号下的 TeleBox 核心代码会自动同步，`plugins/`、`assets/`、`config.json` 和独立会话不会覆盖。插件需要额外的配置时，在对应账号的 `data/telebox/<账号名 SHA-256>/` 下创建私有 `.env`（权限 600）；目录名可用 `printf %s '账号名' | sha256sum` 计算。TeleBox 子进程会读取它，不会把 TG Manage 的 `APP_SECRET_KEY` 传给插件。插件命中但动作失败时，在账号卡片的 TeleBox 日志中找“执行时出错”或依赖安装错误。
-
-## 本地源码开发
-
-Docker 是部署首选。本地开发需要**两个 Node 版本**和 Python；下面以 Linux/macOS 的 shell 为例。Windows 推荐 WSL2 或 Docker。
-
-```bash
-# 1. 环境与 Python 依赖，仓库根目录
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e '.[dev]'
-
-# 2. 前端依赖：切换到 Node 22.23.1
-nvm install 22.23.1
-nvm use 22.23.1
-cd frontend && npm ci && cd ..
-
-# 3. TeleBox 依赖：切换到 Node 24
-nvm install 24
-nvm use 24
-cd telebox && npm ci --include=dev && cd ..
-```
-
-`canvas`、`better-sqlite3` 等 Node 原生模块在 Linux 上可能需要 Python、C/C++ 工具链及 Cairo/Pango/JPEG/GIF 开发包；准确的 Debian 包清单在 [`Dockerfile`](Dockerfile) 的 `telebox-builder` 阶段。Node 版本必须与安装依赖时使用的 ABI 匹配。不要从 `telebox/` 单独再启动一个共用账号的服务进程。
-
-本地开发建议设置 `APP_DATA_DIR=./data`，也可不设置而使用程序默认数据目录。普通账号登录可免填应用凭据；如使用自有 `TG_MANAGE_TG_API_ID/HASH`，请只写在本地私有环境中，不要提交。启动后端前执行：
-
-```bash
-export APP_DATA_DIR=./data
-export TELEBOX_NODE="$(command -v node)"  # 此时应指向 Node 24
-uvicorn backend.main:app --host 127.0.0.1 --port 8080
-```
-
-另开终端运行前端（确保使用 Node 22.23.1）：
-
-```bash
-nvm use 22.23.1
-cd frontend
-npm run dev
-```
-
-Vite 开发服务默认在 `http://localhost:5173`，`/api` 代理到 `127.0.0.1:8080`。前端和 TeleBox 的 Node 主版本不同；切换 nvm 后，已启动的后端必须继承指向 Node 24 的 `TELEBOX_NODE`。本地静态构建使用 `cd frontend && npm run build`。
-
-## 环境变量
-
-| 变量 | 用途 | 当前默认/来源 |
-| --- | --- | --- |
-| `TG_MANAGE_TG_API_ID/HASH` | 普通账号可选的服务器私有应用凭据；Compose 从未提交的 `.env` 注入 | 新部署首选 |
-| `SIGNPULSE_TG_API_ID/HASH`、`TG_API_ID/HASH` | 旧部署凭据兼容别名 | 升级时仍读取；可在确认新值生效后再迁移私有 `.env` |
-| 账号 API ID/Hash | 启用 TeleBox 时在手机/扫码登录表单输入，登录成功后加密保存在账号记录 | 旧账号没有加密凭据时，可继续使用服务器或旧版内置应用凭据 |
-| `APP_SECRET_KEY` | JWT、Bot Token、账号凭据加密根密钥 | 自动持久化在 `data/.app_secret_key`；备份并保持原值 |
-| 初次管理员密码 | 在网页首次设置，服务端一次性设置码见安装脚本输出 | 既有账号保持原密码 |
-| `APP_DATA_DIR` | SQLite、session、日志、TeleBox 持久数据目录 | Compose 为 `/data`；本地建议 `./data` |
-| `PORT` | Docker 入口脚本监听端口 | Compose 为 `8080` |
-| `APP_PORT` | Python Settings 默认端口（直接用 uvicorn 启动时显式 `--port` 覆盖） | `3000` |
-| `TZ` / `APP_TIMEZONE` | 时区，时间显示和系统调度相关 | Compose 为 `Asia/Shanghai`；代码默认 `Asia/Hong_Kong` |
-| `TG_SESSION_MODE` | Telegram session 文件或 string 模式 | 默认 `file` |
-| `TG_PROXY` | Telegram 全局代理（也可在面板设置） | 未设置 |
-| `APP_DATABASE_URL` | 覆盖默认 SQLite，可配置 SQLAlchemy 数据库 URL | 默认 SQLite `data/db.sqlite` |
-| `APP_CORS_ALLOW_ORIGINS` | 分离部署的前端来源列表，逗号分隔 | 默认 localhost 开发来源 |
-| `LOG_LEVEL` | 服务日志等级 | Compose 为 `INFO` |
-| `TG_GLOBAL_CONCURRENCY` | Telegram 操作同时执行上限；与账号总数无关；面板明确设值时以面板为准 | 2 核 Compose 默认 2，可在私有 `.env` 中调整 |
-| `TELEBOX_NODE` | 本地指定 Node 24 可执行文件；Docker 镜像内 Node 24 已就绪 | 默认查找 `node` |
-| `TELEBOX_NODE_HEAP_MB` | 每个 TeleBox Node 进程的 V8 老生代上限，限制在 64–512 MiB | 默认 128 MiB，非进程总内存上限 |
-| `TB_PREFIX` / `TB_LISTENER_HANDLE_EDITED` / `TB_CMD_IGNORE_EDITED` | TeleBox 原生命令前缀、编辑消息监听、编辑命令设置 | Compose 透传；也可在账号私有 `.env` 单独配置 |
-| `ENABLE_API_DOCS` | 开启 Swagger/ReDoc/OpenAPI | 默认关闭 |
-
-实际可配置项还见 [`backend/core/config.py`](backend/core/config.py) 与 [本地配置参考](docs/reference/configuration.md)。不要将真实 API ID、API Hash、密码、session、Bot Token 或导出的数据写进 README、`.env.example` 或 Git。
-
-## 数据、升级与备份
-
-Compose 将宿主机 `./data` 挂载到容器 `/data`。数据库、账号会话、设置、日志、TeleBox 账号目录、自定义仪表盘封面（`data/.tg_manage/appearance/`，旧部署可能在 `data/.signer/appearance/`），以及 `data/.app_secret_key` 都在这个目录内。升级和迁移必须保留**整个目录**，包括隐藏文件；密钥丢失会导致已加密的账号凭据和 Bot Token 无法解密。面板备份和 WebDAV 备份同样含敏感凭据，请限制访问。
-
-在服务器的仓库目录执行：
+在现有仓库目录升级：
 
 ```bash
 bash scripts/update.sh
 ```
 
-脚本检查现有数据目录，调用 `scripts/backup.sh` 将完整目录打包到 `backups/`，然后 `git pull --ff-only`，最后运行安装脚本重新构建并启动。它不会自动清理旧备份。`./data:/data` 挂载保持不变；`docker compose down` 也不会删除绑定挂载的 `./data`。若使用了自定义数据目录，先确认 `APP_DATA_DIR` 与 Compose 的挂载源指向**同一个**目录，再升级。详细的手动步骤、检查和回退见 [Docker 部署指南](docs/deploy/docker.md#无损升级与回退)。
+该脚本调用 `scripts/backup.sh` 将完整数据目录归档到 `backups/`，然后执行 `git pull --ff-only` 并重新构建启动。它不会自动清理旧备份。自定义数据目录必须先确认 `APP_DATA_DIR` 与 Compose 挂载源一致；外部 PostgreSQL 数据库还需单独备份。手动升级和回退见 [Docker 部署指南](docs/deploy/docker.md#无损升级与回退)。
 
-恢复时先停止服务，再还原完整数据目录，最后启动并检查账号、会话和设置。PostgreSQL 部署还需单独备份和恢复外部数据库。不要向公共仓库上传备份包。
+恢复时先停止服务，再还原完整数据目录，最后启动并核对账号、会话和设置。备份含敏感凭据，不要上传公共仓库。TeleBox 核心代码可随项目更新，用户插件、配置和独立会话应保留。
 
-## 验证与已知限制
+</details>
 
-### 本地自动检查
+<a id="verification-limitations"></a>
+<details>
+<summary><strong>🧪 验证与已知限制</strong></summary>
+
+本地自动检查：
 
 ```bash
 python3 -m ruff check backend tg_manage tests
-# 测试文件见 tests/；运行全量 pytest 会执行 pyproject.toml 的覆盖率检查
 python3 -m pytest -q
 cd frontend && npm run typecheck && npm test && npm run build
 cd ../telebox && npx tsc --noEmit
 ```
 
-前端、后端和 TeleBox TypeScript 自动检查请以发布版本的 CI 及部署环境结果为准。完整 Docker 构建与**真实 Telegram 账号**的验证码/扫码、TeleBox 独立授权、Bot API、TPM 远程安装仍需在你的部署环境验证。功能表说明的是代码实现范围，不代表真实账号端到端验收通过。
+真实 Telegram 账号的验证码或扫码、TeleBox 独立授权、Bot API、远程插件安装及完整 Docker 构建，仍需在自己的部署环境验证。旧任务数据仍可留存，但已移除的签到、监听和任务动作不会继续执行。运行 TeleBox 会增加独立进程和会话，部署时请按实际负载预留资源。
 
-- TeleBox 需要额外账号会话和内存，运行多个账号时调高宿主机资源及 Compose 内存限额。
-- 旧插件任务保留原数据，但对应动作不会继续运行；迁移前先备份。
-- 当前 `docs/` 内保留部分上游功能文档；本二改版本以本 README、当前源码和本仓库的 Docker 指南为准。
+</details>
 
-## 项目结构与开发规范
+<a id="project-development"></a>
+<details>
+<summary><strong>🗂️ 项目结构与开发规范</strong></summary>
 
 ```text
 TG-Manage/
-├── backend/              FastAPI API、账号/消息服务、TeleBox 进程管理
-├── frontend/             Vue 3/Pinia/Tailwind 管理面板
-├── tg_manage/            Kurigram/Pyrogram Telegram 自动化引擎
-├── telebox/              固定版本 TeleBox 上游源码、插件与面板适配器
-├── tests/                Python 测试
-├── docs/                 用户和部署文档
-├── .trellis/             任务、开发规范与进度 Markdown
-├── .agents/skills/        Trellis 开发技能
-├── .codex/               Codex hooks 与任务 agent 配置
-├── Dockerfile            Node 22 → Node 24 → Python 多阶段构建
-├── docker-compose.yml    本分支源码构建与持久化配置
-└── .env.example          不含真实凭据的配置模板
+├── backend/       FastAPI API、账号与消息服务
+├── frontend/      Vue 3 管理面板
+├── tg_manage/     Telegram 客户端与会话工具
+├── telebox/       TeleBox 上游源码和集成适配
+├── docs/          使用、部署与运维文档
+└── tests/         后端测试
 ```
 
-开发前阅读 [`AGENTS.md`](AGENTS.md)、[后端规范](.trellis/spec/backend/index.md)、[前端规范](.trellis/spec/frontend/index.md) 和当前 [Trellis 任务记录](.trellis/tasks/10-02-telebox-panel/implement.md)。TeleBox 上游按 LGPL-2.1-only 授权，保留其原始 [`LICENSE`](telebox/LICENSE)；本项目其他部分见根目录 [`LICENSE`](LICENSE)。
+源码开发需 Python 3.10–3.13、前端 Node 22.23.1 和 TeleBox Node 24；Node 原生模块依赖见 [`Dockerfile`](Dockerfile)。本地 AI 工作流、技能与任务记录不随源码发布。TeleBox 保留其 [LGPL-2.1-only 许可证](telebox/LICENSE)，本项目其他部分见根目录 [`LICENSE`](LICENSE)。
+
+</details>

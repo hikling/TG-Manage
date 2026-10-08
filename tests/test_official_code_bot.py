@@ -1,15 +1,15 @@
-"""Private 777000 code bot: authorization, freshness and no-replay cursors."""
+"""Private Bot: on-demand 777000 codes and local account labels only."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
 
 from backend.services import official_code_bot as bot
-from backend.utils.atomic_io import read_json_safe
 
 
 def _stamp(minutes_ago: int = 0) -> str:
@@ -42,15 +42,6 @@ def test_only_exact_private_sender_is_authorized():
     assert not bot.authorized(_update(9), 12345)
 
 
-def test_malformed_cursor_state_is_ignored(tmp_path, monkeypatch):
-    path = tmp_path / "cursors.json"
-    monkeypatch.setattr(bot, "_state_path", lambda: path)
-    path.write_text('["unexpected"]')
-    assert bot._load_state() == ({}, 0)
-    path.write_text('{"message_ids": [1, 2], "update_offset": "oops"}')
-    assert bot._load_state() == ({}, 0)
-
-
 @pytest.mark.asyncio
 async def test_bot_api_error_never_exposes_token():
     token = "12345:very-secret-token"
@@ -74,85 +65,31 @@ async def test_disabled_or_changed_configuration_never_sends(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_history_baseline_and_at_most_once(tmp_path, monkeypatch):
-    state_file = tmp_path / "cursors.json"
-    monkeypatch.setattr(bot, "_state_path", lambda: state_file)
-    history = [{"id": 10, "date": _stamp(), "text": "Login code: 12345", "outgoing": False}]
-    service = SimpleNamespace(
-        list_accounts=lambda: [{"name": "account"}],
-        list_official_messages=AsyncMock(side_effect=lambda *args, **kwargs: list(reversed(history))),
-    )
-    monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
+async def test_idle_bot_never_reads_any_account_history(monkeypatch):
     monkeypatch.setattr(bot, "enabled_config", lambda: ("token", 12345))
-    send = AsyncMock()
-    monkeypatch.setattr(bot, "_send", send)
-    cursors = {"account": 9}
-    baselined_accounts: set[str] = set()
-
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert cursors["account"] == 10
-    send.assert_not_awaited()  # no old code after enable/restart
-
-    history.append({"id": 11, "date": _stamp(), "text": "Login code: 67890", "outgoing": False})
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert send.await_count == 1
-    persisted = read_json_safe(state_file)
-    assert persisted == {"message_ids": {"account": 11}, "update_offset": 0}
-    assert "67890" not in state_file.read_text()
-
-
-@pytest.mark.asyncio
-async def test_failed_first_history_read_baselines_when_it_recovers(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "_state_path", lambda: tmp_path / "cursors.json")
-    history = [{"id": 12, "date": _stamp(), "text": "Login code: 12345", "outgoing": False}]
-    fetch = AsyncMock(side_effect=[RuntimeError("offline"), history])
-    service = SimpleNamespace(list_accounts=lambda: [{"name": "account"}], list_official_messages=fetch)
+    monkeypatch.setattr("backend.scheduler.instance_lock.has_scheduler_lock", lambda: True)
+    service = SimpleNamespace(list_accounts=Mock(), list_official_messages=AsyncMock())
     monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
-    send = AsyncMock()
-    monkeypatch.setattr(bot, "_send", send)
-    baselined_accounts: set[str] = set()
-    cursors = {"account": 9}
 
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert not baselined_accounts
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert cursors["account"] == 12
-    send.assert_not_awaited()
+    async def fake_call(client, token, method, payload):
+        return {"url": ""} if method == "getWebhookInfo" else []
 
+    monkeypatch.setattr(bot, "_bot_call", fake_call)
 
-@pytest.mark.asyncio
-async def test_first_code_after_empty_history_is_forwarded(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "_state_path", lambda: tmp_path / "cursors.json")
-    fetch = AsyncMock(side_effect=[[], [{"id": 1, "date": _stamp(), "text": "Login code: 54321", "outgoing": False}]])
-    service = SimpleNamespace(list_accounts=lambda: [{"name": "account"}], list_official_messages=fetch)
-    monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
-    send = AsyncMock()
-    monkeypatch.setattr(bot, "_send", send)
-    baselined_accounts: set[str] = set()
-    cursors: dict[str, int] = {}
+    idle_ticks = 0
 
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert cursors["account"] == 0
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    send.assert_awaited_once()
+    async def stop_after_idle(_seconds):
+        nonlocal idle_ticks
+        idle_ticks += 1
+        if idle_ticks >= 50:
+            raise asyncio.CancelledError()
 
-
-@pytest.mark.asyncio
-async def test_empty_history_does_not_reset_existing_cursor(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot, "_state_path", lambda: tmp_path / "cursors.json")
-    fetch = AsyncMock(side_effect=[[], [{"id": 10, "date": _stamp(), "text": "Login code: 54321", "outgoing": False}]])
-    service = SimpleNamespace(list_accounts=lambda: [{"name": "account"}], list_official_messages=fetch)
-    monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
-    send = AsyncMock()
-    monkeypatch.setattr(bot, "_send", send)
-    baselined_accounts = {"account"}
-    cursors = {"account": 10}
-
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    assert cursors["account"] == 10
-    await bot._scan_accounts(None, ("token", 12345), cursors, 0, baselined_accounts=baselined_accounts)
-    send.assert_not_awaited()
+    monkeypatch.setattr(bot.asyncio, "sleep", stop_after_idle)
+    with pytest.raises(asyncio.CancelledError):
+        await bot.run_code_bot()
+    assert idle_ticks == 50
+    service.list_accounts.assert_not_called()
+    service.list_official_messages.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -162,6 +99,7 @@ async def test_unauthorized_update_is_silent_and_expired_command_gets_no_code(mo
     history = [{"id": 8, "date": _stamp(6), "text": "Login code: 12345", "outgoing": False}]
     service = SimpleNamespace(
         account_exists=lambda name: name == "account",
+        list_accounts=Mock(),
         list_official_messages=AsyncMock(return_value=history),
     )
     monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
@@ -169,10 +107,63 @@ async def test_unauthorized_update_is_silent_and_expired_command_gets_no_code(mo
     monkeypatch.setattr(bot, "_send", send)
 
     await bot._handle_update(None, config, _update(12345, sender=9))
-    await bot._handle_update(None, config, _update(12345, kind="group"))
+    await bot._handle_update(None, config, _update(12345, kind="group", text="/me"))
     await bot._handle_update(None, config, _update(12345, minutes_ago=6))
     send.assert_not_awaited()
+    service.list_accounts.assert_not_called()
     service.list_official_messages.assert_not_awaited()
 
     await bot._handle_update(None, config, _update(12345))
     send.assert_awaited_once_with(None, config, "暂无有效验证码")
+    service.list_official_messages.assert_awaited_once_with("account", limit=20)
+
+
+@pytest.mark.asyncio
+async def test_authorized_code_reads_only_named_account(monkeypatch):
+    config = ("token", 12345)
+    monkeypatch.setattr(bot, "enabled_config", lambda: config)
+    service = SimpleNamespace(
+        account_exists=lambda name: name == "second",
+        list_official_messages=AsyncMock(return_value=[{"date": _stamp(), "text": "Code: 56789", "outgoing": False}]),
+    )
+    monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
+    send = AsyncMock()
+    monkeypatch.setattr(bot, "_send", send)
+    await bot._handle_update(None, config, _update(12345, text="/code second"))
+    service.list_official_messages.assert_awaited_once_with("second", limit=20)
+    send.assert_awaited_once_with(None, config, "second 的 Telegram 验证码：56789")
+
+
+@pytest.mark.asyncio
+async def test_me_reads_only_local_name_and_remark(monkeypatch):
+    config = ("token", 12345)
+    monkeypatch.setattr(bot, "enabled_config", lambda: config)
+    service = SimpleNamespace(
+        list_accounts=Mock(return_value=[
+            {"name": "zeta", "remark": "工作", "proxy": "secret-proxy", "session_file": "secret-session"},
+            {"name": "alpha", "remark": "", "api_hash": "secret-hash"},
+        ]),
+        list_official_messages=AsyncMock(),
+    )
+    monkeypatch.setattr(bot, "get_telegram_service", lambda: service)
+    send = AsyncMock()
+    monkeypatch.setattr(bot, "_send", send)
+
+    await bot._handle_update(None, config, _update(12345, sender=9, text="/me"))
+    send.assert_not_awaited()
+    service.list_accounts.assert_not_called()
+
+    await bot._handle_update(None, config, _update(12345, text="/me"))
+    service.list_accounts.assert_called_once_with()
+    service.list_official_messages.assert_not_awaited()
+    message = send.await_args.args[2]
+    assert message == "账号管理中的账号：\nalpha — 无备注\nzeta — 工作"
+    assert "secret" not in message
+
+
+def test_me_chunks_many_accounts_without_sensitive_fields():
+    lines = bot._account_lines([{"name": f"account-{i:03d}", "remark": "r" * 80} for i in range(100)])
+    chunks = bot._message_chunks(lines)
+    assert len(chunks) > 1
+    assert all(len(chunk) <= bot.MAX_BOT_MESSAGE_CHARS for chunk in chunks)
+    assert sum(chunk.count("account-") for chunk in chunks) == 100

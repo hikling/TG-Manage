@@ -591,12 +591,15 @@ class TelegramAccountsMixin:
             }
 
         try:
-            # Reuse shared clients and avoid context-manager disconnect on each refresh.
+            # The shared context manager reference-counts active users and releases
+            # newly opened sessions even when get_me times out or fails.
             lock = get_account_lock(account_name)
             async with lock:
-                if not getattr(client, "is_connected", False):
-                    await client.connect()
-                me = await asyncio.wait_for(client.get_me(), timeout=timeout_seconds)
+                async def probe_account():
+                    async with client:
+                        return await client.get_me()
+
+                me = await asyncio.wait_for(probe_account(), timeout=timeout_seconds)
             set_account_status(
                 account_name,
                 status="connected",

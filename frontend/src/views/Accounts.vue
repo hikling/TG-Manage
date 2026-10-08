@@ -22,7 +22,6 @@ import OfficialMessagesModal from '../components/accounts/OfficialMessagesModal.
 import PageRetry from '../components/PageRetry.vue'
 import FilterEmptyState from '../components/FilterEmptyState.vue'
 import { devLog } from '../lib/devLog'
-import { AVATAR_FETCH_CONCURRENCY, mapPool } from '../lib/async-pool'
 import { AvatarLoadGate, AvatarUrlCache } from '../lib/avatar-cache'
 import {
   filterAccountsByQuery,
@@ -150,14 +149,12 @@ const loadAccounts = async () => {
     }
     accounts.value = list.map((acc) => {
       const ui = mapAccountInfoToUiItem(acc, labels)
-      // 复用已加载的头像 URL，未缓存项交由 loadAvatars 补充
+      // 仅复用已加载头像；未点击单卡检测时不发起头像请求。
       const cached = avatarCache.get(acc.name)
       if (cached) ui.avatarUrl = cached
       return ui
     })
     avatarCache.retainOnly(new Set(list.map(acc => acc.name)))
-    // 限流加载头像，避免账号多时并发打满连接
-    void loadAvatars(accounts.value)
   } catch (e: unknown) {
     devLog.error('Failed to fetch accounts', e)
     loadError.value = true
@@ -203,10 +200,9 @@ const invalidateAvatars = (names: string[]) => {
   }
 }
 
-const loadAvatars = async (list: AccountUiItem[]) => {
-  await mapPool(list, AVATAR_FETCH_CONCURRENCY, async (acc) => {
-    await loadAvatar(acc)
-  })
+const loadAvatarForAccount = async (name: string) => {
+  const acc = accounts.value.find(item => item.name === name)
+  if (acc) await loadAvatar(acc)
 }
 
 onMounted(async () => {
@@ -267,6 +263,7 @@ const {
   searchQuery,
   loadAccounts,
   invalidateAvatars,
+  loadAvatarForAccount,
 })
 
 const openEdit = (acc: AccountUiItem) => {

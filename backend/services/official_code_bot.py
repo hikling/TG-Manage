@@ -1,8 +1,7 @@
-"""Opt-in, private delivery of short-lived Telegram 777000 login codes.
+"""Private, on-demand access to Telegram 777000 codes and local account labels.
 
-Only message IDs and Bot API offsets are persisted. Message text/code is never
-written to a job, cache, file, or log. Startup always establishes a fresh
-history baseline, so codes received while the process was down are not replayed.
+The bot never scans account histories in the background. Startup discards queued
+commands; neither verification codes nor account lists are persisted here.
 """
 from __future__ import annotations
 
@@ -14,15 +13,14 @@ from typing import Any
 
 import httpx
 
-from backend.core.config import get_settings
 from backend.services.config import get_config_service
 from backend.services.telegram import get_telegram_service
-from backend.utils.atomic_io import read_json_safe, write_json_atomic
 from backend.utils.names import validate_storage_name
 
 logger = logging.getLogger("backend.official_code_bot")
 CODE_AGE_SECONDS = 5 * 60
 POLL_SECONDS = 20
+MAX_BOT_MESSAGE_CHARS = 3500
 _CODE_PATTERN = re.compile(
     r"(?:code|验证码|登录码|登入码)[^0-9]{0,32}([0-9]{5,8})(?![0-9])",
     re.IGNORECASE,
@@ -119,82 +117,32 @@ async def _send(client: httpx.AsyncClient, config: tuple[str, int], text: str) -
     await _bot_call(client, token, "sendMessage", {"chat_id": target, "text": text})
 
 
-def _state_path():
-    return get_settings().resolve_workdir() / "bots" / "official-code-cursors.json"
-
-
-def _save_state(cursors: dict[str, int], offset: int) -> None:
-    write_json_atomic(_state_path(), {"message_ids": cursors, "update_offset": offset})
-
-
-def _load_state() -> tuple[dict[str, int], int]:
-    state = read_json_safe(_state_path(), {})
-    if not isinstance(state, dict):
-        state = {}
-    raw_ids = state.get("message_ids")
-    if not isinstance(raw_ids, dict):
-        raw_ids = {}
-    cursors = {str(k): int(v) for k, v in raw_ids.items() if str(v).isdigit()}
-    raw_offset = state.get("update_offset")
-    offset = int(raw_offset) if str(raw_offset).isdigit() else 0
-    return cursors, offset
-
-
-async def _scan_accounts(
-    client: httpx.AsyncClient,
-    config: tuple[str, int],
-    cursors: dict[str, int],
-    offset: int,
-    *,
-    baselined_accounts: set[str],
-) -> int:
-    service = get_telegram_service()
-    names = [str(item.get("name") or "") for item in service.list_accounts()]
-    semaphore = asyncio.Semaphore(3)
-    errors = 0
-
-    async def scan(name: str) -> None:
-        nonlocal errors
+def _account_lines(accounts: list[dict[str, Any]]) -> list[str]:
+    """Project local account metadata only; never include proxy or session data."""
+    rows: list[tuple[str, str]] = []
+    for item in accounts:
+        name = " ".join(str(item.get("name") or "").split())
         if not name:
-            return
-        async with semaphore:
-            try:
-                history = await service.list_official_messages(name, limit=20)
-                message_ids = [int(item["id"]) for item in history if item.get("id") is not None]
-                if not message_ids:
-                    if name not in cursors:
-                        cursors[name] = 0
-                        _save_state(cursors, offset)
-                    baselined_accounts.add(name)
-                    return
-                previous = cursors.get(name)
-                newest = max(message_ids)
-                if name not in baselined_accounts or previous is None:
-                    cursors[name] = newest
-                    _save_state(cursors, offset)
-                    baselined_accounts.add(name)
-                    return
-                for item in sorted(history, key=lambda entry: int(entry.get("id") or 0)):
-                    message_id = int(item.get("id") or 0)
-                    if message_id <= previous:
-                        continue
-                    # Persist before sending: a crash can miss a code, but cannot replay it.
-                    cursors[name] = message_id
-                    _save_state(cursors, offset)
-                    if item.get("outgoing") or not fresh(item.get("date")):
-                        continue
-                    code = parse_code(str(item.get("text") or ""))
-                    if code:
-                        await _send(client, config, f"{name} 的 Telegram 验证码：{code}（5 分钟内有效）")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                # Telegram exception details can include message content/session data.
-                errors += 1
-                logger.warning("账号 %s 的验证码检查失败（%s）", name, type(exc).__name__)
+            continue
+        remark = " ".join(str(item.get("remark") or "").split()) or "无备注"
+        rows.append((name, remark))
+    return [f"{name} — {remark}" for name, remark in sorted(rows)]
 
-    await asyncio.gather(*(scan(name) for name in names))
-    return errors
+
+def _message_chunks(lines: list[str]) -> list[str]:
+    if not lines:
+        return ["账号管理中暂无账号"]
+    chunks: list[str] = []
+    current = "账号管理中的账号："
+    for line in lines:
+        # A single malformed legacy remark must not exceed Telegram's limit.
+        line = line[:MAX_BOT_MESSAGE_CHARS - 2]
+        if len(current) + len(line) + 1 > MAX_BOT_MESSAGE_CHARS:
+            chunks.append(current)
+            current = "账号管理中的账号："
+        current += f"\n{line}"
+    chunks.append(current)
+    return chunks
 
 
 async def _handle_update(client: httpx.AsyncClient, config: tuple[str, int], update: dict[str, Any]) -> None:
@@ -204,6 +152,15 @@ async def _handle_update(client: httpx.AsyncClient, config: tuple[str, int], upd
     if not fresh(datetime.fromtimestamp(message.get("date", 0), timezone.utc).isoformat()):
         return
     text = str(message.get("text") or "").strip()
+    if text == "/me":
+        try:
+            lines = _account_lines(get_telegram_service().list_accounts())
+            for chunk in _message_chunks(lines):
+                await _send(client, config, chunk)
+        except Exception as exc:
+            logger.warning("读取本地账号清单失败（%s）", type(exc).__name__)
+            await _send(client, config, "读取账号清单失败，请稍后重试")
+        return
     if not text.startswith("/code "):
         return
     account = text.partition(" ")[2].strip()
@@ -230,22 +187,19 @@ async def run_code_bot() -> None:
     global _status
     from backend.scheduler.instance_lock import has_scheduler_lock
 
-    cursors, offset = _load_state()
+    offset = 0
     current: tuple[str, int] | None = None
-    baselined_accounts: set[str] = set()
     async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=5)) as client:
         while True:
             try:
                 config = enabled_config() if has_scheduler_lock() else None
                 if config is None:
                     current = None
-                    baselined_accounts.clear()
                     _status = "未启用或当前实例未取得调度锁"
                     await asyncio.sleep(5)
                     continue
                 if config != current:
                     current = config
-                    baselined_accounts.clear()
                     offset = 0
                     webhook = await _bot_call(client, config[0], "getWebhookInfo", {})
                     if webhook.get("url"):
@@ -255,19 +209,16 @@ async def run_code_bot() -> None:
                         continue
                     backlog = await _bot_call(client, config[0], "getUpdates", {"offset": -1, "limit": 1, "timeout": 0, "allowed_updates": ["message"]})
                     offset = max((int(item["update_id"]) for item in backlog), default=offset - 1) + 1
-                    _save_state(cursors, offset)
                 webhook = await _bot_call(client, config[0], "getWebhookInfo", {})
                 if webhook.get("url"):
                     _status = "检测到已有 Webhook；请先在该 Bot 的原管理端停用 Webhook"
                     await asyncio.sleep(POLL_SECONDS)
                     continue
-                scan_errors = await _scan_accounts(client, config, cursors, offset, baselined_accounts=baselined_accounts)
                 updates = await _bot_call(client, config[0], "getUpdates", {"offset": offset, "limit": 20, "timeout": 1, "allowed_updates": ["message"]})
                 for update in updates:
                     offset = max(offset, int(update["update_id"]) + 1)
-                    _save_state(cursors, offset)
                     await _handle_update(client, config, update)
-                _status = "运行中（部分账号检查失败）" if scan_errors else "运行中"
+                _status = "运行中（按需查询）"
                 await asyncio.sleep(POLL_SECONDS)
             except asyncio.CancelledError:
                 raise

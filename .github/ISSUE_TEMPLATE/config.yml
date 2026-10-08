@@ -1,8 +1,0 @@
-blank_issues_enabled: true
-contact_links:
-  - name: 📖 文档站
-    url: https://github.com/hikling/TG-Manage/tree/main/docs
-    about: 查看部署指南、使用说明和架构文档
-  - name: 💬 GitHub Issues
-    url: https://github.com/hikling/TG-Manage/issues
-    about: 在本仓库提问与讨论

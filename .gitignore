@@ -190,3 +190,11 @@ coding-trajectories.jsonl
 
 # Trellis live session state is local to this workspace.
 .trellis/.runtime/
+
+# Keep local agent instructions, skills, workflows and task journals out of GitHub.
+/.agents/
+/.codex/
+/.github/
+/.trellis/
+/AGENTS.md
+**/CLAUDE.md
