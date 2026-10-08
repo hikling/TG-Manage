@@ -17,7 +17,11 @@ from backend.core.auth import (
     verify_totp,
 )
 from backend.core.database import get_db
-from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
+from backend.core.rate_limit import (
+    compose_rate_limit_key,
+    get_client_identifier,
+    get_rate_limiter,
+)
 from backend.core.security import hash_password, verify_password
 from backend.models.login_log import LoginLog
 from backend.models.user import User
@@ -72,22 +76,7 @@ def initial_setup(payload: InitialSetupRequest, request: Request, db: Session = 
 
 
 def _resolve_request_ip(request: Request) -> str:
-    ip = ""
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        first_hop = forwarded_for.split(",", 1)[0].strip()
-        if first_hop:
-            ip = first_hop
-
-    if not ip:
-        real_ip = request.headers.get("x-real-ip", "").strip()
-        if real_ip:
-            ip = real_ip
-
-    if not ip and request.client and request.client.host:
-        ip = request.client.host
-
-    return ip[:64]
+    return get_client_identifier(request)
 
 
 def _append_login_log(
@@ -137,6 +126,14 @@ def login(
 ):
     login_key = compose_rate_limit_key(request, payload.username)
     try:
+        rate_limiter.hit(
+            scope="auth.login.ip",
+            key=get_client_identifier(request),
+            max_attempts=120,
+            window_seconds=300,
+            block_seconds=900,
+            detail=LOGIN_RATE_LIMIT_DETAIL,
+        )
         rate_limiter.hit(
             scope="auth.login",
             key=login_key,
@@ -237,6 +234,14 @@ def reset_totp(
     """
     # 验证用户名和密码
     reset_key = compose_rate_limit_key(http_request, request.username)
+    rate_limiter.hit(
+        scope="auth.reset_totp.ip",
+        key=get_client_identifier(http_request),
+        max_attempts=60,
+        window_seconds=600,
+        block_seconds=1800,
+        detail=RESET_TOTP_RATE_LIMIT_DETAIL,
+    )
     rate_limiter.hit(
         scope="auth.reset_totp",
         key=reset_key,

@@ -67,26 +67,26 @@ async def messages(account: str, chat_id: str = Query(..., max_length=64), befor
     return await service.messages(account, chat_id, before_id, limit)
 
 
-@router.post("/{account}/messages")
+@router.post("/{account}/messages", dependencies=[Depends(require_chat_center)])
 async def send(account: str, body: MessageInput):
     return await service.send_message(account, body.chat_id, body.text, body.reply_to_message_id)
 
 
-@router.put("/{account}/messages/{message_id}")
+@router.put("/{account}/messages/{message_id}", dependencies=[Depends(require_chat_center)])
 async def edit(account: str, body: MessageInput, message_id: int):
     if not 1 <= message_id <= 2147483647:
         raise HTTPException(422, "消息 ID 无效")
     return await service.edit_message(account, body.chat_id, message_id, body.text)
 
 
-@router.delete("/{account}/messages/{message_id}")
+@router.delete("/{account}/messages/{message_id}", dependencies=[Depends(require_chat_center)])
 async def delete(account: str, body: ChatInput, message_id: int):
     if not 1 <= message_id <= 2147483647:
         raise HTTPException(422, "消息 ID 无效")
     return await service.delete_message(account, body.chat_id, message_id)
 
 
-@router.post("/{account}/media")
+@router.post("/{account}/media", dependencies=[Depends(require_chat_center)])
 async def upload(account: str, chat_id: str = Form(...), file: UploadFile = File(...), caption: str = Form(""), reply_to_message_id: int | None = Form(None)):
     from pathlib import PurePosixPath
     try:
@@ -135,6 +135,7 @@ async def avatar(account: str, chat_id: str):
             data = await avatar_cache.get_avatar_bytes(
                 cache, marker,
                 lambda: get_telegram_service().download_chat_avatar(account, peer),
+                max_bytes=avatar_cache.CHAT_AVATAR_MAX_BYTES,
             )
         except Exception:
             raise HTTPException(502, "头像暂时不可用") from None
@@ -143,6 +144,6 @@ async def avatar(account: str, chat_id: str):
             raise HTTPException(404, "No avatar available")
         avatar_cache.enforce_chat_cache_limit(directory)
     return Response(data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
-@router.post("/{account}/dialogs/action")
+@router.post("/{account}/dialogs/action", dependencies=[Depends(require_chat_center)])
 async def action(account: str, body: DialogAction):
     return await service.dialog_action(account, body.chat_id, body.action)

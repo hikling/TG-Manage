@@ -27,11 +27,13 @@ def test_backup_settings_guards():
 def test_resolve_request_ip_length_guard():
     req = MagicMock()
     req.headers = {"x-forwarded-for": "1.1.1.1" + ", 2.2.2.2" * 50}
+    req.client.host = "192.0.2.10"
     ip = _resolve_request_ip(req)
     assert len(ip) <= 64
-    assert ip == "1.1.1.1"
+    assert ip == "192.0.2.10"
 
     req.headers = {"x-real-ip": "a" * 100}
+    req.client.host = "b" * 100
     ip = _resolve_request_ip(req)
     assert len(ip) <= 64
 

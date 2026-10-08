@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import codecs
-import fcntl
 import hashlib
 import json
 import os
@@ -95,6 +94,15 @@ class TeleBoxService:
                 self._private_json(marker, {"account": new, "enabled": bool(state.get("enabled"))})
         self.logs[new] = self.logs.pop(old, deque(maxlen=300))
         self.secrets.pop(old, None)
+        self.workers.pop(old, None)
+        self.locks.pop(old, None)
+
+    def forget_account(self, account: str) -> None:
+        """Release in-memory worker/log references after an account is deleted."""
+        self.workers.pop(account, None)
+        self.locks.pop(account, None)
+        self.logs.pop(account, None)
+        self.secrets.pop(account, None)
 
     def _log(self, account: str, message: str, level: str = "info"):
         self.logs.setdefault(account, deque(maxlen=300)).append({
@@ -167,6 +175,10 @@ class TeleBoxService:
         await process.stdin.drain()
 
     async def start(self, account: str):
+        # TeleBox workers run in the Linux container; defer the POSIX-only
+        # dependency so route/unit tests can import the module on Windows.
+        import fcntl
+
         account = self._account(account)
         async with self.locks.setdefault(account, asyncio.Lock()):
             if self.closing:
@@ -209,6 +221,7 @@ class TeleBoxService:
                     start_new_session=True, limit=65536)
             except BaseException:
                 lock_handle.close()
+                self.secrets.pop(account, None)
                 raise
             worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
             ready = asyncio.get_running_loop().create_future()
@@ -300,6 +313,9 @@ class TeleBoxService:
         for task in list(worker["tasks"]):
             task.cancel()
         self._log(account, f"TeleBox 进程退出 ({code})")
+        # Drain and redact the final output before discarding plaintext secrets.
+        await asyncio.gather(*worker["readers"][:2], return_exceptions=True)
+        self.secrets.pop(account, None)
 
     async def _stop_locked(self, account: str, *, disable: bool):
         worker = self.workers.get(account)
@@ -370,7 +386,12 @@ class TeleBoxService:
             raise ValueError("当前账号没有等待两步验证密码")
         if not password or len(password) > 1024:
             raise ValueError("密码长度无效")
-        self.secrets.setdefault(account, []).append(password)
+        # Keep only a small recent set for output redaction, never an unbounded
+        # history of submitted two-step passwords in process memory.
+        secrets = self.secrets.setdefault(account, [])
+        secrets.append(password)
+        if len(secrets) > 8:
+            del secrets[2:-6]
         await self._send(worker, {"action": "password", "password": password})
         worker["status"] = "starting"
         return self.status(account)

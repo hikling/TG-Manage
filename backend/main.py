@@ -399,13 +399,14 @@ async def on_startup() -> None:
     )
 
     ensure_data_dirs(settings)
-    # 清理过期头像缓存（7 天 TTL），避免长期运行累积陈旧文件
+    # 账号头像在显式单卡检测前永久保留；仅清理旧标记/临时文件。
+    # 聊天头像仍按 TTL 清理，避免长期累积。
     try:
         from backend.services import avatar_cache
 
         avatar_root = settings.resolve_workdir() / "avatars"
-        for sub_dir in (avatar_root, avatar_root / "chats"):
-            avatar_cache.cleanup_avatar_cache(sub_dir)
+        avatar_cache.cleanup_avatar_cache(avatar_root, preserve_account_avatars=True)
+        avatar_cache.cleanup_avatar_cache(avatar_root / "chats")
     except Exception:
         logging.getLogger("backend.startup").debug(
             "清理过期头像缓存失败（可忽略）", exc_info=True

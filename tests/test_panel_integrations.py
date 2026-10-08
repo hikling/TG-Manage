@@ -20,7 +20,9 @@ def test_panel_routes_require_auth(api_client, db):  # noqa: F811
 
 def test_invalid_chat_input_never_calls_telegram(api_client, db):  # noqa: F811
     token = _login(api_client)
-    with patch("backend.api.routes.communications.service.send_message", new_callable=AsyncMock) as send:
+    enabled = type("Config", (), {"get_global_settings": lambda _: {"chat_center_enabled": True}})()
+    with patch("backend.api.routes.communications.get_config_service", return_value=enabled), \
+         patch("backend.api.routes.communications.service.send_message", new_callable=AsyncMock) as send:
         response = api_client.post(
             "/api/communications/account/messages",
             json={"chat_id": "https://example.com", "text": "hello"},

@@ -20,6 +20,24 @@ def test_chat_center_disabled_blocks_regular_reads_but_official_route_remains(mo
     assert accounts.list_account_official_messages is not None
 
 
+def test_chat_center_guard_covers_read_and_write_routes():
+    protected = {
+        "/communications/{account}/dialogs",
+        "/communications/{account}/messages",
+        "/communications/{account}/messages/{message_id}",
+        "/communications/{account}/media",
+        "/communications/{account}/avatar/{chat_id}",
+        "/communications/{account}/dialogs/action",
+    }
+    for route in router.routes:
+        if route.path not in protected:
+            continue
+        assert any(
+            dependency.call is communications.require_chat_center
+            for dependency in route.dependant.dependencies
+        ), f"Missing chat-center guard: {route.path} {route.methods}"
+
+
 def test_avatar_chat_cache_clears_above_five_mebibytes(tmp_path: Path):
     cache = tmp_path / "chats"
     cache.mkdir()

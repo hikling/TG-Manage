@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight } from 'lucide-vue-next'
 import {
@@ -38,10 +38,19 @@ const teleboxStates = ref<Record<string, TeleBoxAccount>>({})
 const teleboxBusy = ref('')
 const teleboxPasswords = ref<Record<string, string>>({})
 let statusTimer: ReturnType<typeof setInterval> | undefined
+let teleboxStatesInFlight = false
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
 const avatarLoadGate = new AvatarLoadGate()
+const avatarCacheMisses = new Set<string>()
+const pendingAvatarNames: string[] = []
+const queuedAvatarNames = new Set<string>()
+const activeAvatarNames = new Set<string>()
+const MAX_VISIBLE_AVATAR_FETCHES = 2
+let avatarObserver: IntersectionObserver | undefined
+let avatarObserverVersion = 0
+let fallbackAvatarFrame: number | undefined
 // 卸载标记：在途头像请求完成后不再创建 ObjectURL，避免 blob 泄漏
 let disposed = false
 /** 重登弹窗延时句柄：卸载时清理，避免关闭组件后仍打开新弹窗 */
@@ -82,10 +91,13 @@ const clearListFilters = () => {
 }
 
 async function loadTeleBoxStates() {
+  if (disposed || teleboxStatesInFlight) return
+  teleboxStatesInFlight = true
   try {
     const result = await listTeleBoxAccounts()
     if (!disposed) teleboxStates.value = Object.fromEntries(result.accounts.map(item => [item.account, item]))
   } catch (error) { devLog.error('Failed to load TeleBox status', error) }
+  finally { teleboxStatesInFlight = false }
 }
 
 function teleboxLabel(name: string) {
@@ -155,6 +167,10 @@ const loadAccounts = async () => {
       return ui
     })
     avatarCache.retainOnly(new Set(list.map(acc => acc.name)))
+    const currentNames = new Set(list.map(acc => acc.name))
+    for (const name of avatarCacheMisses) {
+      if (!currentNames.has(name)) avatarCacheMisses.delete(name)
+    }
   } catch (e: unknown) {
     devLog.error('Failed to fetch accounts', e)
     loadError.value = true
@@ -164,7 +180,7 @@ const loadAccounts = async () => {
   }
 }
 
-const loadAvatar = async (acc: AccountUiItem) => {
+const loadAvatar = async (acc: AccountUiItem, cacheOnly = false) => {
   if (disposed) return
   const version = avatarLoadGate.start(acc.name)
   if (version === null) return
@@ -176,7 +192,11 @@ const loadAvatar = async (acc: AccountUiItem) => {
       if (disposed || !avatarLoadGate.isCurrent(acc.name, version)) return
       const current = accounts.value.find(item => item.name === acc.name)
       if (!current) return
-      if (blob.size > 128 * 1024 || !avatarCache.canStore(acc.name, blob.size)) return
+      if (cacheOnly && !filteredAccounts.value.some(item => item.name === acc.name)) return
+      if (blob.size > 128 * 1024 || !avatarCache.canStore(acc.name, blob.size)) {
+        if (cacheOnly) avatarCacheMisses.add(acc.name)
+        return
+      }
       url = URL.createObjectURL(blob)
       avatarCache.set(acc.name, url, blob.size)
     }
@@ -185,16 +205,92 @@ const loadAvatar = async (acc: AccountUiItem) => {
     if (current) current.avatarUrl = url
   } catch {
     // 头像下载失败/无头像：保留首字母占位，不影响列表
+    if (cacheOnly && !disposed && avatarLoadGate.isCurrent(acc.name, version)) {
+      avatarCacheMisses.add(acc.name)
+    }
     devLog.info('头像加载失败，保留占位:', acc.name)
   } finally {
     avatarLoadGate.finish(acc.name, version)
   }
 }
 
+/** 只读取进入视口的磁盘缓存，且同时最多进行两个头像 HTTP 请求。 */
+const drainVisibleAvatarQueue = () => {
+  while (!disposed && activeAvatarNames.size < MAX_VISIBLE_AVATAR_FETCHES && pendingAvatarNames.length) {
+    const name = pendingAvatarNames.shift()!
+    queuedAvatarNames.delete(name)
+    if (activeAvatarNames.has(name) || avatarCacheMisses.has(name) || avatarCache.get(name)) continue
+    const acc = filteredAccounts.value.find(item => item.name === name)
+    if (!acc) continue
+    activeAvatarNames.add(name)
+    void loadAvatar(acc, true).finally(() => {
+      activeAvatarNames.delete(name)
+      drainVisibleAvatarQueue()
+    })
+  }
+}
+
+const enqueueVisibleAvatar = (name: string) => {
+  if (disposed || queuedAvatarNames.has(name) || activeAvatarNames.has(name)
+    || avatarCacheMisses.has(name) || avatarCache.get(name)) return
+  if (!filteredAccounts.value.some(item => item.name === name)) return
+  queuedAvatarNames.add(name)
+  pendingAvatarNames.push(name)
+  drainVisibleAvatarQueue()
+}
+
+const scanFallbackVisibleAvatars = () => {
+  const cards = document.querySelectorAll<HTMLElement>('[data-account-avatar-name]')
+  for (const card of cards) {
+    const bounds = card.getBoundingClientRect()
+    if (bounds.bottom >= 0 && bounds.top <= window.innerHeight) {
+      enqueueVisibleAvatar(card.dataset.accountAvatarName || '')
+    }
+  }
+}
+
+const scheduleFallbackAvatarScan = () => {
+  if (disposed || fallbackAvatarFrame !== undefined) return
+  fallbackAvatarFrame = window.requestAnimationFrame(() => {
+    fallbackAvatarFrame = undefined
+    scanFallbackVisibleAvatars()
+  })
+}
+
+const observeVisibleAvatars = () => {
+  avatarObserver?.disconnect()
+  avatarObserver = undefined
+  avatarObserverVersion += 1
+  pendingAvatarNames.length = 0
+  queuedAvatarNames.clear()
+  if (disposed) return
+
+  const cards = document.querySelectorAll<HTMLElement>('[data-account-avatar-name]')
+  if (typeof IntersectionObserver === 'undefined') {
+    // 旧浏览器降级：滚动时仅检查当前视口，不恢复整页并发抓取。
+    scanFallbackVisibleAvatars()
+    return
+  }
+
+  const version = avatarObserverVersion
+  avatarObserver = new IntersectionObserver((entries) => {
+    if (disposed || version !== avatarObserverVersion) return
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      avatarObserver?.unobserve(entry.target)
+      enqueueVisibleAvatar((entry.target as HTMLElement).dataset.accountAvatarName || '')
+    }
+  }, { rootMargin: '100px 0px' })
+  for (const card of cards) avatarObserver.observe(card)
+}
+
+watch(filteredAccounts, observeVisibleAvatars, { flush: 'post' })
+
 const invalidateAvatars = (names: string[]) => {
   for (const name of names) {
     avatarLoadGate.invalidate(name)
     avatarCache.delete(name)
+    avatarCacheMisses.delete(name)
     const current = accounts.value.find(item => item.name === name)
     if (current) current.avatarUrl = ''
   }
@@ -208,6 +304,10 @@ const loadAvatarForAccount = async (name: string) => {
 onMounted(async () => {
   document.addEventListener('click', onOutsideClick)
   document.addEventListener('keydown', onMenuKeydown)
+  if (typeof IntersectionObserver === 'undefined') {
+    window.addEventListener('scroll', scheduleFallbackAvatarScan, { passive: true, capture: true })
+    window.addEventListener('resize', scheduleFallbackAvatarScan, { passive: true })
+  }
   await loadAccounts()
   void loadTeleBoxStates()
   statusTimer = setInterval(() => void loadTeleBoxStates(), 10000)
@@ -218,7 +318,14 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', onOutsideClick)
   document.removeEventListener('keydown', onMenuKeydown)
+  window.removeEventListener('scroll', scheduleFallbackAvatarScan, true)
+  window.removeEventListener('resize', scheduleFallbackAvatarScan)
   disposed = true
+  if (fallbackAvatarFrame !== undefined) window.cancelAnimationFrame(fallbackAvatarFrame)
+  avatarObserver?.disconnect()
+  avatarObserverVersion += 1
+  pendingAvatarNames.length = 0
+  queuedAvatarNames.clear()
   if (statusTimer) clearInterval(statusTimer)
   if (reloginTimer !== undefined) {
     window.clearTimeout(reloginTimer)
@@ -457,7 +564,7 @@ const goLogs = (name: string) => {
         <p v-else class="ui-empty-desc">{{ t('common.noData') }}</p>
       </div>
       <div v-else class="account-grid">
-    <article v-for="acc in filteredAccounts" :key="acc.id" class="account-tile" :class="{ 'account-tile--menu-open': openActionsName === acc.name }">
+    <article v-for="acc in filteredAccounts" :key="acc.id" class="account-tile" :data-account-avatar-name="acc.name" :class="{ 'account-tile--menu-open': openActionsName === acc.name }">
       <div class="account-tile-top">
         <div class="account-tile-avatar-frame" aria-hidden="true">
           <div class="account-tile-avatar">

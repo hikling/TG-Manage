@@ -1,9 +1,12 @@
 """BackgroundJobStore 状态机与重启恢复测试。"""
 import json
+import os
+import time
 from pathlib import Path
 
 from backend.services.background_job import (
     ACTIVE_STATUSES,
+    MAX_LOADED_JOB_BYTES,
     BackgroundJobStore,
     public_job_view,
 )
@@ -105,3 +108,35 @@ def test_write_job_leaves_no_tmp_files_and_is_readable(tmp_path: Path):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["job_id"] == job_id
     assert any(item["message"] == "持久化内容" for item in data["logs"])
+
+
+def test_startup_loads_only_recent_bounded_history_without_deleting_old_files(tmp_path: Path):
+    root = tmp_path / "jobs"
+    root.mkdir()
+    now = time.time()
+    for index in range(100):
+        path = root / f"job-{index}.json"
+        path.write_text(json.dumps({
+            "job_id": f"job-{index}",
+            "status": "completed",
+            "created_at": f"2026-01-01T{index // 60:02d}:{index % 60:02d}:00Z",
+            "logs": [],
+        }), encoding="utf-8")
+        os.utime(path, (now + index, now + index))
+    store = BackgroundJobStore(root, max_history=3)
+    assert set(store.jobs) == {"job-97", "job-98", "job-99"}
+    assert len(list(root.glob("*.json"))) == 100
+
+
+def test_startup_skips_oversize_job_and_limits_log_fields(tmp_path: Path):
+    root = tmp_path / "jobs"
+    root.mkdir()
+    (root / "oversized.json").write_bytes(b"x" * (MAX_LOADED_JOB_BYTES + 1))
+    store = BackgroundJobStore(root)
+    assert store.jobs == {}
+    assert (root / "oversized.json").exists()
+    job_id = store.create_job(kind="demo")["job_id"]
+    store.append_log(job_id, "info", "m" * 10000, ref="r" * 500)
+    job = store.get_job(job_id)
+    assert len(job["logs"][-1]["message"]) == 2000
+    assert len(job["logs"][-1]["ref"]) == 128

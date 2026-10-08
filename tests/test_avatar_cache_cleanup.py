@@ -35,6 +35,16 @@ def test_cleanup_missing_dir_returns_zero(tmp_path: Path):
     assert avatar_cache.cleanup_avatar_cache(tmp_path / "nope") == 0
 
 
+def test_account_photo_is_preserved_across_startup_cleanup(tmp_path: Path):
+    cache_dir = tmp_path / "avatars"
+    cache_dir.mkdir()
+    _touch(cache_dir / "account.jpg", avatar_cache.AVATAR_CACHE_TTL_SECONDS + 10)
+    _touch(cache_dir / "account.no_avatar", avatar_cache.AVATAR_CACHE_TTL_SECONDS + 10)
+    assert avatar_cache.cleanup_avatar_cache(cache_dir, preserve_account_avatars=True) == 1
+    assert (cache_dir / "account.jpg").exists()
+    assert not (cache_dir / "account.no_avatar").exists()
+
+
 def test_cleanup_skips_directories(tmp_path: Path):
     cache_dir = tmp_path / "avatars"
     (cache_dir / "sub").mkdir(parents=True)

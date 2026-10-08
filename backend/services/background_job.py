@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import heapq
 import json
 import logging
 import uuid
@@ -26,6 +27,7 @@ ACTIVE_STATUSES: Set[str] = {"running", "canceling"}
 FINAL_STATUSES: Set[str] = {"completed", "canceled", "failed"}
 DEFAULT_MAX_LOGS = 1000
 DEFAULT_MAX_HISTORY = 50
+MAX_LOADED_JOB_BYTES = 8 * 1024 * 1024
 
 
 def public_job_view(job: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,10 +72,25 @@ class BackgroundJobStore:
 
     def _load_jobs(self) -> None:
         loaded: List[Dict[str, Any]] = []
-        for path in self.root.glob("*.json"):
+        # The directory can retain old history across upgrades. Rank paths by
+        # mtime without parsing every JSON file into memory at startup.
+        def mtime(path: Path) -> float:
             try:
-                value = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
+                return path.stat().st_mtime if path.is_file() and not path.is_symlink() else -1.0
+            except OSError:
+                return -1.0
+
+        recent_paths = heapq.nlargest(self.max_history, self.root.glob("*.json"), key=mtime)
+        for path in recent_paths:
+            try:
+                if path.is_symlink():
+                    continue
+                with path.open("rb") as handle:
+                    raw = handle.read(MAX_LOADED_JOB_BYTES + 1)
+                if len(raw) > MAX_LOADED_JOB_BYTES:
+                    continue
+                value = json.loads(raw.decode("utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 continue
             if not isinstance(value, dict) or not value.get("job_id"):
                 continue
@@ -180,8 +197,8 @@ class BackgroundJobStore:
             {
                 "time": utc_now_iso(),
                 "level": str(level or "info"),
-                "message": str(message or ""),
-                "ref": ref,
+                "message": str(message or "")[:2000],
+                "ref": str(ref)[:128] if ref is not None else None,
             }
         )
         if len(logs) > self.max_logs:
@@ -265,7 +282,7 @@ class BackgroundJobStore:
             return
         now = utc_now_iso()
         job["status"] = "failed"
-        job["error"] = str(error or "unknown error")
+        job["error"] = str(error or "unknown error")[:2000]
         job["finished_at"] = now
         job["updated_at"] = now
         self.append_log(job_id, "error", job["error"], persist=False)
