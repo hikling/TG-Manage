@@ -166,4 +166,26 @@ describe('account avatar viewport cache loading', () => {
     expect(wrapper.find('[data-account-avatar-name="acc-19"] img').exists()).toBe(true)
     wrapper.unmount()
   })
+
+  it('does not stack TeleBox status polls while a prior request is unresolved', async () => {
+    let resolveStatus!: (value: { accounts: [] }) => void
+    mocks.listTeleBoxAccounts.mockImplementationOnce(() =>
+      new Promise<{ accounts: [] }>(resolve => { resolveStatus = resolve }),
+    )
+    vi.useFakeTimers()
+    try {
+      const wrapper = mountAccounts()
+      await flushPromises()
+      expect(mocks.listTeleBoxAccounts).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(30000)
+      expect(mocks.listTeleBoxAccounts).toHaveBeenCalledTimes(1)
+      resolveStatus({ accounts: [] })
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(10000)
+      expect(mocks.listTeleBoxAccounts).toHaveBeenCalledTimes(2)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

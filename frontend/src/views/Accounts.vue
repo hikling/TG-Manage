@@ -38,6 +38,7 @@ const teleboxStates = ref<Record<string, TeleBoxAccount>>({})
 const teleboxBusy = ref('')
 const teleboxPasswords = ref<Record<string, string>>({})
 let statusTimer: ReturnType<typeof setInterval> | undefined
+let teleboxStatesInFlight = false
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
@@ -90,10 +91,13 @@ const clearListFilters = () => {
 }
 
 async function loadTeleBoxStates() {
+  if (disposed || teleboxStatesInFlight) return
+  teleboxStatesInFlight = true
   try {
     const result = await listTeleBoxAccounts()
     if (!disposed) teleboxStates.value = Object.fromEntries(result.accounts.map(item => [item.account, item]))
   } catch (error) { devLog.error('Failed to load TeleBox status', error) }
+  finally { teleboxStatesInFlight = false }
 }
 
 function teleboxLabel(name: string) {
