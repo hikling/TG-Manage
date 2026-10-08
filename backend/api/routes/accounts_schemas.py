@@ -160,6 +160,7 @@ class AccountStatusCheckRequest(BaseModel):
 
     account_names: Optional[list[str]] = None
     timeout_seconds: float = 6.0
+    refresh_avatar: bool = False
 
 
 class AccountStatusItem(BaseModel):

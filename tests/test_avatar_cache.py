@@ -158,3 +158,23 @@ async def test_explicit_refresh_error_keeps_previous_photo(tmp_path, monkeypatch
     with pytest.raises(RuntimeError):
         await avatar_cache.refresh_account_avatar("account", failure)
     assert (directory / "account.jpg").read_bytes() == b"old"
+
+
+@pytest.mark.asyncio
+async def test_oversized_account_avatar_is_never_cached(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.core.config.get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
+    directory = tmp_path / "avatars"
+    directory.mkdir()
+    cache = directory / "account.jpg"
+    cache.write_bytes(b"old")
+
+    async def oversized():
+        return b"x" * (avatar_cache.ACCOUNT_AVATAR_MAX_BYTES + 1)
+
+    with pytest.raises(ValueError, match="128 KiB"):
+        await avatar_cache.refresh_account_avatar("account", oversized)
+    assert cache.read_bytes() == b"old"
+    assert avatar_cache.read_avatar_file(cache) == b"old"
+    cache.write_bytes(b"x" * (avatar_cache.ACCOUNT_AVATAR_MAX_BYTES + 1))
+    assert avatar_cache.read_avatar_file(cache) is None
+    assert not cache.exists()

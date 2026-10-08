@@ -62,6 +62,7 @@ describe('useAccountBatchCheck (job poll)', () => {
     const accounts = ref(names.map((n) => makeAccountUi(n)))
     const searchQuery = ref('')
     const loadAccounts = vi.fn(async () => {})
+    const loadAvatarForAccount = vi.fn(async () => {})
     const harness = mountComposable(() =>
       useAccountBatchCheck({
         accounts,
@@ -69,19 +70,21 @@ describe('useAccountBatchCheck (job poll)', () => {
         searchQuery,
         loadAccounts,
         invalidateAvatars: vi.fn(),
+        loadAvatarForAccount,
       }),
     )
-    return { ...harness, accounts, searchQuery, loadAccounts }
+    return { ...harness, accounts, searchQuery, loadAccounts, loadAvatarForAccount }
   }
 
   it('single account batch uses sync check API', async () => {
     api.checkAccountsStatus.mockResolvedValue({
       results: [{ account_name: 'only', ok: true, status: 'connected', message: 'ok' }],
     })
-    const { result, loadAccounts, unmount } = setup(['only'])
+    const { result, loadAccounts, loadAvatarForAccount, unmount } = setup(['only'])
     await result.handleBatchCheck()
-    expect(api.checkAccountsStatus).toHaveBeenCalled()
+    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['only'], timeout_seconds: 8 })
     expect(api.startAccountStatusCheckJob).not.toHaveBeenCalled()
+    expect(loadAvatarForAccount).not.toHaveBeenCalled()
     expect(loadAccounts).toHaveBeenCalled()
     expect(toastSpy.success).toHaveBeenCalled()
     expect(result.batchChecking.value).toBe(false)
@@ -166,6 +169,7 @@ describe('useAccountBatchCheck (job poll)', () => {
       results: [{ account_name: 'a1', ok: false, status: 'invalid', message: 'bad' }],
     })
     const loadAccounts = vi.fn(async () => {})
+    const loadAvatarForAccount = vi.fn(async () => {})
     const accounts = ref([makeAccountUi('a1')])
     const { result, unmount } = mountComposable(() =>
       useAccountBatchCheck({
@@ -174,12 +178,26 @@ describe('useAccountBatchCheck (job poll)', () => {
         searchQuery: ref(''),
         loadAccounts,
         invalidateAvatars: vi.fn(),
+        loadAvatarForAccount,
       }),
     )
     await result.handleCheck('a1')
-    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'] })
+    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'], refresh_avatar: true })
+    expect(loadAvatarForAccount).not.toHaveBeenCalled()
     expect(toastSpy.error).toHaveBeenCalled()
     expect(result.checkingAccount.value).toBe('')
+    unmount()
+  })
+
+  it('card check reloads only its refreshed avatar', async () => {
+    api.checkAccountsStatus.mockResolvedValue({
+      results: [{ account_name: 'a1', ok: true, status: 'connected', avatar_refreshed: true }],
+    })
+    const { result, loadAvatarForAccount, unmount } = setup(['a1', 'a2'])
+    await result.handleCheck('a1')
+    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'], refresh_avatar: true })
+    expect(loadAvatarForAccount).toHaveBeenCalledTimes(1)
+    expect(loadAvatarForAccount).toHaveBeenCalledWith('a1')
     unmount()
   })
 

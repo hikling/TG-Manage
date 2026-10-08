@@ -19,6 +19,7 @@ AVATAR_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 # 临时残存文件清理阈值：1 小时（秒）
 _TMP_FILE_CLEANUP_TTL_SECONDS = 3600
 CHAT_CACHE_MAX_BYTES = 5 * 1024 * 1024
+ACCOUNT_AVATAR_MAX_BYTES = 128 * 1024
 
 
 def clear_chat_cache(directory: Path) -> None:
@@ -79,6 +80,10 @@ def read_cached_avatar(
 def read_avatar_file(cache_file: Path) -> Optional[bytes]:
     """读取磁盘上的缓存文件（不校验新鲜度），用于瞬时下载失败时的过期兜底。"""
     try:
+        if cache_file.stat().st_size > ACCOUNT_AVATAR_MAX_BYTES:
+            with contextlib.suppress(OSError):
+                cache_file.unlink(missing_ok=True)
+            return None
         return cache_file.read_bytes()
     except OSError:
         return None
@@ -102,7 +107,13 @@ async def refresh_account_avatar(account_name: str, download_fn: DownloadFn) -> 
     directory.mkdir(parents=True, exist_ok=True)
     cache_file = directory / f"{account_name}.jpg"
     marker = directory / f"{account_name}.no_avatar"
-    avatar = await get_avatar_bytes(cache_file, marker, download_fn)
+    async def bounded_download() -> Optional[bytes]:
+        data = await download_fn()
+        if data and len(data) > ACCOUNT_AVATAR_MAX_BYTES:
+            raise ValueError("账号头像超过 128 KiB 限制")
+        return data
+
+    avatar = await get_avatar_bytes(cache_file, marker, bounded_download)
     if not avatar:
         cache_file.unlink(missing_ok=True)
         mark_no_avatar(marker)
