@@ -107,6 +107,10 @@ def _configure_backend_logging():
         root.addHandler(_handler)
     logging.getLogger("backend").setLevel(level_no)
     logging.getLogger("uvicorn").setLevel(level_no)
+    # httpx logs full request URLs at INFO (and httpcore adds wire details at
+    # DEBUG). Telegram Bot API URLs contain the Bot Token in their path.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # 暴力删除 uvicorn.access 的所有 handler，从根源禁用
     access_logger = logging.getLogger("uvicorn.access")
@@ -411,6 +415,12 @@ async def on_startup() -> None:
     with get_session_local()() as db:
         prepare_admin_setup(db)
     await init_scheduler(sync_on_startup=False)
+    from backend.services.official_code_bot import run_code_bot
+    app.state.code_bot_task = create_logged_task(
+        run_code_bot(),
+        logger=logging.getLogger("backend.official_code_bot"),
+        description="private code bot",
+    )
 
     # Pre-export session strings from .session files to avoid SQLite locks during task execution
     # sqlite 打开/锁等待是同步阻塞调用，挪到线程池执行：
@@ -533,6 +543,11 @@ async def _memory_monitor_loop() -> None:
 
 async def on_shutdown() -> None:
     log = logging.getLogger("backend.shutdown")
+    code_bot_task = getattr(app.state, "code_bot_task", None)
+    if code_bot_task is not None and not code_bot_task.done():
+        code_bot_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await code_bot_task
     try:
         from backend.services.telebox import get_telebox_service
 

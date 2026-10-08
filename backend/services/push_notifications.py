@@ -23,6 +23,16 @@ _shared_http_client: Optional[httpx.AsyncClient] = None
 _shared_http_client_loop: Optional[asyncio.AbstractEventLoop] = None
 
 
+class TelegramBotDeliveryError(RuntimeError):
+    """Safe delivery error that never includes the token-bearing Bot API URL."""
+
+
+def _safe_bot_delivery_error(exc: httpx.RequestError | httpx.HTTPStatusError) -> TelegramBotDeliveryError:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return TelegramBotDeliveryError(f"Telegram Bot API 返回 HTTP {exc.response.status_code}")
+    return TelegramBotDeliveryError(f"Telegram Bot API 网络错误（{type(exc).__name__}）")
+
+
 def _get_shared_http_client() -> httpx.AsyncClient:
     """获取共享客户端；按事件循环缓存，换 loop（如测试隔离）时自动重建。"""
     global _shared_http_client, _shared_http_client_loop
@@ -234,13 +244,14 @@ async def send_telegram_bot_message(
             return
         except (httpx.RequestError, httpx.HTTPStatusError) as exc:
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500:
-                raise
+                raise _safe_bot_delivery_error(exc) from None
             last_exc = exc
             if attempt == 1:
-                logger.warning("Telegram 通知发送失败，准备重试: %s", exc)
+                status_code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+                logger.warning("Telegram 通知发送失败，准备重试（%s, HTTP %s）", type(exc).__name__, status_code)
                 await asyncio.sleep(1.0)
     assert last_exc is not None
-    raise last_exc
+    raise _safe_bot_delivery_error(last_exc) from None
 
 
 async def _http_post_retry_once(
@@ -445,7 +456,7 @@ async def send_auto_backup_failure_notification(
             parse_mode="HTML",
         )
     except Exception as exc:
-        logger.warning("自动备份失败通知发送失败: %s", exc)
+        logger.warning("自动备份失败通知发送失败（%s）", type(exc).__name__)
 
 
 async def send_wecom_message(webhook_url: str, title: str, text: str) -> None:

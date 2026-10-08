@@ -2,7 +2,7 @@
  * AvatarUrlCache：ObjectURL 复用与回收行为。
  */
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { AvatarUrlCache } from '../lib/avatar-cache'
+import { AvatarLoadGate, AvatarUrlCache } from '../lib/avatar-cache'
 
 describe('AvatarUrlCache', () => {
   afterEach(() => {
@@ -59,5 +59,25 @@ describe('AvatarUrlCache', () => {
     expect(revoke).toHaveBeenCalledWith('blob:a')
     expect(cache.get('acc-1')).toBeUndefined()
     expect(cache.canStore('acc-2', 2 * 1024 * 1024)).toBe(true)
+  })
+})
+
+describe('AvatarLoadGate', () => {
+  it('检测刷新后丢弃旧请求，并允许新请求并行完成', () => {
+    const gate = new AvatarLoadGate()
+    const oldVersion = gate.start('acc-1')
+    expect(oldVersion).toBe(0)
+    expect(gate.start('acc-1')).toBeNull()
+
+    gate.invalidate('acc-1')
+    expect(gate.isCurrent('acc-1', oldVersion!)).toBe(false)
+    const newVersion = gate.start('acc-1')
+    expect(newVersion).toBe(1)
+
+    gate.finish('acc-1', oldVersion!)
+    expect(gate.start('acc-1')).toBeNull()
+    expect(gate.isCurrent('acc-1', newVersion!)).toBe(true)
+    gate.finish('acc-1', newVersion!)
+    expect(gate.start('acc-1')).toBe(1)
   })
 })

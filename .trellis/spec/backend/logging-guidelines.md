@@ -7,4 +7,4 @@
 logger.debug("JWT 解码成功但缺少 sub，按未认证处理")
 ```
 
-不能记录 API_HASH、session、Bot Token、TOTP、密码或包含 Token 的外部 URL。`backend/api/routes/bots.py::_call` 特意不把 httpx 异常原文暴露到客户端；`backend/services/telebox.py::_log` 经 `redact()` 后只保留每账号最多 300 条日志。`backend/services/users.py` 只记录初始密码文件路径，不写出密码内容。需要新增运行记录时沿用有界日志、UTC 时间和账号隔离。
+不能记录 API_HASH、session、Bot Token、验证码、TOTP、密码或包含 Token 的外部 URL。`backend/services/official_code_bot.py::_bot_call` 特意不记录 httpx 异常原文；验证码轮询游标只持久化消息 ID 和更新偏移量，不持久化验证码。`backend/services/telebox.py::_log` 经 `redact()` 后只保留每账号最多 300 条日志。`backend/services/users.py` 只记录初始密码文件路径，不写出密码内容。需要新增运行记录时沿用有界日志、UTC 时间和账号隔离。

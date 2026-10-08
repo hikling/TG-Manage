@@ -68,6 +68,7 @@ describe('useAccountBatchCheck (job poll)', () => {
         filteredAccounts: computed(() => accounts.value),
         searchQuery,
         loadAccounts,
+        invalidateAvatars: vi.fn(),
       }),
     )
     return { ...harness, accounts, searchQuery, loadAccounts }
@@ -172,6 +173,7 @@ describe('useAccountBatchCheck (job poll)', () => {
         filteredAccounts: computed(() => accounts.value),
         searchQuery: ref(''),
         loadAccounts,
+        invalidateAvatars: vi.fn(),
       }),
     )
     await result.handleCheck('a1')

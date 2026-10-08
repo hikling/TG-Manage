@@ -23,7 +23,7 @@ import PageRetry from '../components/PageRetry.vue'
 import FilterEmptyState from '../components/FilterEmptyState.vue'
 import { devLog } from '../lib/devLog'
 import { AVATAR_FETCH_CONCURRENCY, mapPool } from '../lib/async-pool'
-import { AvatarUrlCache } from '../lib/avatar-cache'
+import { AvatarLoadGate, AvatarUrlCache } from '../lib/avatar-cache'
 import {
   filterAccountsByQuery,
   mapAccountInfoToUiItem,
@@ -42,7 +42,7 @@ let statusTimer: ReturnType<typeof setInterval> | undefined
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
-const avatarLoads = new Set<string>()
+const avatarLoadGate = new AvatarLoadGate()
 // 卸载标记：在途头像请求完成后不再创建 ObjectURL，避免 blob 泄漏
 let disposed = false
 /** 重登弹窗延时句柄：卸载时清理，避免关闭组件后仍打开新弹窗 */
@@ -168,24 +168,38 @@ const loadAccounts = async () => {
 }
 
 const loadAvatar = async (acc: AccountUiItem) => {
-  if (disposed || avatarLoads.has(acc.name)) return
-  avatarLoads.add(acc.name)
+  if (disposed) return
+  const version = avatarLoadGate.start(acc.name)
+  if (version === null) return
   const token = getAuthToken()
   try {
     let url = avatarCache.get(acc.name)
     if (!url) {
       const blob = await fetchAccountAvatar(token, acc.name)
-      if (disposed || !accounts.value.some(item => item.name === acc.name)) return
+      if (disposed || !avatarLoadGate.isCurrent(acc.name, version)) return
+      const current = accounts.value.find(item => item.name === acc.name)
+      if (!current) return
       if (blob.size > 128 * 1024 || !avatarCache.canStore(acc.name, blob.size)) return
       url = URL.createObjectURL(blob)
       avatarCache.set(acc.name, url, blob.size)
     }
-    acc.avatarUrl = url
+    if (disposed || !avatarLoadGate.isCurrent(acc.name, version)) return
+    const current = accounts.value.find(item => item.name === acc.name)
+    if (current) current.avatarUrl = url
   } catch {
     // 头像下载失败/无头像：保留首字母占位，不影响列表
     devLog.info('头像加载失败，保留占位:', acc.name)
   } finally {
-    avatarLoads.delete(acc.name)
+    avatarLoadGate.finish(acc.name, version)
+  }
+}
+
+const invalidateAvatars = (names: string[]) => {
+  for (const name of names) {
+    avatarLoadGate.invalidate(name)
+    avatarCache.delete(name)
+    const current = accounts.value.find(item => item.name === name)
+    if (current) current.avatarUrl = ''
   }
 }
 
@@ -252,6 +266,7 @@ const {
   filteredAccounts,
   searchQuery,
   loadAccounts,
+  invalidateAvatars,
 })
 
 const openEdit = (acc: AccountUiItem) => {

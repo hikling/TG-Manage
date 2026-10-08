@@ -27,6 +27,13 @@ export class AvatarUrlCache {
     this.sizes.set(name, size)
   }
 
+  delete(name: string): void {
+    const url = this.urls.get(name)
+    if (url) revoke(url)
+    this.urls.delete(name)
+    this.sizes.delete(name)
+  }
+
   retainOnly(names: Set<string>): void {
     for (const [name, url] of this.urls) {
       if (names.has(name)) continue
@@ -43,6 +50,31 @@ export class AvatarUrlCache {
     }
     this.urls.clear()
     this.sizes.clear()
+  }
+}
+
+/** 账号检测后的头像请求代次：旧请求不得覆盖新缓存。 */
+export class AvatarLoadGate {
+  private versions = new Map<string, number>()
+  private inFlight = new Map<string, number>()
+
+  start(name: string): number | null {
+    const version = this.versions.get(name) ?? 0
+    if (this.inFlight.get(name) === version) return null
+    this.inFlight.set(name, version)
+    return version
+  }
+
+  isCurrent(name: string, version: number): boolean {
+    return (this.versions.get(name) ?? 0) === version
+  }
+
+  invalidate(name: string): void {
+    this.versions.set(name, (this.versions.get(name) ?? 0) + 1)
+  }
+
+  finish(name: string, version: number): void {
+    if (this.inFlight.get(name) === version) this.inFlight.delete(name)
   }
 }
 

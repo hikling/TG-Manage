@@ -90,6 +90,25 @@ def mark_no_avatar(no_avatar_marker: Path) -> None:
     no_avatar_marker.write_text("")
 
 
+async def refresh_account_avatar(account_name: str, download_fn: DownloadFn) -> bool:
+    """Explicit check only: refresh disk cache and return whether an avatar exists.
+
+    A transient error leaves the previous image intact; an authoritative no-photo
+    result removes it so the old picture cannot reappear on the next page visit.
+    """
+    from backend.core.config import get_settings
+
+    directory = get_settings().resolve_workdir() / "avatars"
+    directory.mkdir(parents=True, exist_ok=True)
+    cache_file = directory / f"{account_name}.jpg"
+    marker = directory / f"{account_name}.no_avatar"
+    avatar = await get_avatar_bytes(cache_file, marker, download_fn)
+    if not avatar:
+        cache_file.unlink(missing_ok=True)
+        mark_no_avatar(marker)
+    return bool(avatar)
+
+
 async def get_avatar_bytes(
     cache_file: Path,
     no_avatar_marker: Path,

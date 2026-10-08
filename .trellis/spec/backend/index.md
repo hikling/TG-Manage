@@ -7,6 +7,7 @@
 1. 阅读 [目录结构](./directory-structure.md)、[数据库](./database-guidelines.md)、[错误处理](./error-handling.md)、[日志](./logging-guidelines.md)、[质量](./quality-guidelines.md)。
 2. 搜索相邻路由、服务和测试；跨层变更同时核对 `frontend/src/lib/api/` 类型。
 3. 涉及账号或 TeleBox 时，核对账号隔离、认证依赖和敏感信息边界。
+4. 修改账号检测、私人验证码机器人或封面时，阅读[跨层契约](./account-code-appearance-contracts.md)。
 
 ## 质量检查
 

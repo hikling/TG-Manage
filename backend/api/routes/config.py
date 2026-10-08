@@ -137,6 +137,7 @@ class GlobalSettingsRequest(BaseModel):
     device_keepalive_interval_days: Optional[int] = None
     telegram_bot_notify_enabled: Optional[bool] = None
     telegram_bot_login_notify_enabled: Optional[bool] = None
+    telegram_bot_code_enabled: Optional[bool] = None
     telegram_bot_quiet_hours_enabled: Optional[bool] = None
     telegram_bot_quiet_hours_start: Optional[str] = None
     telegram_bot_quiet_hours_end: Optional[str] = None
@@ -163,6 +164,8 @@ class GlobalSettingsResponse(BaseModel):
     device_keepalive_interval_days: int = 30
     telegram_bot_notify_enabled: bool = False
     telegram_bot_login_notify_enabled: bool = False
+    telegram_bot_code_enabled: bool = False
+    telegram_bot_code_status: str = "未启用"
     telegram_bot_quiet_hours_enabled: bool = False
     telegram_bot_quiet_hours_start: Optional[str] = "23:00"
     telegram_bot_quiet_hours_end: Optional[str] = "07:00"
@@ -199,6 +202,8 @@ def get_global_settings(current_user: User = Depends(get_current_user)):
             raw_token is not None and str(raw_token).strip() != ""
         )
         settings["telegram_bot_token"] = None
+        from backend.services.official_code_bot import runtime_status
+        settings["telegram_bot_code_status"] = runtime_status()
         return GlobalSettingsResponse(**settings)
     except Exception as e:
         logger.error("读取全局设置失败: %s", e, exc_info=True)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -113,3 +114,47 @@ async def test_get_avatar_bytes_mkstemp_failure_raises_oserror(tmp_path, monkeyp
     with pytest.raises(OSError, match="缓存目录不可写"):
         await avatar_cache.get_avatar_bytes(cache, marker, download)
     assert not cache.exists()
+
+
+@pytest.mark.asyncio
+async def test_explicit_refresh_removes_stale_photo_on_no_photo(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.core.config.get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
+    directory = tmp_path / "avatars"
+    directory.mkdir()
+    (directory / "account.jpg").write_bytes(b"old")
+
+    async def no_photo():
+        return None
+
+    assert await avatar_cache.refresh_account_avatar("account", no_photo) is False
+    assert not (directory / "account.jpg").exists()
+    assert (directory / "account.no_avatar").exists()
+
+
+@pytest.mark.asyncio
+async def test_empty_avatar_bytes_are_treated_as_no_photo(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.core.config.get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
+    directory = tmp_path / "avatars"
+    directory.mkdir()
+    (directory / "account.jpg").write_bytes(b"old")
+
+    async def empty_photo():
+        return b""
+
+    assert await avatar_cache.refresh_account_avatar("account", empty_photo) is False
+    assert not (directory / "account.jpg").exists()
+
+
+@pytest.mark.asyncio
+async def test_explicit_refresh_error_keeps_previous_photo(tmp_path, monkeypatch):
+    monkeypatch.setattr("backend.core.config.get_settings", lambda: SimpleNamespace(resolve_workdir=lambda: tmp_path))
+    directory = tmp_path / "avatars"
+    directory.mkdir()
+    (directory / "account.jpg").write_bytes(b"old")
+
+    async def failure():
+        raise RuntimeError("network")
+
+    with pytest.raises(RuntimeError):
+        await avatar_cache.refresh_account_avatar("account", failure)
+    assert (directory / "account.jpg").read_bytes() == b"old"

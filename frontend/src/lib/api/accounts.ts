@@ -107,6 +107,8 @@ export interface AccountStatusItem {
   checked_at?: string;
   needs_relogin?: boolean;
   user_id?: number;
+  avatar_refreshed?: boolean;
+  avatar_refresh_error?: boolean;
 }
 
 export interface AccountStatusCheckResponse {
@@ -273,4 +275,4 @@ export const submitQrPassword = (token: string, data: QrLoginPasswordRequest) =>
  * 调用方按需 catch 回退到默认头像。
  */
 export const fetchAccountAvatar = (token: string, accountName: string) =>
-  requestBlob(`/accounts/${encodeURIComponent(accountName)}/avatar`, {}, token);
+  requestBlob(`/accounts/${encodeURIComponent(accountName)}/avatar`, { cache: 'no-store' }, token);

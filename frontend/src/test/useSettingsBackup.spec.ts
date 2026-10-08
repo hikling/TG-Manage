@@ -50,6 +50,7 @@ function baseSettings(over: Partial<SettingsFormState> = {}): SettingsFormState 
     deviceKeepaliveIntervalDays: 30,
     botEnabled: false,
     botLoginNotify: false,
+    botCodeEnabled: false,
     quietEnabled: false,
     quietStart: '23:00',
     quietEnd: '07:00',

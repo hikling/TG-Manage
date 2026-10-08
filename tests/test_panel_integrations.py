@@ -13,7 +13,7 @@ from tests.test_api import _auth, _login, api_client, db  # noqa: F401
 def test_panel_routes_require_auth(api_client, db):  # noqa: F811
     for path in (
         "/api/communications/proxies", "/api/communications/a/dialogs",
-        "/api/bots", "/api/telebox",
+        "/api/telebox",
     ):
         assert api_client.get(path).status_code in {401, 403}
 
@@ -30,22 +30,24 @@ def test_invalid_chat_input_never_calls_telegram(api_client, db):  # noqa: F811
     send.assert_not_awaited()
 
 
-def test_bot_registry_never_serializes_token(api_client, db, monkeypatch, tmp_path):  # noqa: F811
-    from backend.api.routes import bots
-
-    monkeypatch.setattr(bots, "_path", lambda: tmp_path / "bots" / "registry.json")
+def test_bot_center_endpoint_is_removed(api_client, db):  # noqa: F811
     token = _login(api_client)
-    secret = "123456789:" + "x" * 35
-    with patch.object(bots, "_call", new_callable=AsyncMock) as call:
-        call.return_value = {"id": 123, "is_bot": True, "username": "test_bot", "first_name": "Test"}
-        registered = api_client.post("/api/bots", json={"token": secret}, headers=_auth(token))
-    assert registered.status_code == 200
-    assert secret not in registered.text
-    listed = api_client.get("/api/bots", headers=_auth(token))
-    assert listed.status_code == 200
-    assert secret not in listed.text
-    assert secret not in (tmp_path / "bots" / "registry.json").read_text()
-    assert bots._token("123") == secret
+    assert api_client.get("/api/bots", headers=_auth(token)).status_code == 404
+
+
+def test_private_code_bot_rejects_group_target(api_client, db):  # noqa: F811
+    token = _login(api_client)
+    response = api_client.post(
+        "/api/config/settings",
+        json={
+            "telegram_bot_code_enabled": True,
+            "telegram_bot_chat_id": "-1001234567890",
+            "telegram_bot_token": "12345:test-token",
+        },
+        headers=_auth(token),
+    )
+    assert response.status_code == 400
+    assert "私人目标 ID" in response.json()["detail"]
 
 
 def test_peer_id_rejects_urls_and_path_traversal():

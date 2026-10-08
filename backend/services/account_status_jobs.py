@@ -102,6 +102,16 @@ async def _run_status_check(job_id: str, names: List[str], timeout_seconds: floa
             item = await service.check_account_status(
                 name, timeout_seconds=timeout_seconds
             )
+            if item.get("ok"):
+                from backend.services.avatar_cache import refresh_account_avatar
+                try:
+                    await refresh_account_avatar(
+                        name, lambda account=name: service.download_account_avatar(account)
+                    )
+                    item["avatar_refreshed"] = True
+                except Exception:
+                    logger.warning("刷新账号头像失败 account=%s", name)
+                    item["avatar_refresh_error"] = True
         except Exception as exc:
             item = {
                 "account_name": name,

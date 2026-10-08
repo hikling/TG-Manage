@@ -47,6 +47,7 @@ export function useSettingsPage() {
     deviceKeepaliveIntervalDays: 30,
     botEnabled: false,
     botLoginNotify: false,
+    botCodeEnabled: false,
     quietEnabled: false,
     quietStart: '23:00',
     quietEnd: '07:00',
@@ -97,6 +98,8 @@ export function useSettingsPage() {
   // 卸载标记：异步加载期间离开页面时停止后续副作用
   let disposed = false
   const botTokenSet = ref(false)
+  const botCodeStatus = ref('')
+  let botStatusTimer: ReturnType<typeof setInterval> | undefined
   const afterBotTokenSaved = () => {
     if (settings.value.botToken) {
       botTokenSet.value = true
@@ -235,6 +238,7 @@ export function useSettingsPage() {
       const res = await getGlobalSettings(token)
       const flags = applyGlobalSettingsToForm(settings.value, res)
       botTokenSet.value = flags.botTokenSet
+      botCodeStatus.value = res.telegram_bot_code_status || ''
       webdavPasswordSet.value = flags.webdavPasswordSet
       // 同步面板展示时区：Settings 加载后，Dashboard/Logs 等页的时间格式跟随
       setPanelTimezone(res.timezone)
@@ -280,11 +284,22 @@ export function useSettingsPage() {
     // 同步注册 beforeunload：避免异步加载期间卸载导致监听器永久泄漏
     window.addEventListener('beforeunload', onBeforeUnload)
     await loadAllSettings()
+    botStatusTimer = setInterval(async () => {
+      const token = getAuthToken()
+      if (!token || disposed || document.hidden) return
+      try {
+        const latest = await getGlobalSettings(token)
+        if (!disposed) botCodeStatus.value = latest.telegram_bot_code_status || ''
+      } catch {
+        // Keep the last known status; normal settings load owns error feedback.
+      }
+    }, 20_000)
   })
 
   onUnmounted(() => {
     disposed = true
     window.removeEventListener('beforeunload', onBeforeUnload)
+    if (botStatusTimer) clearInterval(botStatusTimer)
   })
 
 
@@ -327,6 +342,7 @@ export function useSettingsPage() {
     remoteWebdavMessage,
     webdavPasswordSet,
     botTokenSet,
+    botCodeStatus,
     remoteDownloadName,
     saveSettings,
     runKeepaliveNow,
