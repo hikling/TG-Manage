@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from collections import deque
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -18,6 +19,19 @@ def test_node_heap_limit_for_multi_account_host(monkeypatch):
     for value, expected in [("96", 96), ("8", 64), ("999", 512), ("bad", 128)]:
         monkeypatch.setenv("TELEBOX_NODE_HEAP_MB", value)
         assert telebox.node_heap_limit_mb() == expected
+
+
+def test_deleted_account_releases_worker_and_secret_references(tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service.workers["removed"] = {"process": object()}
+    service.locks["removed"] = object()
+    service.logs["removed"] = deque([{"message": "old"}])
+    service.secrets["removed"] = ["sensitive"]
+    service.forget_account("removed")
+    assert "removed" not in service.workers
+    assert "removed" not in service.locks
+    assert "removed" not in service.logs
+    assert "removed" not in service.secrets
 
 
 def test_worker_passes_telebox_settings_without_panel_secrets(tmp_path, monkeypatch):

@@ -16,6 +16,8 @@ class InMemoryRateLimiter:
     _STALE_BUCKET_AGE = 3600.0
     # 每 N 次 hit 触发一次全局清扫，摊薄 O(n) 成本
     _SWEEP_INTERVAL = 256
+    # An unauthenticated caller can vary usernames; never retain unlimited keys.
+    _MAX_BUCKETS = 4096
 
     def __init__(self) -> None:
         self._lock = Lock()
@@ -83,6 +85,18 @@ class InMemoryRateLimiter:
                     detail=detail,
                     headers={"Retry-After": str(retry_after)},
                 )
+            if blocked_until:
+                self._blocked_until.pop(bucket, None)
+
+            if bucket not in self._attempts and bucket not in self._blocked_until:
+                if len(self._attempts) + len(self._blocked_until) >= self._MAX_BUCKETS:
+                    self._sweep_expired(now)
+                    if len(self._attempts) + len(self._blocked_until) >= self._MAX_BUCKETS:
+                        raise HTTPException(
+                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail=detail,
+                            headers={"Retry-After": str(self._STALE_BUCKET_AGE)},
+                        )
 
             attempts = self._attempts.setdefault(bucket, deque())
             cutoff = now - max(window_seconds, 1)
@@ -104,18 +118,10 @@ class InMemoryRateLimiter:
 
 
 def get_client_identifier(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        first_hop = forwarded_for.split(",", 1)[0].strip()
-        if first_hop:
-            return first_hop
-
-    real_ip = request.headers.get("x-real-ip", "").strip()
-    if real_ip:
-        return real_ip
-
+    # request.client is set by the ASGI server's trusted-proxy configuration.
+    # Raw forwarding headers are user-controlled and must not select a bucket.
     if request.client and request.client.host:
-        return request.client.host
+        return str(request.client.host)[:64]
     return "unknown"
 
 

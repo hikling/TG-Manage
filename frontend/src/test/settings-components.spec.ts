@@ -79,9 +79,9 @@ describe('设置页拆分组件契约', () => {
         props: { modelValue: { ...settingsState(), botCodeEnabled: true }, reveal: { botToken: false } },
         global: { plugins: [i18n] },
       })
-      expect(wrapper.text()).toContain('Enable private code bot')
+      expect(wrapper.text()).toContain('Enable private bot')
       expect(wrapper.text()).toContain('Enter a positive private user ID')
-      expect(wrapper.text()).not.toContain('启用私人验证码机器人')
+      expect(wrapper.text()).not.toContain('启用私人机器人')
     } finally {
       i18n.global.locale.value = previousLocale
     }

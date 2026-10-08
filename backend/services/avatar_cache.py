@@ -20,6 +20,7 @@ AVATAR_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 _TMP_FILE_CLEANUP_TTL_SECONDS = 3600
 CHAT_CACHE_MAX_BYTES = 5 * 1024 * 1024
 ACCOUNT_AVATAR_MAX_BYTES = 128 * 1024
+CHAT_AVATAR_MAX_BYTES = 128 * 1024
 
 
 def clear_chat_cache(directory: Path) -> None:
@@ -124,6 +125,8 @@ async def get_avatar_bytes(
     cache_file: Path,
     no_avatar_marker: Path,
     download_fn: DownloadFn,
+    *,
+    max_bytes: Optional[int] = None,
 ) -> Optional[bytes]:
     """下载头像字节并写入本地缓存（供账号/chat 头像路由共用）。
 
@@ -133,6 +136,8 @@ async def get_avatar_bytes(
     """
     avatar_bytes = await download_fn()
     if avatar_bytes:
+        if max_bytes is not None and len(avatar_bytes) > max_bytes:
+            raise ValueError("头像超过大小限制")
         # 先写临时文件再 rename，避免并发读/写缓存时读到半截文件
         tmp_name: str | None = None
         replaced = False
@@ -153,17 +158,21 @@ async def get_avatar_bytes(
     return avatar_bytes
 
 
-def cleanup_avatar_cache(cache_dir: Path, ttl: int = AVATAR_CACHE_TTL_SECONDS) -> int:
+def cleanup_avatar_cache(
+    cache_dir: Path,
+    ttl: int = AVATAR_CACHE_TTL_SECONDS,
+    *,
+    preserve_account_avatars: bool = False,
+) -> int:
     """清理过期头像缓存文件与无头像标记，返回清理数量。
+
+    7 天 TTL 在读路径校验，但磁盘上的过期文件不会自动消失；
+    长期运行会累积陈旧文件。中断遗留的临时文件使用更短的阈值。
+    """
     try:
         ttl = max(60, int(ttl or AVATAR_CACHE_TTL_SECONDS))
     except (TypeError, ValueError):
         ttl = AVATAR_CACHE_TTL_SECONDS
-
-    7 天 TTL 在读路径校验，但磁盘上的过期文件不会自动消失；
-    长期运行（大量会话/删除的账号）会累积陈旧文件。
-    遍历目录删除超过 TTL 的文件；单文件失败跳过，不影响其余清理。
-    """
     removed = 0
     try:
         entries = list(cache_dir.iterdir())
@@ -175,6 +184,8 @@ def cleanup_avatar_cache(cache_dir: Path, ttl: int = AVATAR_CACHE_TTL_SECONDS) -
             if not entry.is_file():
                 continue
             name = entry.name
+            if preserve_account_avatars and name.endswith(".jpg"):
+                continue
             # 针对中断遗留的 .tmp 文件使用更短的 1 小时过期阈值
             file_ttl = _TMP_FILE_CLEANUP_TTL_SECONDS if name.startswith(".avatar_") and name.endswith(".tmp") else ttl
             if now - entry.stat().st_mtime >= file_ttl:

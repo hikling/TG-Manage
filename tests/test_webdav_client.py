@@ -182,9 +182,13 @@ def test_list_webdav_files_filters_tar_gz():
     mock_client = MagicMock()
     mock_client.__enter__ = MagicMock(return_value=mock_client)
     mock_client.__exit__ = MagicMock(return_value=False)
-    mock_client.request.return_value = MagicMock(
-        status_code=207, text=_SAMPLE_PROPFIND
-    )
+    mock_resp = MagicMock(status_code=207)
+    mock_resp.iter_bytes.return_value = [
+        _SAMPLE_PROPFIND.encode("utf-8")
+    ]
+    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    mock_client.stream.return_value = mock_resp
     with patch("backend.services.webdav_client.httpx.Client", return_value=mock_client):
         result = list_webdav_files(
             base_url="https://dav.example.com/remote.php/dav/files/u",
@@ -197,6 +201,30 @@ def test_list_webdav_files_filters_tar_gz():
     assert len(result["files"]) == 1
     assert result["files"][0]["name"] == "auto-1.tar.gz"
     assert result["files"][0]["size_bytes"] == 1024
+
+
+def test_propfind_rejects_xml_entities_and_oversized_body():
+    with pytest.raises(RuntimeError, match="XML 声明"):
+        _parse_propfind_entries(
+            '<!DOCTYPE x [<!ENTITY e "expanded">]><x>&e;</x>',
+            "https://dav.example.com/",
+        )
+    with pytest.raises(RuntimeError, match="1 MiB"):
+        _parse_propfind_entries("x" * (1024 * 1024 + 1), "https://dav.example.com/")
+
+
+def test_list_webdav_files_stream_limit():
+    mock_client = MagicMock()
+    mock_client.__enter__ = MagicMock(return_value=mock_client)
+    mock_client.__exit__ = MagicMock(return_value=False)
+    mock_resp = MagicMock(status_code=207)
+    mock_resp.iter_bytes.return_value = [b"x" * (1024 * 1024 + 1)]
+    mock_resp.__enter__ = MagicMock(return_value=mock_resp)
+    mock_resp.__exit__ = MagicMock(return_value=False)
+    mock_client.stream.return_value = mock_resp
+    with patch("backend.services.webdav_client.httpx.Client", return_value=mock_client):
+        with pytest.raises(RuntimeError, match="1 MiB"):
+            list_webdav_files(base_url="https://dav.example.com/", username="u", password="p")
 
 
 def test_validate_backup_filename():

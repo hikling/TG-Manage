@@ -83,6 +83,21 @@ async def test_get_avatar_bytes_empty_result_no_cache(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_chat_avatar_over_limit_is_not_written(tmp_path):
+    cache = tmp_path / "large.jpg"
+    marker = tmp_path / "large.no_avatar"
+
+    async def large_download():
+        return b"x" * (avatar_cache.CHAT_AVATAR_MAX_BYTES + 1)
+
+    with pytest.raises(ValueError, match="大小限制"):
+        await avatar_cache.get_avatar_bytes(
+            cache, marker, large_download, max_bytes=avatar_cache.CHAT_AVATAR_MAX_BYTES
+        )
+    assert not cache.exists()
+
+
+@pytest.mark.asyncio
 async def test_get_avatar_bytes_download_error_no_cache_write(tmp_path):
     cache = tmp_path / "c.jpg"
     marker = tmp_path / "c.no_avatar"

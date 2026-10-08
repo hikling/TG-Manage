@@ -28,6 +28,17 @@ _PROPFIND_PROP = (
 )
 # 仅允许安全备份文件名，防止路径穿越
 _SAFE_BACKUP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.tar\.gz$")
+_MAX_PROPFIND_BYTES = 1024 * 1024
+
+
+def _read_bounded_response(response: httpx.Response) -> str:
+    """Never buffer an unbounded WebDAV listing/error body in process memory."""
+    chunks = bytearray()
+    for chunk in response.iter_bytes(chunk_size=65536):
+        if len(chunks) + len(chunk) > _MAX_PROPFIND_BYTES:
+            raise RuntimeError("WebDAV 列表响应超过 1 MiB 限制")
+        chunks.extend(chunk)
+    return chunks.decode("utf-8", errors="replace")
 
 
 def _join_url(base: str, *parts: str) -> str:
@@ -154,9 +165,13 @@ def _local_name(tag: str) -> str:
 
 def _parse_propfind_entries(xml_text: str, base_url: str) -> List[dict]:
     """解析 PROPFIND multistatus，返回文件条目（跳过集合目录自身）。"""
+    if len(xml_text.encode("utf-8")) > _MAX_PROPFIND_BYTES:
+        raise RuntimeError("WebDAV 列表响应超过 1 MiB 限制")
+    if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b", xml_text, re.IGNORECASE):
+        raise RuntimeError("WebDAV 列表响应包含不允许的 XML 声明")
     entries: List[dict] = []
     try:
-        root = ET.fromstring(xml_text)
+        root = ET.fromstring(xml_text)  # noqa: S314 - size/DTD/entity checked above
     except ET.ParseError as exc:
         raise RuntimeError(f"WebDAV 列表响应无法解析: {exc}") from exc
 
@@ -234,36 +249,37 @@ def list_webdav_files(
     limit = max(1, min(int(limit), 100))
 
     with httpx.Client(timeout=timeout, auth=auth, follow_redirects=True) as client:
-        resp = client.request(
+        response_stream = client.stream(
             "PROPFIND",
             target,
             headers={"Depth": "1", "Content-Type": "application/xml; charset=utf-8"},
             content=_PROPFIND_PROP,
         )
-        if resp.status_code in (401, 403):
-            return {
-                "success": False,
-                "files": [],
-                "message": f"认证失败 HTTP {resp.status_code}",
-                "status_code": resp.status_code,
-            }
-        if resp.status_code == 404:
-            return {
-                "success": True,
-                "files": [],
-                "message": "远端目录不存在（尚未上传过备份）",
-                "status_code": 404,
-            }
-        if resp.status_code not in (207, 200):
-            detail = (resp.text or "")[:200]
-            return {
-                "success": False,
-                "files": [],
-                "message": f"列出失败 HTTP {resp.status_code}: {detail}",
-                "status_code": resp.status_code,
-            }
-
-        entries = _parse_propfind_entries(resp.text or "", target)
+        with response_stream as resp:
+            if resp.status_code in (401, 403):
+                return {
+                    "success": False,
+                    "files": [],
+                    "message": f"认证失败 HTTP {resp.status_code}",
+                    "status_code": resp.status_code,
+                }
+            if resp.status_code == 404:
+                return {
+                    "success": True,
+                    "files": [],
+                    "message": "远端目录不存在（尚未上传过备份）",
+                    "status_code": 404,
+                }
+            body = _read_bounded_response(resp)
+            if resp.status_code not in (207, 200):
+                return {
+                    "success": False,
+                    "files": [],
+                    "message": f"列出失败 HTTP {resp.status_code}: {body[:200]}",
+                    "status_code": resp.status_code,
+                }
+            entries = _parse_propfind_entries(body, target)
+            response_status = resp.status_code
         suffix = (name_suffix or "").lower()
         if suffix:
             entries = [
@@ -278,7 +294,7 @@ def list_webdav_files(
             "success": True,
             "files": files,
             "message": f"共 {len(files)} 个文件" if files else "目录为空",
-            "status_code": resp.status_code,
+            "status_code": response_status,
             "total_matched": len(entries),
         }
 

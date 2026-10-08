@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -98,3 +99,38 @@ class TestRateLimiterSweep:
         # 到达间隔：清扫生效
         _hit(limiter, key="trigger")
         assert ("auth.login", "ghost") not in limiter._attempts
+
+
+def test_forwarded_headers_cannot_change_rate_limit_identity():
+    from backend.core.rate_limit import get_client_identifier
+
+    request = SimpleNamespace(
+        headers={"x-forwarded-for": "203.0.113.1", "x-real-ip": "203.0.113.2"},
+        client=SimpleNamespace(host="192.0.2.10"),
+    )
+    assert get_client_identifier(request) == "192.0.2.10"
+    request.headers["x-forwarded-for"] = "198.51.100.99"
+    assert get_client_identifier(request) == "192.0.2.10"
+
+
+def test_rate_limit_bucket_count_stays_bounded():
+    limiter = _limiter()
+    limiter._MAX_BUCKETS = 3
+    for name in ("a", "b", "c"):
+        _hit(limiter, key=name)
+    with pytest.raises(HTTPException) as exc:
+        _hit(limiter, key="d")
+    assert exc.value.status_code == 429
+    assert len(limiter._attempts) == 3
+
+    limiter.reset_all()
+    for _ in range(6):
+        try:
+            _hit(limiter, key="blocked")
+        except HTTPException:
+            pass
+    _hit(limiter, key="one")
+    _hit(limiter, key="two")
+    with pytest.raises(HTTPException):
+        _hit(limiter, key="new")
+    assert len(limiter._attempts) + len(limiter._blocked_until) == 3
