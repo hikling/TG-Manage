@@ -1,10 +1,12 @@
 """账号状态批量检测 Job 测试。"""
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from backend.services import account_status_jobs as jobs_mod
+from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
 from backend.services.background_job import BackgroundJobStore
 
 
@@ -61,6 +63,43 @@ def test_start_rejects_when_already_running(monkeypatch):
             jobs_mod.start_account_status_check_job(account_names=["a"])
 
 
+def test_start_rejects_account_in_card_cooldown(monkeypatch):
+    reservation = account_check_gate.reserve(["shared_a"])
+    reservation.finish("shared_a", success=True)
+    with patch.object(jobs_mod, "_normalize_names", return_value=["shared_a", "other"]):
+        with pytest.raises(AccountCheckBusy) as error:
+            jobs_mod.start_account_status_check_job(account_names=["shared_a", "other"])
+    assert error.value.remaining_seconds == 45
+    assert jobs_mod.get_account_status_job_store().list_jobs() == []
+    # The rejected batch must not leave "other" reserved.
+    account_check_gate.reserve(["other"]).release()
+
+
+@pytest.mark.asyncio
+async def test_cancel_before_runner_starts_releases_all_reservations(monkeypatch):
+    with patch.object(jobs_mod, "_normalize_names", return_value=["prestart_a", "prestart_b"]):
+        job = jobs_mod.start_account_status_check_job(account_names=["prestart_a", "prestart_b"])
+    task = jobs_mod.get_account_status_job_store()._tasks[job["job_id"]]
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0)  # run BackgroundJobStore and reservation callbacks
+    account_check_gate.reserve(["prestart_a", "prestart_b"]).release()
+
+
+@pytest.mark.asyncio
+async def test_canceled_batch_releases_unprocessed_reservations():
+    store = jobs_mod.get_account_status_job_store()
+    created = store.create_job(kind=jobs_mod.KIND, progress={"total": 2, "done": 0})
+    job_id = created["job_id"]
+    reservation = account_check_gate.reserve(["first", "second"])
+    store.request_cancel(job_id)
+    with patch("backend.services.telegram.get_telegram_service") as mock_get:
+        await jobs_mod._run_status_check(job_id, ["first", "second"], 5.0, reservation)
+    mock_get.return_value.check_account_status.assert_not_called()
+    account_check_gate.reserve(["first", "second"]).release()
+
+
 def test_normalize_names_dedupe_and_limit(monkeypatch):
     with patch("backend.services.telegram.get_telegram_service") as mock_get:
         mock_get.return_value.list_accounts.return_value = []
@@ -78,3 +117,50 @@ def test_normalize_names_rejects_path_segments():
         mock_get.return_value.list_accounts.return_value = []
         names = jobs_mod._normalize_names(["ok", "../evil", "a/b", "good"])
         assert names == ["ok", "good"]
+
+
+@pytest.mark.asyncio
+async def test_start_failure_releases_reservation_and_allows_next_job():
+    store = jobs_mod.get_account_status_job_store()
+    with patch.object(jobs_mod, "_normalize_names", return_value=["startup"]), patch.object(
+        store, "start_background", side_effect=RuntimeError("cannot schedule")
+    ):
+        with pytest.raises(RuntimeError, match="cannot schedule"):
+            jobs_mod.start_account_status_check_job(account_names=["startup"])
+    assert store.list_jobs()[0]["status"] == "failed"
+    account_check_gate.reserve(["startup"]).release()
+    with patch.object(jobs_mod, "_normalize_names", return_value=["startup"]), patch(
+        "backend.services.telegram.get_telegram_service"
+    ) as get_service:
+        get_service.return_value.check_account_status = AsyncMock(return_value={
+            "account_name": "startup", "ok": True, "status": "connected",
+        })
+        job = jobs_mod.start_account_status_check_job(account_names=["startup"])
+        await store._tasks[job["job_id"]]
+    assert store.get_job(job["job_id"])["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_cancel_during_probe_releases_remaining_accounts():
+    store = jobs_mod.get_account_status_job_store()
+    started = asyncio.Event()
+
+    async def probe(name, timeout_seconds):
+        started.set()
+        await asyncio.Future()
+
+    with patch.object(jobs_mod, "_normalize_names", return_value=["probing", "pending"]), patch(
+        "backend.services.telegram.get_telegram_service"
+    ) as get_service:
+        get_service.return_value.check_account_status = AsyncMock(side_effect=probe)
+        job = jobs_mod.start_account_status_check_job(account_names=["probing", "pending"])
+        task = store._tasks[job["job_id"]]
+        await started.wait()
+        with pytest.raises(AccountCheckBusy):
+            account_check_gate.reserve(["pending"])
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.sleep(0)
+    account_check_gate.reserve(["probing", "pending"]).release()
+    get_service.return_value.check_account_status.assert_awaited_once()

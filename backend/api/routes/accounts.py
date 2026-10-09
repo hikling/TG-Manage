@@ -49,6 +49,7 @@ from backend.api.routes.accounts_schemas import (
 from backend.core.auth import get_current_user
 from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
 from backend.models.user import User
+from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
 from backend.services.telegram import get_telegram_service
 from backend.services.telegram.credentials import resolve_login_api_credentials
 from backend.utils.names import validate_storage_name
@@ -373,28 +374,40 @@ async def check_accounts_status(
             )
         timeout_seconds = clamp_status_check_timeout(request.timeout_seconds)
         results: list[AccountStatusItem] = []
-        for idx, name in enumerate(names):
-            try:
-                item = await service.check_account_status(
-                    name, timeout_seconds=timeout_seconds
-                )
-                if item.get("ok") and request.refresh_avatar:
-                    from backend.services.avatar_cache import refresh_account_avatar
-                    try:
-                        await refresh_account_avatar(
-                            name, lambda account=name: service.download_account_avatar(account)
-                        )
-                        item["avatar_refreshed"] = True
-                    except Exception:
-                        logger.warning("刷新账号头像失败 account=%s", name)
-                        item["avatar_refresh_error"] = True
-            except Exception as exc:
-                item = build_status_check_error_item(name, exc)
-            results.append(AccountStatusItem(**item))
-            if idx < len(names) - 1:
-                await asyncio.sleep(0.15)
+        reservation = account_check_gate.reserve(names)
+        try:
+            for idx, name in enumerate(names):
+                try:
+                    item = await service.check_account_status(
+                        name, timeout_seconds=timeout_seconds
+                    )
+                    if item.get("ok") and request.refresh_avatar:
+                        from backend.services.avatar_cache import refresh_account_avatar
+                        try:
+                            await refresh_account_avatar(
+                                name, lambda account=name: service.download_account_avatar(account)
+                            )
+                            item["avatar_refreshed"] = True
+                        except Exception:
+                            logger.warning("刷新账号头像失败 account=%s", name)
+                            item["avatar_refresh_error"] = True
+                except Exception as exc:
+                    item = build_status_check_error_item(name, exc)
+                result = AccountStatusItem(**item)
+                reservation.finish(name, success=bool(result.ok))
+                results.append(result)
+                if idx < len(names) - 1:
+                    await asyncio.sleep(0.15)
+        finally:
+            reservation.release()
 
         return AccountStatusCheckResponse(results=results)
+    except AccountCheckBusy as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.remaining_seconds)},
+        ) from exc
     except HTTPException:
         raise
     except Exception as e:
@@ -418,6 +431,12 @@ async def start_account_status_check_job(
             account_names=request.account_names,
             timeout_seconds=request.timeout_seconds,
         )
+    except AccountCheckBusy as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.remaining_seconds)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception:
@@ -492,6 +511,7 @@ async def delete_account(
             for suffix in (".jpg", ".no_avatar"):
                 with contextlib.suppress(OSError):
                     (avatar_dir / f"{account_name}{suffix}").unlink(missing_ok=True)
+            get_telebox_service().forget_account(account_name)
             return DeleteAccountResponse(
                 success=True, message=f"账号 {account_name} 已删除"
             )

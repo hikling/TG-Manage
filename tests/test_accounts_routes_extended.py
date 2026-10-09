@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -529,6 +530,109 @@ class TestAvatarCache:
 
 
 class TestStatusCheckExtended:
+    @pytest.mark.asyncio
+    async def test_canceled_card_probe_releases_reservation(self):
+        from backend.services.account_check_gate import account_check_gate
+
+        svc = _svc()
+        svc.check_account_status.side_effect = asyncio.CancelledError()
+        with _patch_svc(svc), pytest.raises(asyncio.CancelledError):
+            await accounts_mod.check_accounts_status(
+                accounts_mod.AccountStatusCheckRequest(account_names=["cancel-card"]),
+                current_user=None,
+            )
+        account_check_gate.reserve(["cancel-card"]).release()
+        svc.download_account_avatar.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_successful_probe_keeps_cooldown_when_avatar_refresh_fails(self):
+        from backend.services.account_check_gate import (
+            AccountCheckBusy,
+            account_check_gate,
+        )
+
+        svc = _svc()
+        with _patch_svc(svc), patch(
+            "backend.services.avatar_cache.refresh_account_avatar", side_effect=RuntimeError("download failed")
+        ):
+            response = await accounts_mod.check_accounts_status(
+                accounts_mod.AccountStatusCheckRequest(account_names=["avatar-failed"], refresh_avatar=True),
+                current_user=None,
+            )
+        assert response.results[0].ok
+        assert response.results[0].avatar_refresh_error
+        with pytest.raises(AccountCheckBusy) as error:
+            account_check_gate.reserve(["avatar-failed"])
+        assert error.value.remaining_seconds == 45
+
+    @pytest.mark.asyncio
+    async def test_card_cooldown_starts_after_avatar_refresh_finishes(self):
+        from backend.services.account_check_gate import (
+            AccountCheckBusy,
+            account_check_gate,
+        )
+
+        svc = _svc()
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def refresh(_name, _download):
+            started.set()
+            await release.wait()
+            return True
+
+        with _patch_svc(svc), patch("backend.services.avatar_cache.refresh_account_avatar", side_effect=refresh):
+            task = asyncio.create_task(accounts_mod.check_accounts_status(
+                accounts_mod.AccountStatusCheckRequest(account_names=["timing"], refresh_avatar=True),
+                current_user=None,
+            ))
+            await started.wait()
+            with pytest.raises(AccountCheckBusy):
+                account_check_gate.reserve(["timing"])
+            release.set()
+            response = await task
+        assert response.results[0].avatar_refreshed is True
+        with pytest.raises(AccountCheckBusy) as error:
+            account_check_gate.reserve(["timing"])
+        assert error.value.remaining_seconds == 45
+
+    def test_successful_card_check_blocks_same_account_batch_for_45_seconds(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        with _patch_svc(svc):
+            first = api_client.post(
+                "/api/accounts/status/check",
+                json={"account_names": ["cooldown_a"], "refresh_avatar": True},
+                headers=_auth(token),
+            )
+            repeated = api_client.post(
+                "/api/accounts/status/check",
+                json={"account_names": ["cooldown_b", "cooldown_a"]},
+                headers=_auth(token),
+            )
+        assert first.status_code == 200
+        assert repeated.status_code == 429
+        assert repeated.headers["retry-after"] == "45"
+        assert svc.check_account_status.await_count == 1
+        assert svc.download_account_avatar.await_count == 1
+
+    def test_failed_check_can_retry_without_cooldown(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        svc.check_account_status = AsyncMock(side_effect=[
+            {"account_name": "retry_a", "ok": False, "status": "error", "message": "failed"},
+            {"account_name": "retry_a", "ok": True, "status": "connected", "message": "ok"},
+        ])
+        with _patch_svc(svc):
+            first = api_client.post(
+                "/api/accounts/status/check", json={"account_names": ["retry_a"]}, headers=_auth(token)
+            )
+            second = api_client.post(
+                "/api/accounts/status/check", json={"account_names": ["retry_a"]}, headers=_auth(token)
+            )
+        assert first.status_code == second.status_code == 200
+        assert svc.check_account_status.await_count == 2
+
     def test_per_account_failure_and_timeout_clamp(self, api_client, db):  # noqa: F811
         token = _login(api_client)
         svc = _svc()
@@ -799,6 +903,10 @@ class TestAvatarStaleCache:
         )
         stale = marker.stat().st_mtime - 8 * 86400
         os.utime(marker, (stale, stale))
+        # This test exercises expired avatar metadata, not the new check cooldown.
+        from backend.services.account_check_gate import account_check_gate
+
+        account_check_gate._deadlines.pop("ava_f", None)
         svc.download_account_avatar.return_value = b"\xff\xd8\xffnew"
         svc.download_account_avatar.side_effect = None
         with _patch_svc(svc):

@@ -105,6 +105,18 @@ def no_external_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def reset_account_check_gate() -> Iterator[None]:
+    """Keep the process-local cooldown isolated across independent test cases."""
+    from backend.services.account_check_gate import account_check_gate
+
+    account_check_gate._in_flight.clear()
+    account_check_gate._deadlines.clear()
+    yield
+    account_check_gate._in_flight.clear()
+    account_check_gate._deadlines.clear()
+
+
+@pytest.fixture(autouse=True)
 def ensure_event_loop() -> Iterator[None]:
     """
     保证同步测试始终有可用的事件循环。
