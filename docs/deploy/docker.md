@@ -6,7 +6,7 @@
 
 - Linux 主机安装 Docker Engine 24+、Docker Compose v2 和 Git；主机需能下载 Python/npm 依赖并连接 Telegram。
 - 私有仓库需要对应 GitHub 读取权限。
-- Compose 默认限制容器为 2 GiB 内存和 2 CPU；每个运行中的 TeleBox 账号还会启动独立 Node 进程。
+- 小型部署最低支持 1 vCPU / 1 GiB RAM；Compose 不设置固定 CPU 或内存上限。更大的实例可以按账号数量和实际负载扩容，每个运行中的 TeleBox 账号还会启动独立 Node 进程。
 - 需要自己的 Telegram API ID/Hash 时，在未提交的 `.env` 中设置 `TG_MANAGE_TG_API_ID` 和 `TG_MANAGE_TG_API_HASH`。旧部署的 `SIGNPULSE_TG_API_*`、`TG_API_*` 仍可读取。
 
 ## 首次安装

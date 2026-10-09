@@ -26,7 +26,9 @@ import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import Modal from '../components/Modal.vue'
 import { createViewPrefetcher } from '../lib/view-prefetch'
-import { deleteHeroImage, getHeroImage, MAX_HERO_IMAGE_BYTES, uploadHeroImage } from '../lib/api/appearance'
+import { deleteHeroImage, getHeroImage, getHeroSettings, MAX_HERO_IMAGE_BYTES, saveHeroSettings, uploadHeroImage } from '../lib/api/appearance'
+import { getGlobalSettings, saveGlobalSettings } from '../lib/api/settings'
+import { getAuthToken } from '../lib/api/core'
 
 const route = useRoute()
 const { isDark, toggleTheme, accentColor, setAccentColor } = useTheme()
@@ -38,6 +40,11 @@ const heroInput = ref<HTMLInputElement | null>(null)
 const heroBusy = ref(false)
 const heroPresent = ref(false)
 const heroFeedback = ref('')
+const heroPreviewUrl = ref('')
+const heroPositionX = ref(50)
+const heroPositionY = ref(50)
+let accentSaveTimer: ReturnType<typeof setTimeout> | undefined
+let heroPositionSaveTimer: ReturnType<typeof setTimeout> | undefined
 const sidebarCollapsed = ref(true)
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
@@ -52,11 +59,52 @@ const sidebarHidden = computed(() => isMobileView.value && !isMobileMenuOpen.val
 
 async function refreshHeroPresence() {
   try {
-    await getHeroImage()
-    heroPresent.value = true
+    const [blob, settings] = await Promise.all([getHeroImage(), getHeroSettings()])
+    if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
+    heroPreviewUrl.value = URL.createObjectURL(blob)
+    heroPresent.value = settings.present
+    heroPositionX.value = settings.position_x
+    heroPositionY.value = settings.position_y
   } catch {
     heroPresent.value = false
+    if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
+    heroPreviewUrl.value = ''
   }
+}
+
+async function loadAppearanceSettings() {
+  try {
+    const settings = await getGlobalSettings(getAuthToken())
+    if (settings.appearance_accent_color) setAccentColor(settings.appearance_accent_color)
+    heroPositionX.value = settings.hero_position_x ?? heroPositionX.value
+    heroPositionY.value = settings.hero_position_y ?? heroPositionY.value
+  } catch {
+    // Keep the browser-local fallback when the settings endpoint is unavailable.
+  }
+  await refreshHeroPresence()
+}
+
+function handleAccentChange(color: string) {
+  if (!setAccentColor(color)) return
+  if (accentSaveTimer) clearTimeout(accentSaveTimer)
+  accentSaveTimer = setTimeout(async () => {
+    try {
+      await saveGlobalSettings(getAuthToken(), { appearance_accent_color: accentColor.value })
+    } catch {
+      heroFeedback.value = '主题色已应用到当前页面，但服务器保存失败'
+    }
+  }, 350)
+}
+
+function persistHeroPosition() {
+  if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
+  heroPositionSaveTimer = setTimeout(async () => {
+    try {
+      await saveHeroSettings(heroPositionX.value, heroPositionY.value)
+    } catch {
+      heroFeedback.value = '封面位置已应用，但服务器保存失败'
+    }
+  }, 250)
 }
 
 async function onHeroSelected(event: Event) {
@@ -72,6 +120,8 @@ async function onHeroSelected(event: Event) {
   heroFeedback.value = '正在上传封面…'
   try {
     await uploadHeroImage(file)
+    if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
+    heroPreviewUrl.value = URL.createObjectURL(file)
     heroPresent.value = true
     heroFeedback.value = '封面已更新'
     window.dispatchEvent(new Event('tg-manage:hero-changed'))
@@ -88,6 +138,10 @@ async function resetHeroImage() {
   try {
     await deleteHeroImage()
     heroPresent.value = false
+    heroPositionX.value = 50
+    heroPositionY.value = 50
+    if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
+    heroPreviewUrl.value = ''
     heroFeedback.value = '已恢复默认封面'
     window.dispatchEvent(new Event('tg-manage:hero-changed'))
   } catch {
@@ -125,7 +179,7 @@ watch(isMobileMenuOpen, async (open, prev) => {
 })
 
 onMounted(() => {
-  void refreshHeroPresence()
+  void loadAppearanceSettings()
   window.addEventListener('keydown', onKeydown)
   mobileQuery.addEventListener('change', onViewportChange)
 })
@@ -136,6 +190,9 @@ onUnmounted(() => {
     unlockBodyScroll()
     menuScrollLocked = false
   }
+  if (accentSaveTimer) clearTimeout(accentSaveTimer)
+  if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
+  if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
 })
 
 const viewLoaders: Record<string, () => Promise<unknown>> = {
@@ -329,18 +386,25 @@ const handleNavClick = () => {
       <UserProfileModal :isOpen="showProfileModal" @close="showProfileModal = false" />
       <Modal :isOpen="showAppearanceModal" title="自定义主题" maxWidthClass="max-w-lg" @close="showAppearanceModal = false">
         <div class="appearance-picker">
-          <p>选择一种 2026 趋势配色，或使用下方色盘。仅影响当前浏览器的界面，不改动账号数据。</p>
+          <p>选择一种 2026 趋势配色，或使用下方色盘。主题色会保存到服务器并在刷新后恢复。</p>
           <div class="appearance-preset-grid" role="group" aria-label="2026 趋势配色">
-            <button v-for="preset in ACCENT_PRESETS" :key="preset.color" type="button" class="appearance-preset" :aria-pressed="accentColor === preset.color" @click="setAccentColor(preset.color)">
+            <button v-for="preset in ACCENT_PRESETS" :key="preset.color" type="button" class="appearance-preset" :aria-pressed="accentColor === preset.color" @click="handleAccentChange(preset.color)">
               <span class="appearance-swatch" :style="{ backgroundColor: preset.color }" aria-hidden="true" />{{ preset.name }}
             </button>
           </div>
           <label class="appearance-custom-label" for="accent-custom-color">自定义颜色</label>
-          <div class="appearance-custom-control"><input id="accent-custom-color" type="color" :value="accentColor" @input="setAccentColor(($event.target as HTMLInputElement).value)" /><code>{{ accentColor.toUpperCase() }}</code></div>
+          <div class="appearance-custom-control"><input id="accent-custom-color" type="color" :value="accentColor" @input="handleAccentChange(($event.target as HTMLInputElement).value)" /><code>{{ accentColor.toUpperCase() }}</code></div>
           <div class="appearance-cover-control">
             <h3 class="text-sm font-medium">仪表盘封面</h3>
-            <p class="text-xs">支持 JPEG、PNG、WebP，新上传图片不超过 1 MB。</p>
+            <p class="text-xs">支持 JPEG、PNG、WebP，不超过 1 MB。上传后可调整仪表盘展示区域。</p>
             <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" aria-label="选择仪表盘封面图片" @change="onHeroSelected" />
+            <div v-if="heroPreviewUrl" class="appearance-cover-preview" :style="{ backgroundImage: `url('${heroPreviewUrl}')`, backgroundPosition: `${heroPositionX}% ${heroPositionY}%` }" aria-label="封面预览">
+              <span>预览仪表盘展示区域</span>
+            </div>
+            <div v-if="heroPreviewUrl" class="appearance-cover-position">
+              <label>水平位置 <input v-model.number="heroPositionX" type="range" min="0" max="100" step="1" @input="persistHeroPosition" /><output>{{ heroPositionX }}%</output></label>
+              <label>垂直位置 <input v-model.number="heroPositionY" type="range" min="0" max="100" step="1" @input="persistHeroPosition" /><output>{{ heroPositionY }}%</output></label>
+            </div>
             <div class="flex flex-wrap gap-2">
               <button type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroPresent ? '更换封面' : '上传封面' }}</button>
               <button v-if="heroPresent" type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="resetHeroImage"><RotateCcw :size="16" aria-hidden="true" />恢复默认</button>

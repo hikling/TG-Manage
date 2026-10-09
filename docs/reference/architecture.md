@@ -21,4 +21,4 @@ Compose 把宿主机 `./data` 挂载到容器 `/data`。SQLite 默认保存在�
 
 ## 资源
 
-默认 Compose 限制容器使用 2 GiB 内存和 2 CPU。仪表盘显示当前进程内存，容器总内存还包括各账号 TeleBox 子进程。部署多个常驻账号时，按实际运行情况观察 `docker stats` 并调整资源。
+小型部署最低支持 1 vCPU / 1 GiB RAM，默认并发会根据 CPU 和容器可用资源自适应；Compose 不设置固定 CPU 或内存上限。仪表盘显示当前进程内存，容器总内存还包括各账号 TeleBox 子进程。部署多个常驻账号时，按实际运行情况观察 `docker stats` 并扩容。

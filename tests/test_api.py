@@ -557,6 +557,53 @@ class TestTimezoneSettings:
 
 
 
+class TestAppearanceSettings:
+    """Server-backed accent color and dashboard cover position endpoints."""
+
+    def test_accent_color_round_trip(self, api_client):
+        token = _login(api_client)
+        saved = api_client.post(
+            "/api/config/settings",
+            json={"appearance_accent_color": "#AABBCC"},
+            headers=_auth(token),
+        )
+        assert saved.status_code == 200
+        loaded = api_client.get("/api/config/settings", headers=_auth(token))
+        assert loaded.status_code == 200
+        assert loaded.json()["appearance_accent_color"] == "#aabbcc"
+
+    def test_hero_upload_rejects_more_than_one_mebibyte(self, api_client):
+        from backend.services.appearance import MAX_HERO_UPLOAD_BYTES
+
+        token = _login(api_client)
+        payload = b"\x89PNG\r\n\x1a\n" + b"x" * MAX_HERO_UPLOAD_BYTES
+        response = api_client.put(
+            "/api/appearance/hero-image",
+            files={"file": ("hero.png", payload, "image/png")},
+            headers=_auth(token),
+        )
+        assert response.status_code == 400
+
+    def test_hero_position_round_trip_and_delete_reset(self, api_client):
+        token = _login(api_client)
+        saved = api_client.put(
+            "/api/appearance/hero-settings",
+            json={"position_x": 18.5, "position_y": 82.0},
+            headers=_auth(token),
+        )
+        assert saved.status_code == 200
+        assert saved.json()["position_x"] == 18.5
+        loaded = api_client.get("/api/appearance/hero-settings", headers=_auth(token))
+        assert loaded.json()["position_x"] == 18.5
+        assert loaded.json()["position_y"] == 82.0
+
+        deleted = api_client.delete("/api/appearance/hero-image", headers=_auth(token))
+        assert deleted.status_code == 204
+        reset = api_client.get("/api/appearance/hero-settings", headers=_auth(token))
+        assert reset.json()["position_x"] == 50.0
+        assert reset.json()["position_y"] == 50.0
+
+
 class TestDeviceKeepaliveRunResponse:
     """设备保活手动执行端点的响应建模守钉"""
 

@@ -34,10 +34,19 @@ def test_rejects_invalid_or_large_upload(content):
         appearance.save_hero(content)
 
 
-def test_rejects_oversized_image():
-    content = b"\x89PNG\r\n\x1a\n" + b"x" * appearance.MAX_HERO_UPLOAD_BYTES
+def test_accepts_exactly_one_mebibyte(cover_workdir):
+    content = b"\x89PNG\r\n\x1a\n" + b"x" * (appearance.MAX_HERO_UPLOAD_BYTES - 8)
+    appearance.save_hero(content)
+    assert appearance.read_hero() == (content, "image/png")
+
+
+def test_rejects_oversized_image_without_replacing_existing_cover(cover_workdir):
+    original = b"\x89PNG\r\n\x1a\noriginal"
+    appearance.save_hero(original)
+    oversized = b"\x89PNG\r\n\x1a\n" + b"x" * appearance.MAX_HERO_UPLOAD_BYTES
     with pytest.raises(ValueError, match="JPEG、PNG 或 WebP"):
-        appearance.save_hero(content)
+        appearance.save_hero(oversized)
+    assert appearance.read_hero() == (original, "image/png")
 
 
 def test_accepts_jpeg_and_webp():
@@ -45,9 +54,33 @@ def test_accepts_jpeg_and_webp():
     assert appearance.image_media_type(b"RIFF\x00\x00\x00\x00WEBPmore") == "image/webp"
 
 
-def test_existing_large_cover_remains_readable(cover_workdir):
-    content = b"\x89PNG\r\n\x1a\n" + b"x" * (appearance.MAX_HERO_UPLOAD_BYTES + 1)
+def test_existing_oversized_cover_is_ignored(cover_workdir):
+    content = b"\x89PNG\r\n\x1a\n" + b"x" * appearance.MAX_HERO_UPLOAD_BYTES
     path = cover_workdir / "appearance" / "dashboard-hero.bin"
     path.parent.mkdir(parents=True)
     path.write_bytes(content)
-    assert appearance.read_hero() == (content, "image/png")
+    assert appearance.read_hero() is None
+
+
+def test_hero_position_round_trip_and_reset(monkeypatch):
+    state = {"hero_position_x": 50.0, "hero_position_y": 50.0}
+
+    class FakeConfig:
+        def get_global_settings(self):
+            return dict(state)
+
+        def save_global_settings(self, values):
+            state.update(values)
+            return True
+
+    monkeypatch.setattr(
+        "backend.services.config.get_config_service",
+        lambda: FakeConfig(),
+    )
+
+    appearance.save_hero_position(12.5, 87.25)
+    assert appearance.get_hero_position() == (12.5, 87.25)
+    appearance.save_hero_position(*appearance.DEFAULT_HERO_POSITION)
+    assert appearance.get_hero_position() == appearance.DEFAULT_HERO_POSITION
+    state.update({"hero_position_x": float("nan"), "hero_position_y": 200})
+    assert appearance.get_hero_position() == (50.0, 100.0)

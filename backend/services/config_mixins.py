@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -35,6 +36,8 @@ _GLOBAL_SETTING_INT_CLAMPS = {
     "auto_backup_interval_hours": (1, 168),
     "auto_backup_keep": (1, 30),
 }
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-f]{6}$", re.IGNORECASE)
+_GLOBAL_SETTING_POSITION_FIELDS = ("hero_position_x", "hero_position_y")
 
 
 def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -55,6 +58,22 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
             normalized[key] = (
                 None if value is None else max(low, min(int(value), high))
             )
+
+    if "appearance_accent_color" in normalized:
+        color = str(normalized["appearance_accent_color"] or "").strip().lower()
+        if not _HEX_COLOR_RE.fullmatch(color):
+            raise ValueError("主题色必须是六位十六进制颜色")
+        normalized["appearance_accent_color"] = color
+
+    for key in _GLOBAL_SETTING_POSITION_FIELDS:
+        if key in normalized:
+            try:
+                value = float(normalized[key])
+            except (TypeError, ValueError) as exc:
+                raise ValueError("封面位置必须是 0 到 100 之间的数字") from exc
+            if value != value or value in (float("inf"), float("-inf")):
+                raise ValueError("封面位置必须是 0 到 100 之间的数字")
+            normalized[key] = round(max(0.0, min(value, 100.0)), 2)
 
     # Token 空串不修改；非空去空白（与原路由行为一致）
     if "telegram_bot_token" in normalized:
@@ -219,6 +238,9 @@ class GlobalSettingsMixin:
             "webdav_username": None,
             "webdav_password": None,
             "webdav_remote_dir": "tg-manage-backups",
+            "appearance_accent_color": "#3d6fa8",
+            "hero_position_x": 50.0,
+            "hero_position_y": 50.0,
         }
 
         settings = self._read_json_file(config_file)

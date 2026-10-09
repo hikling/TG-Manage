@@ -15,7 +15,8 @@ services:
       # 管理员在首次网页设置流程中设定密码。
       # 单实例保持 1；多 API 副本时仅写节点持锁
       - APP_SCHEDULER_LOCK=1
-      - TG_GLOBAL_CONCURRENCY=${TG_GLOBAL_CONCURRENCY:-2}
+      # Leave blank so the backend chooses a cgroup-aware CPU default; set TG_GLOBAL_CONCURRENCY to override.
+      - TG_GLOBAL_CONCURRENCY=${TG_GLOBAL_CONCURRENCY:-}
       - TELEBOX_NODE_HEAP_MB=${TELEBOX_NODE_HEAP_MB:-128}
       - TB_PREFIX=${TB_PREFIX:-}
       - TB_LISTENER_HANDLE_EDITED=${TB_LISTENER_HANDLE_EDITED:-}
@@ -56,5 +57,3 @@ services:
         max-size: "10m"
         max-file: "3"
     restart: unless-stopped
-    mem_limit: 2g
-    cpus: 2.0

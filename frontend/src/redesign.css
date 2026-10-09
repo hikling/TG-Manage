@@ -223,6 +223,44 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .appearance-custom-control { display: flex; align-items: center; gap: 12px; }
 .appearance-custom-control input { width: 60px; height: 44px; cursor: pointer; }
 .appearance-custom-control code { color: var(--tg-text-muted); }
+.appearance-cover-preview {
+  min-height: 132px;
+  border: 1px solid var(--tg-border);
+  border-radius: 14px;
+  background-color: var(--tg-bg-muted);
+  background-repeat: no-repeat;
+  background-size: cover;
+  display: grid;
+  place-items: end start;
+  overflow: hidden;
+  position: relative;
+}
+.appearance-cover-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 45%, rgb(10 20 32 / .62));
+}
+.appearance-cover-preview span {
+  position: relative;
+  z-index: 1;
+  margin: 12px;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 650;
+  text-shadow: 0 1px 2px rgb(0 0 0 / .35);
+}
+.appearance-cover-position { display: grid; gap: 8px; }
+.appearance-cover-position label {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 10px;
+  color: var(--tg-text-muted);
+  font-size: .78rem;
+}
+.appearance-cover-position input { accent-color: var(--tg-accent); min-width: 0; }
+.appearance-cover-position output { text-align: right; color: var(--tg-text); font-variant-numeric: tabular-nums; }
 .dashboard-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .dashboard-metric {
   display: flex; flex-direction: column; min-width: 0; min-height: 215px; padding: 24px;
