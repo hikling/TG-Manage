@@ -507,7 +507,7 @@
     "dataDir": "数据目录",
     "proxy": "全局代理",
     "concurrency": "Telegram 并发数",
-    "concurrencyPlaceholder": "留空使用服务器默认值（2 核约为 2）",
+    "concurrencyPlaceholder": "留空使用服务器默认值（按 CPU 与容器资源自适应）",
     "deviceKeepalive": "设备保活",
     "deviceKeepaliveDesc": "定期轻量唤醒账号会话，降低 6 个月不活跃后被 Telegram 自动踢下线的风险。",
     "deviceKeepaliveIntervalHint": "单位：天。建议 30 天；最大 170 天，需小于 Telegram 约 6 个月不活跃限制。",

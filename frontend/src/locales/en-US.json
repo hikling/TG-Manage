@@ -507,7 +507,7 @@
     "dataDir": "Data Directory",
     "proxy": "Global Proxy",
     "concurrency": "Telegram Concurrency",
-    "concurrencyPlaceholder": "Blank uses server default (2 on 2 CPUs)",
+    "concurrencyPlaceholder": "Blank uses a CPU- and container-aware server default",
     "deviceKeepalive": "Device Keepalive",
     "deviceKeepaliveDesc": "Periodically performs a lightweight account check to reduce the risk of Telegram terminating sessions after about 6 months of inactivity.",
     "deviceKeepaliveIntervalHint": "Unit: days. Recommended: 30; max: 170, below Telegram's roughly 6-month inactivity limit.",

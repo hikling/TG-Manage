@@ -152,6 +152,9 @@ class GlobalSettingsRequest(BaseModel):
     webdav_username: Optional[str] = None
     webdav_password: Optional[str] = None
     webdav_remote_dir: Optional[str] = None
+    appearance_accent_color: Optional[str] = None
+    hero_position_x: Optional[float] = None
+    hero_position_y: Optional[float] = None
 
 
 class GlobalSettingsResponse(BaseModel):
@@ -183,6 +186,9 @@ class GlobalSettingsResponse(BaseModel):
     webdav_password: Optional[str] = None
     webdav_password_set: bool = False
     webdav_remote_dir: Optional[str] = "tg-manage-backups"
+    appearance_accent_color: str = "#3d6fa8"
+    hero_position_x: float = 50.0
+    hero_position_y: float = 50.0
 
 
 @router.get("/settings", response_model=GlobalSettingsResponse)

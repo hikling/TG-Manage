@@ -10,7 +10,7 @@ import type { AccountInfo } from '../lib/api'
 import { getMemoryStats } from '../lib/api/ops'
 import { getAuthToken } from '../lib/api/core'
 import { formatMemoryRssFromStats } from '../lib/memory-format'
-import { getHeroImage } from '../lib/api/appearance'
+import { getHeroImage, getHeroSettings } from '../lib/api/appearance'
 
 const store = useAccountsStore()
 const telebox = ref<TeleBoxAccount[]>([])
@@ -20,6 +20,7 @@ const memoryRss = ref('读取中…')
 const memoryStatus = ref('正在获取当前服务进程内存')
 const memoryUpdatedAt = ref('')
 const heroImageUrl = ref('')
+const heroPosition = ref('50% 50%')
 let heroObjectUrl = ''
 let memoryTimer: ReturnType<typeof setTimeout> | undefined
 let memoryInFlight = false
@@ -90,13 +91,17 @@ function showHeroBlob(blob: Blob) {
 
 async function loadHeroImage() {
   try {
-    const blob = await getHeroImage()
-    if (active) showHeroBlob(blob)
+    const [blob, settings] = await Promise.all([getHeroImage(), getHeroSettings()])
+    if (active) {
+      heroPosition.value = `${settings.position_x}% ${settings.position_y}%`
+      showHeroBlob(blob)
+    }
   } catch {
     if (active) {
       if (heroObjectUrl) URL.revokeObjectURL(heroObjectUrl)
       heroObjectUrl = ''
       heroImageUrl.value = ''
+      heroPosition.value = '50% 50%'
     }
   }
 }
@@ -120,7 +125,7 @@ onUnmounted(() => {
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
     <section class="dashboard-hero" :class="{ 'dashboard-hero--custom': !!heroImageUrl }">
-      <div v-if="heroImageUrl" class="dashboard-hero-image" :style="{ backgroundImage: `url('${heroImageUrl}')` }" aria-hidden="true" />
+      <div v-if="heroImageUrl" class="dashboard-hero-image" :style="{ backgroundImage: `url('${heroImageUrl}')`, backgroundPosition: heroPosition }" aria-hidden="true" />
       <div class="dashboard-hero-copy">
         <h2>一眼掌握，<br><span>每一次运行。</span></h2>
         <p>账号与 TeleBox 状态汇聚于此。需要处理的变化，随时清晰可见。</p>

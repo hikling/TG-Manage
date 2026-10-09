@@ -84,3 +84,14 @@ class TestGlobalSettingsCache:
         assert b.read_count == 0
         b.get_global_settings()
         assert b.read_count == 1
+
+    def test_appearance_settings_round_trip_and_normalization(self, mixin):
+        assert mixin.save_global_settings({
+            "appearance_accent_color": "#AABBCC",
+            "hero_position_x": 120,
+            "hero_position_y": -10,
+        })
+        settings = mixin.get_global_settings()
+        assert settings["appearance_accent_color"] == "#aabbcc"
+        assert settings["hero_position_x"] == 100.0
+        assert settings["hero_position_y"] == 0.0
