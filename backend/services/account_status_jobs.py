@@ -12,6 +12,10 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from backend.core.config import get_settings
+from backend.services.account_check_gate import (
+    AccountCheckReservation,
+    account_check_gate,
+)
 from backend.services.background_job import BackgroundJobStore
 from backend.utils.names import validate_storage_name
 from tg_manage.utils import clamp
@@ -79,7 +83,12 @@ def _clamp_timeout(value: Any) -> float:
     return clamp(timeout, MIN_TIMEOUT, MAX_TIMEOUT)
 
 
-async def _run_status_check(job_id: str, names: List[str], timeout_seconds: float) -> None:
+async def _run_status_check(
+    job_id: str,
+    names: List[str],
+    timeout_seconds: float,
+    reservation: AccountCheckReservation | None = None,
+) -> None:
     from backend.services.telegram import get_telegram_service
 
     store = get_account_status_job_store()
@@ -94,60 +103,66 @@ async def _run_status_check(job_id: str, names: List[str], timeout_seconds: floa
         f"开始批量检测 {len(names)} 个账号，超时 {timeout_seconds:.1f}s",
     )
 
-    for idx, name in enumerate(names):
-        if store.is_cancel_requested(job_id):
-            store.append_log(job_id, "info", "检测已取消")
-            break
-        try:
-            item = await service.check_account_status(
-                name, timeout_seconds=timeout_seconds
-            )
-        except Exception as exc:
-            item = {
-                "account_name": name,
-                "ok": False,
-                "status": "error",
-                "message": str(exc) or "status check failed",
-                "code": "STATUS_CHECK_FAILED",
-                "checked_at": None,
-                "needs_relogin": False,
-            }
-        if not isinstance(item, dict):
-            item = {
-                "account_name": name,
-                "ok": False,
-                "status": "error",
-                "message": "invalid status payload",
-                "code": "STATUS_CHECK_FAILED",
-            }
-        results.append(item)
-        if item.get("ok"):
-            ok_count += 1
-            store.append_log(job_id, "info", f"{name}: 正常", ref=name, persist=False)
-        else:
-            fail_count += 1
-            msg = item.get("message") or item.get("code") or item.get("status") or "异常"
-            store.append_log(job_id, "error", f"{name}: {msg}", ref=name, persist=False)
+    try:
+        for idx, name in enumerate(names):
+            if store.is_cancel_requested(job_id):
+                store.append_log(job_id, "info", "检测已取消")
+                break
+            try:
+                item = await service.check_account_status(
+                    name, timeout_seconds=timeout_seconds
+                )
+            except Exception as exc:
+                item = {
+                    "account_name": name,
+                    "ok": False,
+                    "status": "error",
+                    "message": str(exc) or "status check failed",
+                    "code": "STATUS_CHECK_FAILED",
+                    "checked_at": None,
+                    "needs_relogin": False,
+                }
+            if not isinstance(item, dict):
+                item = {
+                    "account_name": name,
+                    "ok": False,
+                    "status": "error",
+                    "message": "invalid status payload",
+                    "code": "STATUS_CHECK_FAILED",
+                }
+            if reservation is not None:
+                reservation.finish(name, success=bool(item.get("ok")))
+            results.append(item)
+            if item.get("ok"):
+                ok_count += 1
+                store.append_log(job_id, "info", f"{name}: 正常", ref=name, persist=False)
+            else:
+                fail_count += 1
+                msg = item.get("message") or item.get("code") or item.get("status") or "异常"
+                store.append_log(job_id, "error", f"{name}: {msg}", ref=name, persist=False)
 
-        # 过程结果落盘，供前端轮询渐进刷新卡片状态
-        job = store.jobs.get(job_id)
-        if job is not None:
-            job["results"] = list(results)
-            job["summary"] = {
-                "total": len(names),
-                "checked": len(results),
-                "ok": ok_count,
-                "fail": fail_count,
-            }
-        store.update_progress(
-            job_id,
-            done=idx + 1,
-            total=len(names),
-            extra={"ok": ok_count, "fail": fail_count},
-            persist=True,
-        )
-        if idx < len(names) - 1 and not store.is_cancel_requested(job_id):
-            await asyncio.sleep(INTER_DELAY_SECONDS)
+            # 过程结果落盘，供前端轮询渐进刷新卡片状态
+            job = store.jobs.get(job_id)
+            if job is not None:
+                job["results"] = list(results)
+                job["summary"] = {
+                    "total": len(names),
+                    "checked": len(results),
+                    "ok": ok_count,
+                    "fail": fail_count,
+                }
+            store.update_progress(
+                job_id,
+                done=idx + 1,
+                total=len(names),
+                extra={"ok": ok_count, "fail": fail_count},
+                persist=True,
+            )
+            if idx < len(names) - 1 and not store.is_cancel_requested(job_id):
+                await asyncio.sleep(INTER_DELAY_SECONDS)
+    finally:
+        if reservation is not None:
+            reservation.release()
 
     summary = {
         "total": len(names),
@@ -178,25 +193,38 @@ def start_account_status_check_job(
             }:
                 raise ValueError("已有批量状态检测在运行，请稍后再试或先取消")
 
-        created = store.create_job(
-            kind=KIND,
-            payload={
-                "account_names": names,
-                "timeout_seconds": timeout,
-            },
-            progress={"total": len(names), "done": 0, "ok": 0, "fail": 0},
-        )
-        job_id = str(created["job_id"])
+        reservation = account_check_gate.reserve(names)
+        job_id: str | None = None
+        try:
+            created = store.create_job(
+                kind=KIND,
+                payload={
+                    "account_names": names,
+                    "timeout_seconds": timeout,
+                },
+                progress={"total": len(names), "done": 0, "ok": 0, "fail": 0},
+            )
+            job_id = str(created["job_id"])
 
-        async def _runner() -> None:
-            try:
-                await _run_status_check(job_id, names, timeout)
-            except Exception as exc:
-                logger.exception("账号状态检测任务 %s 失败", job_id)
-                store.mark_failed(job_id, str(exc) or "status check job failed")
+            async def _runner() -> None:
+                try:
+                    await _run_status_check(job_id, names, timeout, reservation)
+                except Exception as exc:
+                    logger.exception("账号状态检测任务 %s 失败", job_id)
+                    store.mark_failed(job_id, str(exc) or "status check job failed")
+                finally:
+                    reservation.release()
 
-        store.start_background(job_id, _runner, name=f"account-status-{job_id[:8]}")
-        return store.get_job(job_id) or created
+            task = store.start_background(job_id, _runner, name=f"account-status-{job_id[:8]}")
+            # A task canceled before its first scheduling step never enters
+            # _runner's finally block; release that reservation on completion.
+            task.add_done_callback(lambda _done: reservation.release())
+            return store.get_job(job_id) or created
+        except BaseException:
+            reservation.release()
+            if job_id is not None:
+                store.mark_failed(job_id, "账号状态检测任务启动失败")
+            raise
 
 
 def get_account_status_job(job_id: str) -> Optional[Dict[str, Any]]:

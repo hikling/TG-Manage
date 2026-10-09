@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -58,3 +59,24 @@ async def test_status_probe_releases_client_on_all_outcomes(tmp_path, monkeypatc
         assert result["ok"] is (behavior == "ok")
         assert client.active == 0
     assert client.enters == client.exits == iterations
+
+
+@pytest.mark.asyncio
+async def test_avatar_download_closes_in_memory_media_buffer(tmp_path, monkeypatch):
+    data = io.BytesIO(b"\xff\xd8\xffavatar")
+
+    class PhotoClient(_Client):
+        async def get_me(self):
+            return SimpleNamespace(photo=SimpleNamespace(small_file_id="small"))
+
+        async def download_media(self, _file_id, *, in_memory):
+            assert in_memory is True
+            return data
+
+    client = PhotoClient()
+    monkeypatch.setattr("tg_manage.core.get_client", lambda *_args, **_kwargs: client)
+    monkeypatch.setattr(accounts_mod, "get_session_mode", lambda: "file")
+    monkeypatch.setattr(accounts_mod, "get_account_profile", lambda _name: {})
+    assert await _Service(tmp_path).download_account_avatar("sample") == b"\xff\xd8\xffavatar"
+    assert data.closed
+    assert client.active == 0

@@ -346,8 +346,11 @@ class TelegramAccountsMixin:
                         timeout=15,
                     )
                     if photo_bytes:
-                        photo_bytes.seek(0)
-                        return photo_bytes.read()
+                        try:
+                            photo_bytes.seek(0)
+                            return photo_bytes.read()
+                        finally:
+                            photo_bytes.close()
                     return None
         except Exception as e:
             # 瞬时错误（网络/限流/会话失效）不能与"无头像"混为一谈：抛出让路由层区分

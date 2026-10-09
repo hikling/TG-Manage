@@ -9,9 +9,9 @@
 <a id="features"></a>
 ## ✨ Features
 
-- **👥 Account management** — Sign in by code or QR, check account status, refresh avatars on demand, and set account-specific proxies.
+- **👥 Account management** — Sign in by code or QR, check status, refresh avatars on demand, and set per-account proxies. Single and batch checks share a 45-second interval after each successful account check.
 - **💬 Chat center** — Browse group conversations by account, search, send attachments, reply, edit, and delete messages. Chat can be switched on independently.
-- **🤖 Private bot** — Only the configured private target ID may use `/code account-name` to query a code from the last five minutes of `777000`, or `/me` to list local account names and remarks. Idle operation never scans account messages.
+- **🤖 Private bot** — Only the configured private target ID may use `/code account-name` to query a code from the last five minutes of `777000`, or `/me` to list local account names and remarks. Both commands share a 45-second interval; idle operation never scans account messages.
 - **🎨 Dashboard and appearance** — View current process memory, select an accent color, and upload or restore the dashboard cover in theme settings.
 - **🔌 Integrated TeleBox** — Each enabled account gets a separate Telegram session and runtime directory, with status and logs on its account card. The pinned upstream revision is recorded in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json).
 

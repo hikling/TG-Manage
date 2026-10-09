@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import re
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,12 +24,68 @@ logger = logging.getLogger("backend.official_code_bot")
 CODE_AGE_SECONDS = 5 * 60
 POLL_SECONDS = 20
 MAX_BOT_MESSAGE_CHARS = 3500
+COMMAND_COOLDOWN_SECONDS = 45
 _CODE_PATTERN = re.compile(
     r"(?:code|验证码|登录码|登入码)[^0-9]{0,32}([0-9]{5,8})(?![0-9])",
     re.IGNORECASE,
 )
 _PRIVATE_ID = re.compile(r"[1-9][0-9]{0,18}\Z")
 _status = "未启用"
+
+
+class _CommandGate:
+    """Serialize target commands without keeping Telegram data in the gate."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._config: tuple[str, int] | None = None
+        self._deadline = 0.0
+        self._in_flight: object | None = None
+        self._notice: object | None = None
+
+    def sync(self, config: tuple[str, int] | None) -> None:
+        with self._lock:
+            if config != self._config:
+                self._config = config
+                self._deadline = 0.0
+                self._in_flight = None
+                self._notice = None
+
+    def begin(self, config: tuple[str, int]) -> tuple[object | None, int, object | None]:
+        with self._lock:
+            if config != self._config:
+                self._config = config
+                self._deadline = 0.0
+                self._in_flight = None
+                self._notice = None
+            remaining = max(0, math.ceil(self._deadline - time.monotonic()))
+            if self._in_flight or remaining:
+                notice = None if self._notice else object()
+                if notice is not None:
+                    self._notice = notice
+                return None, remaining or COMMAND_COOLDOWN_SECONDS, notice
+            self._in_flight = object()
+            self._notice = None
+            return self._in_flight, 0, None
+
+    def finish(self, config: tuple[str, int], reservation: object, *, delivered: bool) -> None:
+        with self._lock:
+            # A target can change away and back while an older send is pending.
+            if config != self._config or reservation is not self._in_flight:
+                return
+            self._in_flight = None
+            if delivered:
+                self._deadline = time.monotonic() + COMMAND_COOLDOWN_SECONDS
+            else:
+                self._deadline = 0.0
+
+    def notice_failed(self, config: tuple[str, int], notice: object) -> None:
+        with self._lock:
+            if config == self._config and notice is self._notice:
+                self._notice = None
+
+
+_command_gate = _CommandGate()
 
 
 class CodeBotError(Exception):
@@ -95,6 +154,7 @@ def authorized(update: dict[str, Any], target: int) -> bool:
 
 
 async def _bot_call(client: httpx.AsyncClient, token: str, method: str, payload: dict[str, Any]) -> Any:
+    response: httpx.Response | None = None
     try:
         response = await client.post(f"https://api.telegram.org/bot{token}/{method}", json=payload)
         if response.status_code == 409:
@@ -105,16 +165,26 @@ async def _bot_call(client: httpx.AsyncClient, token: str, method: str, payload:
         if not body.get("ok"):
             raise CodeBotError("Bot API 请求失败")
         return body.get("result")
+    except CodeBotError:
+        raise
     except (httpx.RequestError, ValueError) as exc:
         raise CodeBotError(f"Bot API 网络或响应错误（{type(exc).__name__}）") from None
+    finally:
+        if response is not None:
+            try:
+                await response.aclose()
+            except Exception as exc:
+                # Preserve a known delivery result and sanitize close errors.
+                logger.warning("Bot API 响应关闭失败（%s）", type(exc).__name__)
 
 
-async def _send(client: httpx.AsyncClient, config: tuple[str, int], text: str) -> None:
+async def _send(client: httpx.AsyncClient, config: tuple[str, int], text: str) -> bool:
     # Recheck configuration at the last possible moment; never deliver to an old target.
     if enabled_config() != config:
-        return
+        return False
     token, target = config
     await _bot_call(client, token, "sendMessage", {"chat_id": target, "text": text})
+    return enabled_config() == config
 
 
 def _account_lines(accounts: list[dict[str, Any]]) -> list[str]:
@@ -146,40 +216,62 @@ def _message_chunks(lines: list[str]) -> list[str]:
 
 
 async def _handle_update(client: httpx.AsyncClient, config: tuple[str, int], update: dict[str, Any]) -> None:
-    if enabled_config() != config or not authorized(update, config[1]):
+    active = enabled_config()
+    _command_gate.sync(active)
+    if active != config or not authorized(update, config[1]):
         return
     message = update["message"]
     if not fresh(datetime.fromtimestamp(message.get("date", 0), timezone.utc).isoformat()):
         return
     text = str(message.get("text") or "").strip()
-    if text == "/me":
+    if text != "/me" and text != "/code" and not text.startswith("/code "):
+        return
+    accepted, remaining, notify = _command_gate.begin(config)
+    if not accepted:
+        if notify:
+            try:
+                sent = await _send(client, config, f"操作过于频繁，请 {remaining} 秒后再发送 /me 或 /code")
+            except BaseException:
+                _command_gate.notice_failed(config, notify)
+                raise
+            if not sent:
+                _command_gate.notice_failed(config, notify)
+        return
+    delivered = False
+    try:
+        if text == "/me":
+            try:
+                lines = _account_lines(get_telegram_service().list_accounts())
+                chunks = _message_chunks(lines)
+            except Exception as exc:
+                logger.warning("读取本地账号清单失败（%s）", type(exc).__name__)
+                chunks = ["读取账号清单失败，请稍后重试"]
+            for chunk in chunks:
+                if not await _send(client, config, chunk):
+                    return
+            delivered = True
+            return
         try:
-            lines = _account_lines(get_telegram_service().list_accounts())
-            for chunk in _message_chunks(lines):
-                await _send(client, config, chunk)
-        except Exception as exc:
-            logger.warning("读取本地账号清单失败（%s）", type(exc).__name__)
-            await _send(client, config, "读取账号清单失败，请稍后重试")
-        return
-    if not text.startswith("/code "):
-        return
-    account = text.partition(" ")[2].strip()
-    try:
-        account = validate_storage_name(account, field_name="account_name")
-    except ValueError:
-        await _send(client, config, "账号名无效")
-        return
-    service = get_telegram_service()
-    if not service.account_exists(account):
-        await _send(client, config, "账号不存在")
-        return
-    try:
-        messages = await service.list_official_messages(account, limit=20)
-        code = latest_code(messages)
-        await _send(client, config, f"{account} 的 Telegram 验证码：{code}" if code else "暂无有效验证码")
-    except Exception as exc:
-        logger.warning("按需读取验证码失败（%s）", type(exc).__name__)
-        await _send(client, config, "验证码读取失败，请稍后重试")
+            account = validate_storage_name(text.partition(" ")[2].strip(), field_name="account_name")
+        except ValueError:
+            reply = "账号名无效"
+        else:
+            service = get_telegram_service()
+            if not service.account_exists(account):
+                reply = "账号不存在"
+            else:
+                try:
+                    messages = await service.list_official_messages(account, limit=20)
+                    code = latest_code(messages)
+                    reply = f"{account} 的 Telegram 验证码：{code}" if code else "暂无有效验证码"
+                except Exception as exc:
+                    logger.warning("按需读取验证码失败（%s）", type(exc).__name__)
+                    reply = "验证码读取失败，请稍后重试"
+        delivered = await _send(client, config, reply)
+    finally:
+        active = enabled_config()
+        _command_gate.sync(active)
+        _command_gate.finish(config, accepted, delivered=delivered and active == config)
 
 
 async def run_code_bot() -> None:
@@ -193,6 +285,7 @@ async def run_code_bot() -> None:
         while True:
             try:
                 config = enabled_config() if has_scheduler_lock() else None
+                _command_gate.sync(config)
                 if config is None:
                     current = None
                     _status = "未启用或当前实例未取得调度锁"
@@ -209,11 +302,6 @@ async def run_code_bot() -> None:
                         continue
                     backlog = await _bot_call(client, config[0], "getUpdates", {"offset": -1, "limit": 1, "timeout": 0, "allowed_updates": ["message"]})
                     offset = max((int(item["update_id"]) for item in backlog), default=offset - 1) + 1
-                webhook = await _bot_call(client, config[0], "getWebhookInfo", {})
-                if webhook.get("url"):
-                    _status = "检测到已有 Webhook；请先在该 Bot 的原管理端停用 Webhook"
-                    await asyncio.sleep(POLL_SECONDS)
-                    continue
                 updates = await _bot_call(client, config[0], "getUpdates", {"offset": offset, "limit": 20, "timeout": 1, "allowed_updates": ["message"]})
                 for update in updates:
                     offset = max(offset, int(update["update_id"]) + 1)

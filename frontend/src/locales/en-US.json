@@ -530,7 +530,7 @@
     "privateTargetHint": "The private code bot requires a positive private user ID; ordinary notifications may still use a group ID.",
     "privateTargetPlaceholder": "123456789 (private user ID)",
     "privateCodeBot": "Enable private bot",
-    "privateCodeBotHint": "Only the private target ID above may use this bot: /code ACCOUNT reads a code from Telegram's official 777000 chat received in the last five minutes; /me lists local account names and remarks. Other users and groups receive no response. Idle operation never reads account messages.",
+    "privateCodeBotHint": "Only the private target ID above may use this bot: /code ACCOUNT reads a code from Telegram's official 777000 chat received in the last five minutes; /me lists local account names and remarks. Both commands share a 45-second interval; repeated commands receive at most one remaining-time notice. Other users and groups receive no response. Idle operation never reads account messages.",
     "privateTargetInvalid": "Enter a positive private user ID as the target; group IDs are not allowed.",
     "privateCodeStatus": "Status: {status}",
     "threadId": "Thread ID (optional)",
