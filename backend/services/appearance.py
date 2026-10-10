@@ -8,7 +8,7 @@ from pathlib import Path
 
 from backend.core.config import get_settings
 
-MAX_HERO_UPLOAD_BYTES = 1 * 1024 * 1024
+MAX_HERO_UPLOAD_BYTES = 2 * 1024 * 1024
 MAX_HERO_BYTES = MAX_HERO_UPLOAD_BYTES
 DEFAULT_HERO_POSITION = (50.0, 50.0)
 
@@ -46,7 +46,7 @@ def read_hero() -> tuple[bytes, str] | None:
 
 def save_hero(data: bytes) -> None:
     if not data or len(data) > MAX_HERO_UPLOAD_BYTES or image_media_type(data) is None:
-        raise ValueError("仅支持不超过 1 MB 的 JPEG、PNG 或 WebP 图片")
+        raise ValueError("仅支持不超过 2 MB 的 JPEG、PNG 或 WebP 图片")
     path = hero_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.parent.is_symlink():

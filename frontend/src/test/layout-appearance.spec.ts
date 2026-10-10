@@ -8,7 +8,7 @@ const api = vi.hoisted(() => ({
   getHeroImage: vi.fn(), getHeroSettings: vi.fn(), saveHeroSettings: vi.fn(),
   uploadHeroImage: vi.fn(), deleteHeroImage: vi.fn(), getGlobalSettings: vi.fn(), saveGlobalSettings: vi.fn(),
 }))
-vi.mock('../lib/api/appearance', () => ({ ...api, MAX_HERO_IMAGE_BYTES: 1024 * 1024 }))
+vi.mock('../lib/api/appearance', () => ({ ...api, MAX_HERO_IMAGE_BYTES: 2 * 1024 * 1024 }))
 vi.mock('../lib/api/settings', () => api)
 vi.mock('vue-router', () => ({ useRoute: () => ({ name: 'dashboard' }) }))
 import Layout from '../views/Layout.vue'
