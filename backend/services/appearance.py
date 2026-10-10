@@ -30,11 +30,16 @@ def hero_path() -> Path:
 
 def read_hero() -> tuple[bytes, str] | None:
     path = hero_path()
-    if path.parent.is_symlink() or not path.is_file() or path.is_symlink():
+    try:
+        if path.parent.is_symlink() or not path.is_file() or path.is_symlink():
+            return None
+        if path.stat().st_size > MAX_HERO_BYTES:
+            return None
+        with path.open('rb') as stream:
+            data = stream.read(MAX_HERO_BYTES + 1)
+    except OSError:
+        # A concurrent reset can remove the optional cover after the stat check.
         return None
-    if path.stat().st_size > MAX_HERO_BYTES:
-        return None
-    data = path.read_bytes()
     media_type = image_media_type(data)
     return (data, media_type) if media_type and len(data) <= MAX_HERO_BYTES else None
 

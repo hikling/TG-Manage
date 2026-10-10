@@ -18,12 +18,12 @@ const initDark = savedTheme === 'dark' || (savedTheme === null && prefersDark)
 const isDark = ref(initDark)
 export const DEFAULT_ACCENT = '#3d6fa8'
 export const ACCENT_PRESETS = [
-  { name: '蓝韵', color: '#3d6fa8' },
-  { name: '潮汐青', color: '#247e83' },
-  { name: '电光紫红', color: '#a83d8f' },
-  { name: '柔雾紫', color: '#765ba7' },
-  { name: '可可棕', color: '#866044' },
-  { name: '暖沙金', color: '#9b702e' },
+  { nameKey: 'appearance.presetBlue', color: '#3d6fa8' },
+  { nameKey: 'appearance.presetTidal', color: '#247e83' },
+  { nameKey: 'appearance.presetViolet', color: '#a83d8f' },
+  { nameKey: 'appearance.presetMist', color: '#765ba7' },
+  { nameKey: 'appearance.presetCocoa', color: '#866044' },
+  { nameKey: 'appearance.presetSand', color: '#9b702e' },
 ] as const
 const validHex = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value)
 const savedAccent = storageGet('tg-manage-accent-color')

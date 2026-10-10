@@ -1,8 +1,11 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import i18n from '../i18n'
 
 export interface ToastItem {
   id: number
   message: string
+  messageKey?: string
+  messageParams?: Record<string, unknown>
   /** 可选多行详情 */
   description?: string
   type: 'success' | 'error' | 'warning' | 'info'
@@ -11,6 +14,8 @@ export interface ToastItem {
 }
 
 export interface ToastOptions {
+  messageKey?: string
+  messageParams?: Record<string, unknown>
   description?: string
   duration?: number
 }
@@ -36,6 +41,11 @@ function removeToast(id: number) {
   remainingMap.delete(id)
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
+
+// Notifications with a key rerender; discard resolved strings from the previous locale.
+watch(i18n.global.locale, () => {
+  for (const toast of toasts.value) if (!toast.messageKey) removeToast(toast.id)
+})
 
 export const useToast = () => {
   const dismiss = (id: number) => {
@@ -130,6 +140,8 @@ export const useToast = () => {
     toasts.value.push({
       id,
       message: text,
+      messageKey: opts.messageKey,
+      messageParams: opts.messageParams,
       description: opts.description?.trim() || undefined,
       type,
       count: 1,

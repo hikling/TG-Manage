@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, ref } from 'vue'
+import enUS from '../locales/en-US.json'
 import {
   flushPromises,
   makeAccountUi,
@@ -11,6 +12,7 @@ const toastSpy = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
+  warning: vi.fn(),
   show: vi.fn(),
 }))
 
@@ -26,7 +28,10 @@ const pollTicks = vi.hoisted(() => [] as Array<() => Promise<void>>)
 const pollStops = vi.hoisted(() => [] as Array<ReturnType<typeof vi.fn>>)
 
 vi.mock('../composables/useI18n', () => ({
-  useI18n: () => mockI18nPassthrough(),
+  useI18n: () => {
+    const result = mockI18nPassthrough()
+    return { ...result, t: (key: string, named?: Record<string, unknown>) => key === 'common.requestFailed' ? enUS.common.requestFailed : result.t(key, named) }
+  },
 }))
 vi.mock('../composables/useToast', () => ({
   useToast: () => toastSpy,
@@ -235,6 +240,15 @@ describe('useAccountBatchCheck (job poll)', () => {
     await result.handleBatchCheck()
     expect(toastSpy.error).toHaveBeenCalled()
     expect(api.startAccountStatusCheckJob).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('localizes an unknown Chinese job failure before placing it in toast details', async () => {
+    api.startAccountStatusCheckJob.mockResolvedValue({ job_id: 'failed', status: 'running', results: [] })
+    api.getAccountStatusCheckJob.mockResolvedValue({ job_id: 'failed', status: 'failed', error: '代理连接失败', results: [] })
+    const { result, unmount } = setup()
+    await result.handleBatchCheck()
+    expect(toastSpy.error).toHaveBeenCalledWith('accounts.checkFailed', { description: enUS.common.requestFailed })
     unmount()
   })
 })

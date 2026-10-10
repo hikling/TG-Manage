@@ -1,4 +1,5 @@
 """Dashboard cover persistence and format validation."""
+from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
@@ -60,6 +61,34 @@ def test_existing_oversized_cover_is_ignored(cover_workdir):
     path.parent.mkdir(parents=True)
     path.write_bytes(content)
     assert appearance.read_hero() is None
+
+
+def test_cover_removed_between_stat_and_read_is_treated_as_missing(monkeypatch):
+    appearance.save_hero(b"\x89PNG\r\n\x1a\noriginal")
+    path = appearance.hero_path()
+
+    def removed_cover(*_args, **_kwargs):
+        raise FileNotFoundError('Cover was reset by another request')
+
+    monkeypatch.setattr(type(path), 'open', removed_cover)
+    assert appearance.read_hero() is None
+
+
+def test_cover_growing_after_stat_is_read_with_a_size_bound(monkeypatch):
+    appearance.save_hero(b"\x89PNG\r\n\x1a\noriginal")
+    path = appearance.hero_path()
+    read_sizes = []
+
+    class GrowingCover(BytesIO):
+        def read(self, size=-1):
+            read_sizes.append(size)
+            return super().read(size)
+
+    stream = GrowingCover(b"\x89PNG\r\n\x1a\n" + b'x' * appearance.MAX_HERO_BYTES)
+    monkeypatch.setattr(type(path), 'open', lambda *_args, **_kwargs: stream)
+    assert appearance.read_hero() is None
+    assert read_sizes == [appearance.MAX_HERO_BYTES + 1]
+    assert stream.closed
 
 
 def test_hero_position_round_trip_and_reset(monkeypatch):

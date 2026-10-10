@@ -12,7 +12,7 @@
 - **👥 Account management** — Sign in by code or QR, check status, refresh avatars on demand, and set per-account proxies. Single and batch checks share a 45-second interval after each successful account check.
 - **💬 Chat center** — Browse group conversations by account, search, send attachments, reply, edit, and delete messages. Chat can be switched on independently.
 - **🤖 Private bot** — Only the configured private target ID may use `/code account-name` to query a code from the last five minutes of `777000`, or `/me` to list local account names and remarks. Both commands share a 45-second interval; idle operation never scans account messages.
-- **🎨 Dashboard and appearance** — View current process memory, select an accent color, and upload or restore the dashboard cover in theme settings.
+- **🎨 Dashboard and appearance** — The dashboard contains a cover with Manage accounts and Refresh actions. Accent colors and custom covers are saved on the server. Covers support horizontal and vertical positioning, reset to default, and a 1 MiB upload limit.
 - **🔌 Integrated TeleBox** — Each enabled account gets a separate Telegram session and runtime directory, with status and logs on its account card. The pinned upstream revision is recorded in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json).
 
 > **Session boundary:** Logging out of TeleBox clears only its separate authorization, not the main account session. Do not merge the two session stores manually.
@@ -20,7 +20,7 @@
 <a id="quick-start"></a>
 ## 🚀 Quick start
 
-Install Docker Engine, Docker Compose v2, and Git. Ensure the server can reach Telegram and download build dependencies, then run:
+Small deployments support a minimum of 1 vCPU / 1 GiB RAM, with no artificial upper limit. Scale according to account count and actual workload. Install Docker Engine, Docker Compose v2, and Git. Ensure the server can reach Telegram and download build dependencies, then run:
 
 ```bash
 git clone https://github.com/hikling/TG-Manage.git

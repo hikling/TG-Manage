@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
-vi.mock('../composables/useI18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }))
+vi.mock('../composables/useI18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: ref('zh') }) }))
 vi.mock('../composables/useToast', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }))
 vi.mock('../composables/useConfirm', () => ({ useConfirm: () => ({ confirm: vi.fn() }) }))
 vi.mock('../stores/accounts', () => ({ useAccountsStore: () => ({ refreshAccounts: mocks.refreshAccounts }) }))

@@ -53,7 +53,7 @@ curl -fsS http://127.0.0.1:8080/readyz
 docker stats --no-stream tg-manage
 ```
 
-再用原管理员账号登录，检查账号列表、Telegram 会话、系统设置和各账号 TeleBox 状态。仪表盘的当前进程内存可用于观察应用自身占用；容器总体内存以 `docker stats` 为准。
+再用原管理员账号登录，检查账号列表、Telegram 会话、系统设置和各账号 TeleBox 状态。使用 `docker stats` 观察整个容器的资源占用。
 
 需要回退时，先 `docker compose stop app`，切回升级前的代码提交，恢复备份中的**完整**数据目录（包括 `.app_secret_key`、`sessions/`、`telebox/` 和隐藏文件），再执行 `docker compose up -d --build`。归档由 `backup.sh` 在数据目录的父目录打包；解压前先用 `tar -tzf <备份文件>` 核对顶层目录，避免解压到错误层级。回退旧代码可能无法读取新版本写入的数据，因此优先使用升级前的整目录备份。使用 PostgreSQL 时还要恢复同一时间点的数据库备份。
 
@@ -73,6 +73,6 @@ docker compose start app
 | 构建失败 | Docker 磁盘/内存、npm/PyPI 网络和 TeleBox 原生模块错误。 |
 | `/readyz` 未就绪 | `docker compose ps`、应用日志及 `./data` 的可写权限。 |
 | Telegram 登录失败 | API ID/Hash、验证码/2FA、服务器网络及账号代理。 |
-| TeleBox 内存不足 | 观察 `docker stats`、仪表盘和各账号日志；按实际负载调高内存或减少常驻账号。 |
+| TeleBox 内存不足 | 观察 `docker stats` 和各账号日志；按实际负载调高内存或减少常驻账号。 |
 
 真实 Telegram 授权、Bot API 和 TeleBox 远程插件安装需要在目标环境验证。

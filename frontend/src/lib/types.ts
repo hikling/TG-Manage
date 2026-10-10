@@ -180,5 +180,14 @@ export function getLocalizedErrorMessage(
     const localized = t(key)
     if (localized && localized !== key) return localized
   }
-  return getErrorMessage(e, fallback)
+  const message = getErrorMessage(e, fallback)
+  // The shared fallback is Chinese only in Chinese mode: preserve useful server
+  // details there, while keeping unknown Chinese diagnostics out of English UI.
+  if (/\p{Script=Han}/u.test(message)) {
+    const localizedFallback = t('common.requestFailed')
+    if (localizedFallback && localizedFallback !== 'common.requestFailed' && !/\p{Script=Han}/u.test(localizedFallback)) {
+      return localizedFallback
+    }
+  }
+  return message
 }

@@ -1,47 +1,57 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { chatAvatar } from '../lib/api/communications'
+import { chatAvatarCache } from '../lib/chat-avatar-cache'
 
 const props = defineProps<{ account: string; chatId: string; name: string }>()
 const root = ref<HTMLElement | null>(null)
 const source = ref('')
 let observer: IntersectionObserver | undefined
 let requestId = 0
+let releaseAvatar: (() => void) | undefined
 
-async function load() {
-  if (!props.account || !props.chatId) return
+function releaseCurrent() {
+  ++requestId
+  releaseAvatar?.()
+  releaseAvatar = undefined
+  source.value = ''
+}
+
+function leaveViewport() {
+  releaseCurrent()
+}
+
+function enterViewport() {
+  if (source.value || releaseAvatar || !props.account || !props.chatId) return
   const id = ++requestId
-  try {
-    const blob = await chatAvatar(props.account, props.chatId)
-    if (id !== requestId) return
-    if (source.value) URL.revokeObjectURL(source.value)
-    source.value = URL.createObjectURL(blob)
-  } catch {
-    // Chats without a photo use the initials fallback.
-  }
+  const account = props.account
+  const chatId = props.chatId
+  const lease = chatAvatarCache.acquire(`${account}:${chatId}`, () => chatAvatar(account, chatId))
+  releaseAvatar = lease.release
+  void lease.promise.then(url => {
+    if (id !== requestId || !url) return
+    source.value = url
+  })
 }
 
 function observe() {
   observer?.disconnect()
   if (!root.value) return
-  if (!('IntersectionObserver' in window)) { void load(); return }
+  if (!('IntersectionObserver' in window)) { enterViewport(); return }
   observer = new IntersectionObserver(entries => {
-    if (entries.some(entry => entry.isIntersecting)) {
-      observer?.disconnect()
-      void load()
-    }
+    const entry = entries.find(item => item.target === root.value)
+    if (entry?.isIntersecting) enterViewport()
+    else if (entry) leaveViewport()
   }, { rootMargin: '100px' })
   observer.observe(root.value)
 }
 
 watch(() => [props.account, props.chatId], () => {
-  ++requestId
-  if (source.value) URL.revokeObjectURL(source.value)
-  source.value = ''
+  releaseCurrent()
   observe()
 })
 onMounted(observe)
-onUnmounted(() => { ++requestId; observer?.disconnect(); if (source.value) URL.revokeObjectURL(source.value) })
+onUnmounted(() => { releaseCurrent(); observer?.disconnect() })
 </script>
 
 <template>

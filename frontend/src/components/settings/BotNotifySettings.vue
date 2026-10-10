@@ -32,7 +32,20 @@ const emit = defineEmits<{
   (e: 'toggle-reveal', key: 'botToken'): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const botStatusLabel = () => {
+  const status = props.codeStatus || ''
+  const keys: Record<string, string> = {
+    '未启用': 'disabled',
+    '未启用或当前实例未取得调度锁': 'waitingLock',
+    '检测到已有 Webhook；请先在该 Bot 的原管理端停用 Webhook': 'webhookActive',
+    '运行中（按需查询）': 'running',
+    '运行异常，请检查服务日志': 'error',
+  }
+  const key = keys[status]
+  if (key) return t(`settings.privateBotStatus.${key}`)
+  return locale.value === 'en' && /\p{Script=Han}/u.test(status) ? t('settings.privateBotStatus.error') : status
+}
 
 const update = <K extends keyof SettingsFormState>(key: K, value: SettingsFormState[K]) => {
   emit('update:modelValue', { ...props.modelValue, [key]: value } as SettingsFormState)
@@ -114,7 +127,7 @@ const isPrivateTarget = (value: string) => {
         </label>
         <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.privateCodeBotHint') }}</p>
         <p v-if="modelValue.botCodeEnabled && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
-        <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-gray-500 dark:text-gray-400" role="status">{{ t('settings.privateCodeStatus', { status: codeStatus }) }}</p>
+        <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-gray-500 dark:text-gray-400" role="status">{{ t('settings.privateCodeStatus', { status: botStatusLabel() }) }}</p>
       </div>
       <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
         <div class="flex items-center justify-between gap-3">

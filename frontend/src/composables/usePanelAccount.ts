@@ -1,7 +1,14 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAccountsStore } from '../stores/accounts'
-export const errorText = (error: unknown) => error instanceof Error ? error.message : '请求失败，请重试'
+import i18n from '../i18n'
+import { getLocalizedErrorMessage } from '../lib/types'
+
+export const errorText = (error: unknown) => getLocalizedErrorMessage(
+  error,
+  key => String(i18n.global.t(key)),
+  String(i18n.global.t('common.requestFailed')),
+)
 export function usePanelAccount() {
   const store = useAccountsStore(); const route = useRoute(); const account = ref(''); const error = ref('')
   onMounted(async () => {

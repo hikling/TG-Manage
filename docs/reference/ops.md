@@ -11,7 +11,7 @@
 | `docker stats --no-stream tg-manage` | 整个容器的内存、CPU 使用情况。 |
 | `docker inspect -f '&#123;&#123;.State.OOMKilled&#125;&#125;' tg-manage` | 检查上次退出是否由内存不足引起。 |
 
-仪表盘显示当前进程内存，适合观察应用自身变化；它与容器总内存不是同一指标。每个运行中的 TeleBox 账号另有 Node 进程，因此评估内存上限时还要看 `docker stats`。
+使用 `docker stats` 观察整个容器的资源占用，其中包含应用和每个运行中的 TeleBox 账号的独立 Node 进程。按实际负载评估容量并扩容。
 
 ## 数据目录
 

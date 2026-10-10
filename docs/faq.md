@@ -18,7 +18,7 @@
 
 ## 为什么 TeleBox 占用较多内存？
 
-每个运行中的账号都有独立 Node 进程。仪表盘显示当前应用进程内存；容器内存还包括 TeleBox 等子进程，使用 `docker stats --no-stream tg-manage` 检查。
+每个运行中的账号都有独立 Node 进程。使用 `docker stats --no-stream tg-manage` 检查整个容器的内存占用，其中包括应用和 TeleBox 等子进程。按实际负载增加资源或减少常驻账号。
 
 ## 旧任务为什么不再执行？
 

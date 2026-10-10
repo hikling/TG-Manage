@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Github, Globe, Moon, Sun, Eye, EyeOff } from 'lucide-vue-next'
 import { login } from '../lib/api'
@@ -26,6 +26,7 @@ const setupRequired = ref(false)
 const setupToken = ref('')
 const setupPassword = ref('')
 const setupConfirm = ref('')
+watch(locale, () => { errorMsg.value = '' })
 
 onMounted(async () => {
   try { setupRequired.value = (await getSetupStatus()).setup_required }
@@ -34,7 +35,7 @@ onMounted(async () => {
 
 const handleSetup = async () => {
   if (setupPassword.value !== setupConfirm.value) {
-    errorMsg.value = '两次输入的密码不一致'
+    errorMsg.value = t('login.passwordMismatch')
     return
   }
   loading.value = true
@@ -114,8 +115,8 @@ const openGithub = () => {
         <span class="login-intro-mark">TG <span>／</span> 01</span>
         <div class="login-intro-copy">
           <p>YOUR TELEGRAM CONTROL CENTER</p>
-          <h2>让每个信号，<br><em>都有回应。</em></h2>
-          <span>集中管理账号、聊天与运行状态。<br>从连接到执行，一切尽在掌握。</span>
+          <h2>{{ t('login.introHeadline') }}<br><em>{{ t('login.introHeadlineAccent') }}</em></h2>
+          <span>{{ t('login.introDescription') }}<br>{{ t('login.introDescriptionSecond') }}</span>
         </div>
         <div class="login-intro-foot"><span class="login-intro-pulse" /> TG MANAGE CONSOLE</div>
       </aside>
@@ -127,16 +128,16 @@ const openGithub = () => {
       </div>
 
       <form v-if="setupRequired" class="space-y-4" @submit.prevent="handleSetup">
-        <h2 class="text-lg font-medium">首次设置管理员</h2>
-        <p class="text-sm text-gray-500">在服务器运行 <code>docker compose exec -T app cat /data/.admin_setup_token</code> 获取一次性设置码。密码由你在此设置，设置码使用后失效。</p>
-        <label class="block text-sm" for="setup-token">一次性设置码</label>
+        <h2 class="text-lg font-medium">{{ t('login.setupTitle') }}</h2>
+        <p class="text-sm text-gray-500">{{ t('login.setupDescription') }} <code>docker compose exec -T app cat /data/.admin_setup_token</code> {{ t('login.setupDescriptionEnd') }}</p>
+        <label class="block text-sm" for="setup-token">{{ t('login.setupToken') }}</label>
         <input id="setup-token" v-model="setupToken" class="ui-input" required autocomplete="off" />
-        <label class="block text-sm" for="setup-password">管理员密码（至少 12 位）</label>
+        <label class="block text-sm" for="setup-password">{{ t('login.setupPassword') }}</label>
         <input id="setup-password" v-model="setupPassword" class="ui-input" type="password" minlength="12" required autocomplete="new-password" />
-        <label class="block text-sm" for="setup-confirm">确认密码</label>
+        <label class="block text-sm" for="setup-confirm">{{ t('login.setupConfirm') }}</label>
         <input id="setup-confirm" v-model="setupConfirm" class="ui-input" type="password" minlength="12" required autocomplete="new-password" />
         <p v-if="errorMsg" role="alert" class="text-rose-600 text-sm">{{ errorMsg }}</p>
-        <button class="ui-btn-primary w-full" :disabled="loading || !setupToken || !setupPassword || !setupConfirm">{{ loading ? '设置中…' : '创建管理员' }}</button>
+        <button class="ui-btn-primary w-full" :disabled="loading || !setupToken || !setupPassword || !setupConfirm">{{ loading ? t('login.settingUp') : t('login.createAdmin') }}</button>
       </form>
       <form v-else class="space-y-4" @submit.prevent="handleLogin">
         <div>

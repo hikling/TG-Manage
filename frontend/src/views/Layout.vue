@@ -25,6 +25,9 @@ import { useI18n } from '../composables/useI18n'
 import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import Modal from '../components/Modal.vue'
+import HeroCover from '../components/HeroCover.vue'
+import { clampCoverPosition, type CoverFrame } from '../lib/cover-frame'
+import { createCoalescedSave } from '../lib/coalesced-save'
 import { createViewPrefetcher } from '../lib/view-prefetch'
 import { deleteHeroImage, getHeroImage, getHeroSettings, MAX_HERO_IMAGE_BYTES, saveHeroSettings, uploadHeroImage } from '../lib/api/appearance'
 import { getGlobalSettings, saveGlobalSettings } from '../lib/api/settings'
@@ -39,10 +42,23 @@ const showAppearanceModal = ref(false)
 const heroInput = ref<HTMLInputElement | null>(null)
 const heroBusy = ref(false)
 const heroPresent = ref(false)
-const heroFeedback = ref('')
+const heroFeedbackKey = ref('')
+const heroFeedbackKind = ref<'error' | 'status'>('status')
+const heroFeedback = computed(() => heroFeedbackKey.value ? t(heroFeedbackKey.value) : '')
 const heroPreviewUrl = ref('')
+const heroPreview = ref<HTMLElement | null>(null)
 const heroPositionX = ref(50)
 const heroPositionY = ref(50)
+const heroDragging = ref(false)
+let heroPointerId: number | null = null
+let heroDragOrigin = { clientX: 0, clientY: 0, x: 50, y: 50 }
+let heroFrame: CoverFrame = { width: 0, height: 0, overflowX: 0, overflowY: 0 }
+let appearanceActive = true
+let accentEdited = false
+let heroPositionEdited = false
+let heroMutationVersion = 0
+let heroPositionDirty = false
+let accentDirty = false
 let accentSaveTimer: ReturnType<typeof setTimeout> | undefined
 let heroPositionSaveTimer: ReturnType<typeof setTimeout> | undefined
 const sidebarCollapsed = ref(true)
@@ -56,16 +72,50 @@ const onViewportChange = () => {
   isMobileView.value = mobileQuery.matches
 }
 const sidebarHidden = computed(() => isMobileView.value && !isMobileMenuOpen.value)
+const heroFeedbackIsError = computed(() => heroFeedbackKind.value === 'error')
+function feedback(key: string, kind: 'error' | 'status' = 'status') {
+  if (!appearanceActive) return
+  heroFeedbackKey.value = `appearance.${key}`
+  heroFeedbackKind.value = kind
+}
+const accentSaves = createCoalescedSave<string>(
+  color => saveGlobalSettings(getAuthToken(), { appearance_accent_color: color }),
+  () => feedback('accentSaveFailed', 'error'),
+)
+const positionSaves = createCoalescedSave<{ x: number; y: number }>(
+  position => saveHeroSettings(position.x, position.y),
+  () => feedback('positionSaveFailed', 'error'),
+)
+function flushAccentSave() {
+  if (accentSaveTimer) clearTimeout(accentSaveTimer)
+  accentSaveTimer = undefined
+  if (!accentDirty) return
+  accentDirty = false
+  void accentSaves.enqueue(accentColor.value)
+}
+function flushHeroPositionSave() {
+  if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
+  heroPositionSaveTimer = undefined
+  if (!heroPositionDirty) return
+  heroPositionDirty = false
+  void positionSaves.enqueue({ x: heroPositionX.value, y: heroPositionY.value })
+}
 
 async function refreshHeroPresence() {
+  if (!appearanceActive) return
+  const version = heroMutationVersion
   try {
     const [blob, settings] = await Promise.all([getHeroImage(), getHeroSettings()])
+    if (!appearanceActive || version !== heroMutationVersion) return
     if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
     heroPreviewUrl.value = URL.createObjectURL(blob)
     heroPresent.value = settings.present
-    heroPositionX.value = settings.position_x
-    heroPositionY.value = settings.position_y
+    if (!heroPositionEdited) {
+      heroPositionX.value = settings.position_x
+      heroPositionY.value = settings.position_y
+    }
   } catch {
+    if (!appearanceActive || version !== heroMutationVersion) return
     heroPresent.value = false
     if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
     heroPreviewUrl.value = ''
@@ -75,37 +125,83 @@ async function refreshHeroPresence() {
 async function loadAppearanceSettings() {
   try {
     const settings = await getGlobalSettings(getAuthToken())
-    if (settings.appearance_accent_color) setAccentColor(settings.appearance_accent_color)
-    heroPositionX.value = settings.hero_position_x ?? heroPositionX.value
-    heroPositionY.value = settings.hero_position_y ?? heroPositionY.value
+    if (!appearanceActive) return
+    if (!accentEdited && settings.appearance_accent_color) setAccentColor(settings.appearance_accent_color)
+    if (!heroPositionEdited) {
+      heroPositionX.value = settings.hero_position_x ?? heroPositionX.value
+      heroPositionY.value = settings.hero_position_y ?? heroPositionY.value
+    }
   } catch {
     // Keep the browser-local fallback when the settings endpoint is unavailable.
   }
-  await refreshHeroPresence()
+  if (heroMutationVersion === 0) await refreshHeroPresence()
 }
 
 function handleAccentChange(color: string) {
   if (!setAccentColor(color)) return
+  accentEdited = true
+  accentDirty = true
   if (accentSaveTimer) clearTimeout(accentSaveTimer)
-  accentSaveTimer = setTimeout(async () => {
-    try {
-      await saveGlobalSettings(getAuthToken(), { appearance_accent_color: accentColor.value })
-    } catch {
-      heroFeedback.value = '主题色已应用到当前页面，但服务器保存失败'
-    }
-  }, 350)
+  accentSaveTimer = setTimeout(flushAccentSave, 350)
 }
 
 function persistHeroPosition() {
+  heroPositionEdited = true
+  heroPositionX.value = clampCoverPosition(heroPositionX.value)
+  heroPositionY.value = clampCoverPosition(heroPositionY.value)
+  heroPositionDirty = true
+  window.dispatchEvent(new CustomEvent('tg-manage:hero-position-changed', {
+    detail: { x: heroPositionX.value, y: heroPositionY.value },
+  }))
   if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
-  heroPositionSaveTimer = setTimeout(async () => {
-    try {
-      await saveHeroSettings(heroPositionX.value, heroPositionY.value)
-    } catch {
-      heroFeedback.value = '封面位置已应用，但服务器保存失败'
-    }
-  }, 250)
+  heroPositionSaveTimer = setTimeout(flushHeroPositionSave, 250)
 }
+
+function setHeroPositionFromPointer(event: PointerEvent) {
+  if (!heroFrame.overflowX || !heroFrame.overflowY) return
+  heroPositionX.value = Math.round(clampCoverPosition(heroDragOrigin.x - (event.clientX - heroDragOrigin.clientX) / heroFrame.overflowX * 100))
+  heroPositionY.value = Math.round(clampCoverPosition(heroDragOrigin.y - (event.clientY - heroDragOrigin.clientY) / heroFrame.overflowY * 100))
+  persistHeroPosition()
+}
+
+function startHeroDrag(event: PointerEvent) {
+  if (heroBusy.value || event.button !== 0) return
+  event.preventDefault()
+  heroDragging.value = true
+  heroPointerId = event.pointerId
+  heroDragOrigin = { clientX: event.clientX, clientY: event.clientY, x: heroPositionX.value, y: heroPositionY.value }
+  heroPreview.value?.setPointerCapture?.(event.pointerId)
+}
+
+function moveHeroDrag(event: PointerEvent) {
+  if (!heroDragging.value || event.pointerId !== heroPointerId) return
+  setHeroPositionFromPointer(event)
+}
+
+function stopHeroDrag(event?: PointerEvent) {
+  if (event && heroPointerId !== null && event.pointerId !== heroPointerId) return
+  if (heroPointerId !== null && heroPreview.value?.hasPointerCapture?.(heroPointerId)) {
+    heroPreview.value.releasePointerCapture(heroPointerId)
+  }
+  heroDragging.value = false
+  heroPointerId = null
+  flushHeroPositionSave()
+}
+
+function moveHeroWithKeyboard(event: KeyboardEvent) {
+  if (heroBusy.value || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+  event.preventDefault()
+  const step = event.shiftKey ? 10 : 2
+  if (event.key === 'ArrowLeft') heroPositionX.value -= step
+  if (event.key === 'ArrowRight') heroPositionX.value += step
+  if (event.key === 'ArrowUp') heroPositionY.value -= step
+  if (event.key === 'ArrowDown') heroPositionY.value += step
+  persistHeroPosition()
+}
+
+watch(showAppearanceModal, open => {
+  if (!open) { stopHeroDrag(); flushAccentSave() }
+})
 
 async function onHeroSelected(event: Event) {
   const input = event.target as HTMLInputElement
@@ -113,39 +209,50 @@ async function onHeroSelected(event: Event) {
   input.value = ''
   if (!file) return
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size === 0 || file.size > MAX_HERO_IMAGE_BYTES) {
-    heroFeedback.value = '请选择不超过 1 MB 的 JPEG、PNG 或 WebP 图片'
+    feedback('invalidCover', 'error')
     return
   }
+  ++heroMutationVersion
   heroBusy.value = true
-  heroFeedback.value = '正在上传封面…'
+  feedback('uploadingCover')
   try {
     await uploadHeroImage(file)
+    if (!appearanceActive) return
     if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
     heroPreviewUrl.value = URL.createObjectURL(file)
     heroPresent.value = true
-    heroFeedback.value = '封面已更新'
+    feedback('coverUpdated')
     window.dispatchEvent(new Event('tg-manage:hero-changed'))
   } catch {
-    heroFeedback.value = '封面上传失败，请稍后重试'
+    feedback('uploadFailed', 'error')
   } finally {
     heroBusy.value = false
   }
 }
 
 async function resetHeroImage() {
+  ++heroMutationVersion
+  heroPositionEdited = true
   heroBusy.value = true
-  heroFeedback.value = '正在恢复默认封面…'
+  feedback('resettingCover')
+  stopHeroDrag()
+  if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
+  heroPositionSaveTimer = undefined
+  heroPositionDirty = false
+  positionSaves.discard()
   try {
+    await positionSaves.whenIdle()
     await deleteHeroImage()
+    if (!appearanceActive) return
     heroPresent.value = false
     heroPositionX.value = 50
     heroPositionY.value = 50
     if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
     heroPreviewUrl.value = ''
-    heroFeedback.value = '已恢复默认封面'
+    feedback('coverReset')
     window.dispatchEvent(new Event('tg-manage:hero-changed'))
   } catch {
-    heroFeedback.value = '恢复默认封面失败，请稍后重试'
+    feedback('resetFailed', 'error')
   } finally {
     heroBusy.value = false
   }
@@ -184,6 +291,9 @@ onMounted(() => {
   mobileQuery.addEventListener('change', onViewportChange)
 })
 onUnmounted(() => {
+  stopHeroDrag()
+  flushAccentSave()
+  appearanceActive = false
   window.removeEventListener('keydown', onKeydown)
   mobileQuery.removeEventListener('change', onViewportChange)
   if (menuScrollLocked) {
@@ -216,7 +326,7 @@ const toggleSidebar = () => {
 const navigation = computed(() => [
   { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard', color: 'cyan' },
   { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts', color: 'blue' },
-  { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: '聊天中心', color: 'green' },
+  { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: 'nav.chats', color: 'green' },
   { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs', color: 'slate' },
   { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings', color: 'teal' },
 ])
@@ -224,7 +334,7 @@ const navigation = computed(() => [
 const currentTitle = computed(() => {
   const current = navigation.value.find(n => n.name === route.name)
   if (!current) return 'TG Manage'
-  return current.labelKey.startsWith('nav.') ? t(current.labelKey) : current.labelKey
+  return t(current.labelKey)
 })
 
 // 浏览器标签页标题跟随当前页面，便于多标签切换时识别
@@ -266,7 +376,7 @@ const handleNavClick = () => {
         <div class="sidebar-label min-w-0 flex-1">
           <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG Manage</div>
         </div>
-        <button type="button" class="sidebar-collapse-toggle hidden lg:inline-flex" :aria-label="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :title="sidebarCollapsed ? '展开侧栏' : '收起侧栏'" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar">
+        <button type="button" class="sidebar-collapse-toggle hidden lg:inline-flex" :aria-label="sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')" :title="sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar">
           <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" /><PanelLeftClose v-else class="w-4 h-4" />
         </button>
         <!-- 仅移动端抽屉显示关闭；提高可点区域与层级 -->
@@ -289,8 +399,8 @@ const handleNavClick = () => {
           class="sidebar-link flex items-center h-11 px-2.5 whitespace-nowrap rounded-xl"
           :class="[{ 'ui-nav-active': route.name === nav.name }, `sidebar-link--${nav.color}`]"
           :aria-current="route.name === nav.name ? 'page' : undefined"
-          :title="nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey"
-          :aria-label="nav.labelKey.startsWith('nav.') ? t(nav.labelKey) : nav.labelKey"
+          :title="t(nav.labelKey)"
+          :aria-label="t(nav.labelKey)"
           @click="handleNavClick"
           @mouseenter="prefetchView(nav.name)"
           @focus="prefetchView(nav.name)"
@@ -305,12 +415,12 @@ const handleNavClick = () => {
         <button
           type="button"
           class="sidebar-link flex items-center w-full h-11 px-2.5 whitespace-nowrap rounded-xl"
-          title="自定义主题"
-          aria-label="自定义主题"
+          :title="t('appearance.title')"
+          :aria-label="t('appearance.title')"
           @click="showAppearanceModal = true; isMobileMenuOpen = false"
         >
           <span class="sidebar-link-icon"><Palette class="w-[19px] h-[19px]" stroke-width="1.9" aria-hidden="true" /></span>
-          <span class="sidebar-label ml-3 text-sm font-medium">自定义主题</span>
+          <span class="sidebar-label ml-3 text-sm font-medium">{{ t('appearance.title') }}</span>
         </button>
         <button
           type="button"
@@ -384,32 +494,33 @@ const handleNavClick = () => {
       </div>
 
       <UserProfileModal :isOpen="showProfileModal" @close="showProfileModal = false" />
-      <Modal :isOpen="showAppearanceModal" title="自定义主题" maxWidthClass="max-w-lg" @close="showAppearanceModal = false">
+      <Modal :isOpen="showAppearanceModal" :title="t('appearance.title')" maxWidthClass="max-w-lg" @close="showAppearanceModal = false">
         <div class="appearance-picker">
-          <p>选择一种 2026 趋势配色，或使用下方色盘。主题色会保存到服务器并在刷新后恢复。</p>
-          <div class="appearance-preset-grid" role="group" aria-label="2026 趋势配色">
+          <p>{{ t('appearance.description') }}</p>
+          <div class="appearance-preset-grid" role="group" :aria-label="t('appearance.presets')">
             <button v-for="preset in ACCENT_PRESETS" :key="preset.color" type="button" class="appearance-preset" :aria-pressed="accentColor === preset.color" @click="handleAccentChange(preset.color)">
-              <span class="appearance-swatch" :style="{ backgroundColor: preset.color }" aria-hidden="true" />{{ preset.name }}
+              <span class="appearance-swatch" :style="{ backgroundColor: preset.color }" aria-hidden="true" />{{ t(preset.nameKey) }}
             </button>
           </div>
-          <label class="appearance-custom-label" for="accent-custom-color">自定义颜色</label>
+          <label class="appearance-custom-label" for="accent-custom-color">{{ t('appearance.customColor') }}</label>
           <div class="appearance-custom-control"><input id="accent-custom-color" type="color" :value="accentColor" @input="handleAccentChange(($event.target as HTMLInputElement).value)" /><code>{{ accentColor.toUpperCase() }}</code></div>
           <div class="appearance-cover-control">
-            <h3 class="text-sm font-medium">仪表盘封面</h3>
-            <p class="text-xs">支持 JPEG、PNG、WebP，不超过 1 MB。上传后可调整仪表盘展示区域。</p>
-            <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" aria-label="选择仪表盘封面图片" @change="onHeroSelected" />
-            <div v-if="heroPreviewUrl" class="appearance-cover-preview" :style="{ backgroundImage: `url('${heroPreviewUrl}')`, backgroundPosition: `${heroPositionX}% ${heroPositionY}%` }" aria-label="封面预览">
-              <span>预览仪表盘展示区域</span>
+            <h3 class="text-sm font-medium">{{ t('appearance.coverTitle') }}</h3>
+            <p class="text-xs">{{ t('appearance.coverDescription') }}</p>
+            <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" :aria-label="t('appearance.chooseCover')" @change="onHeroSelected" />
+            <div v-if="heroPreviewUrl" ref="heroPreview" class="appearance-cover-preview" :class="{ 'appearance-cover-preview--dragging': heroDragging }" :aria-label="t('appearance.coverPreviewPosition', { x: heroPositionX, y: heroPositionY })" role="group" tabindex="0" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" :aria-busy="heroBusy" @keydown="moveHeroWithKeyboard" @pointerdown="startHeroDrag" @pointermove="moveHeroDrag" @pointerup="stopHeroDrag" @pointercancel="stopHeroDrag">
+              <HeroCover :src="heroPreviewUrl" :position-x="heroPositionX" :position-y="heroPositionY" @geometry="heroFrame = $event" />
+              <span>{{ t('appearance.coverPreviewHint') }}</span>
             </div>
             <div v-if="heroPreviewUrl" class="appearance-cover-position">
-              <label>水平位置 <input v-model.number="heroPositionX" type="range" min="0" max="100" step="1" @input="persistHeroPosition" /><output>{{ heroPositionX }}%</output></label>
-              <label>垂直位置 <input v-model.number="heroPositionY" type="range" min="0" max="100" step="1" @input="persistHeroPosition" /><output>{{ heroPositionY }}%</output></label>
+              <label>{{ t('appearance.horizontalPosition') }} <input v-model.number="heroPositionX" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.horizontalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionX }}%</output></label>
+              <label>{{ t('appearance.verticalPosition') }} <input v-model.number="heroPositionY" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.verticalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionY }}%</output></label>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroPresent ? '更换封面' : '上传封面' }}</button>
-              <button v-if="heroPresent" type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="resetHeroImage"><RotateCcw :size="16" aria-hidden="true" />恢复默认</button>
+              <button type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroPresent ? t('appearance.replaceCover') : t('appearance.uploadCover') }}</button>
+              <button v-if="heroPresent" type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="resetHeroImage"><RotateCcw :size="16" aria-hidden="true" />{{ t('appearance.resetCover') }}</button>
             </div>
-            <p v-if="heroFeedback" id="hero-cover-feedback" class="text-xs" :class="heroFeedback.includes('失败') || heroFeedback.includes('请选择') ? 'panel-error' : 'text-[var(--tg-text-muted)]'" :role="heroFeedback.includes('失败') || heroFeedback.includes('请选择') ? 'alert' : 'status'" aria-live="polite">{{ heroFeedback }}</p>
+            <p v-if="heroFeedback" id="hero-cover-feedback" class="text-xs" :class="heroFeedbackIsError ? 'panel-error' : 'text-[var(--tg-text-muted)]'" :role="heroFeedbackIsError ? 'alert' : 'status'" aria-live="polite">{{ heroFeedback }}</p>
           </div>
         </div>
       </Modal>

@@ -90,16 +90,25 @@ async def delete(account: str, body: ChatInput, message_id: int):
 async def upload(account: str, chat_id: str = Form(...), file: UploadFile = File(...), caption: str = Form(""), reply_to_message_id: int | None = Form(None)):
     from pathlib import PurePosixPath
     try:
-        service.checked_account(account)
         service.peer_id(chat_id)
         if len(caption) > 1024 or (reply_to_message_id is not None and not 1 <= reply_to_message_id <= 2147483647):
             raise HTTPException(422, "附件说明或回复消息 ID 无效")
-        data = await file.read(service.MAX_MEDIA_BYTES + 1)
-        if not data:
-            raise HTTPException(422, "不能发送空文件")
-        filename = PurePosixPath((file.filename or "attachment.bin").replace("\\", "/")).name
-        filename = "".join(c for c in filename if c.isprintable())[:200] or "attachment.bin"
-        return await service.send_media(account, chat_id, data, filename, caption, reply_to_message_id)
+        async with service.media_upload_admission(account) as client:
+            data = await file.read(service.MAX_MEDIA_BYTES + 1)
+            try:
+                if len(data) > service.MAX_MEDIA_BYTES:
+                    raise HTTPException(413, "附件不能超过 20 MiB")
+                if not data:
+                    raise HTTPException(422, "不能发送空文件")
+                filename = PurePosixPath((file.filename or "attachment.bin").replace("\\", "/")).name
+                filename = "".join(c for c in filename if c.isprintable())[:200] or "attachment.bin"
+                return await service.send_media_with_client(
+                    client, chat_id, data, filename, caption, reply_to_message_id
+                )
+            finally:
+                # Release the buffer before yielding its admission to another
+                # request, even if closing the uploaded file later takes time.
+                del data
     finally:
         await file.close()
 

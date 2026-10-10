@@ -26,7 +26,7 @@ export function useSettingsSave(options: {
 }) {
   const { t } = useI18n()
   const toast = useToast()
-  const notifySuccess = (msg: string) => toast.success(msg)
+  const notifySuccess = (key: string, params?: Record<string, unknown>) => toast.success(t(key, params), { messageKey: key, messageParams: params })
   const notifyError = (msg: string) => toast.error(msg)
 
   const loading = ref(false)
@@ -44,7 +44,7 @@ export function useSettingsSave(options: {
         // 保存成功后立即同步面板展示时区，Dashboard/Logs 等页时间格式跟随
         setPanelTimezone(String(options.buildGeneralPayload().timezone || ''))
         options.markSectionClean('general')
-        notifySuccess(t('settings.saveSuccess'))
+        notifySuccess('settings.saveSuccess')
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {
@@ -60,11 +60,11 @@ export function useSettingsSave(options: {
         const res = await runDeviceKeepalive(token)
         // 整句走 i18n 插值：标点与语序交给词条，避免英文界面混入中文全角标点
         notifySuccess(
-          t('settings.keepaliveSummary', {
+          'settings.keepaliveSummary', {
             kept: res.kept_alive,
             checked: res.checked,
             failed: res.failed,
-          }),
+          },
         )
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.keepaliveFailed'))
@@ -81,7 +81,7 @@ export function useSettingsSave(options: {
         await saveGlobalSettings(token, options.buildBotPayload())
         options.afterBotTokenSaved()
         options.markSectionClean('bot')
-        notifySuccess(t('settings.saveSuccess'))
+        notifySuccess('settings.saveSuccess')
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {
@@ -97,7 +97,7 @@ export function useSettingsSave(options: {
         await saveGlobalSettings(token, options.buildBackupPayload())
         options.afterWebdavSettingsSaved()
         options.markSectionClean('advanced')
-        notifySuccess(t('settings.saveSuccess'))
+        notifySuccess('settings.saveSuccess')
         try {
           await options.loadBackupStatus(token)
         } catch {
@@ -127,7 +127,7 @@ export function useSettingsSave(options: {
         options.markSectionClean('general')
         options.markSectionClean('bot')
         options.markSectionClean('advanced')
-        notifySuccess(t('settings.saveAllSuccess'))
+        notifySuccess('settings.saveAllSuccess')
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {
@@ -141,8 +141,8 @@ export function useSettingsSave(options: {
       botTestLoading.value = true
       try {
         const res = await testBotNotification(token)
-        if (res.success) notifySuccess(res.message)
-        else notifyError(res.message)
+        if (res.success) notifySuccess('settings.botTestSuccess')
+        else notifyError(resolveApiErrorMessage(res.message, 'settings.testFailed'))
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.testFailed'))
       } finally {

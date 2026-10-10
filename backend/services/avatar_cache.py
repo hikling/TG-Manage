@@ -73,7 +73,7 @@ def read_cached_avatar(
             return None
         if time.time() - cache_file.stat().st_mtime >= ttl:
             return None
-        return cache_file.read_bytes()
+        return read_avatar_file(cache_file)
     except OSError:
         return None
 
@@ -85,7 +85,9 @@ def read_avatar_file(cache_file: Path) -> Optional[bytes]:
             with contextlib.suppress(OSError):
                 cache_file.unlink(missing_ok=True)
             return None
-        return cache_file.read_bytes()
+        with cache_file.open('rb') as stream:
+            data = stream.read(ACCOUNT_AVATAR_MAX_BYTES + 1)
+        return data if len(data) <= ACCOUNT_AVATAR_MAX_BYTES else None
     except OSError:
         return None
 

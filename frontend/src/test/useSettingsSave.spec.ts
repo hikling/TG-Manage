@@ -111,7 +111,7 @@ describe('useSettingsSave', () => {
     api.testBotNotification.mockResolvedValue({ success: true, message: 'ok' })
     const { save } = setup()
     await save.testBot()
-    expect(toastSpy.success).toHaveBeenCalledWith('ok')
+    expect(toastSpy.success).toHaveBeenCalledWith('settings.botTestSuccess', { messageKey: 'settings.botTestSuccess', messageParams: undefined })
 
     api.testBotNotification.mockResolvedValue({ success: false, message: 'bad' })
     await save.testBot()

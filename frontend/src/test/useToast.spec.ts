@@ -232,5 +232,20 @@ describe('useToast', () => {
     dismiss(toasts.value[0].id)
     expect(toasts.value).toHaveLength(0)
   })
-})
 
+  it('drops old-language resolved messages and their timers while keeping keyed notifications', async () => {
+    const i18n = (await import('../i18n')).default
+    const previous = i18n.global.locale.value
+    const { toasts, success, clear } = useToast()
+    success('旧语言消息')
+    success('保存成功', { messageKey: 'settings.saveSuccess' })
+    expect(vi.getTimerCount()).toBe(2)
+    i18n.global.locale.value = previous === 'zh-CN' ? 'en-US' : 'zh-CN'
+    await import('vue').then(({ nextTick }) => nextTick())
+    expect(toasts.value).toHaveLength(1)
+    expect(toasts.value[0]?.messageKey).toBe('settings.saveSuccess')
+    expect(vi.getTimerCount()).toBe(1)
+    clear()
+    i18n.global.locale.value = previous
+  })
+})

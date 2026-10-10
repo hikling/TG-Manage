@@ -1,4 +1,5 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import i18n from '../i18n'
 
 export interface ConfirmOptions {
   title: string
@@ -37,6 +38,9 @@ function close(result: boolean) {
   pending = null
   p?.resolve(result)
 }
+
+// A pending decision is cancelled when its resolved text belongs to the old locale.
+watch(i18n.global.locale, () => close(false))
 
 /**
  * 全局确认对话框（Promise 化），替代 window.confirm

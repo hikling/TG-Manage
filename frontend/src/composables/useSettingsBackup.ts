@@ -1,7 +1,7 @@
 /**
  * 设置页：配置导入导出、WebDAV 与完整备份。
  */
-import { ref, type Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import {
   exportAllConfigs,
   importAllConfigs,
@@ -41,7 +41,8 @@ export function useSettingsBackup(options: {
   const webdavTestLoading = ref(false)
   const webdavListLoading = ref(false)
   const remoteWebdavFiles = ref<WebDavRemoteFile[]>([])
-  const remoteWebdavMessage = ref('')
+  const remoteWebdavMessageKey = ref('')
+  const remoteWebdavMessage = computed(() => remoteWebdavMessageKey.value ? t(remoteWebdavMessageKey.value) : '')
   const webdavPasswordSet = ref(false)
   const remoteDownloadName = ref('')
 
@@ -90,7 +91,7 @@ export function useSettingsBackup(options: {
       return
     }
     webdavListLoading.value = true
-    remoteWebdavMessage.value = ''
+    remoteWebdavMessageKey.value = ''
     try {
       await saveGlobalSettings(token, options.buildBackupPayload())
       afterWebdavSettingsSaved()
@@ -98,16 +99,14 @@ export function useSettingsBackup(options: {
       const res = await listWebdavBackupFiles(token)
       if (!res.success) {
         remoteWebdavFiles.value = []
-        remoteWebdavMessage.value = res.message || t('settings.webdavListFailed')
+        remoteWebdavMessageKey.value = 'settings.webdavListFailed'
         notifyError(remoteWebdavMessage.value)
         return
       }
       remoteWebdavFiles.value = res.files || []
-      remoteWebdavMessage.value =
-        res.message ||
-        (remoteWebdavFiles.value.length
-          ? t('settings.webdavListOk')
-          : t('settings.webdavListEmpty'))
+      remoteWebdavMessageKey.value = remoteWebdavFiles.value.length
+        ? 'settings.webdavListOk'
+        : 'settings.webdavListEmpty'
     } catch (e: unknown) {
       remoteWebdavFiles.value = []
       notifyError(resolveApiErrorMessage(e, 'settings.webdavListFailed'))
@@ -169,8 +168,8 @@ export function useSettingsBackup(options: {
       afterWebdavSettingsSaved()
       options.markSectionClean('advanced')
       const res = await testWebdavBackup(token)
-      if (res.success) notifySuccess(res.message || t('settings.webdavTestOk'))
-      else notifyError(res.message || t('settings.webdavTestFailed'))
+      if (res.success) notifySuccess(t('settings.webdavTestOk'))
+      else notifyError(resolveApiErrorMessage(res.message, 'settings.webdavTestFailed'))
     } catch (e: unknown) {
       notifyError(resolveApiErrorMessage(e, 'settings.webdavTestFailed'))
     } finally {
@@ -191,7 +190,7 @@ export function useSettingsBackup(options: {
       try {
         const preview = await importConfigPreview(token, jsonStr)
         if (preview.errors?.length) {
-          notifyError(`${t('settings.importFailed')}: ${preview.errors.slice(0, 2).join('; ')}`)
+          notifyError(`${t('settings.importFailed')}: ${preview.errors.slice(0, 2).map(message => resolveApiErrorMessage(message, 'settings.importFailed')).join('; ')}`)
           return
         }
         const conflictHint = preview.conflicts?.length
@@ -208,9 +207,9 @@ export function useSettingsBackup(options: {
         const warnings = result.warnings || []
         const errors = result.errors || []
         const summary = [
-          result.message,
-          warnings.length ? warnings.slice(0, 3).join('; ') : '',
-          errors.length ? errors.slice(0, 3).join('; ') : '',
+          result.message ? resolveApiErrorMessage(result.message, 'settings.importPartial') : '',
+          warnings.length ? warnings.slice(0, 3).map(message => resolveApiErrorMessage(message, 'settings.importPartial')).join('; ') : '',
+          errors.length ? errors.slice(0, 3).map(message => resolveApiErrorMessage(message, 'settings.importFailed')).join('; ') : '',
         ]
           .filter(Boolean)
           .join(' · ')

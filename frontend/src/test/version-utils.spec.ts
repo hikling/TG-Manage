@@ -121,6 +121,65 @@ describe('version-utils', () => {
     await expect(fetchGithubLatestRelease()).rejects.toThrow(/HTTP 403/)
   })
 
+  it('uses the highest stable tag after Releases 404 and stays within one tag page', async () => {
+    const mockFetch = vi.fn()
+      .mockRejectedValueOnce(new TypeError('CORS'))
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: true, json: async () => [
+        { name: 'v2.1.0' }, { name: 'v3.0.0-rc.1' }, { name: 'preview' }, { name: 'v2.5.0' },
+      ] })
+    vi.stubGlobal('fetch', mockFetch)
+    const result = await fetchGithubLatestRelease('https://api.github.com/repos/custom/panel/releases/latest')
+    expect(result).toEqual({ version: '2.5.0', url: 'https://github.com/custom/panel/tree/v2.5.0' })
+    expect(mockFetch).toHaveBeenCalledTimes(3)
+    expect(mockFetch.mock.calls[0][0]).toBe('https://github.com/custom/panel/releases/latest')
+    expect(mockFetch.mock.calls[2][0]).toBe('https://api.github.com/repos/custom/panel/tags?per_page=100')
+  })
+
+  it('returns an informational empty version when there are no stable tags', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockRejectedValueOnce(new TypeError('CORS'))
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ name: 'v3.0.0-beta.1' }] }))
+    expect(await fetchGithubLatestRelease()).toEqual({
+      version: null, url: 'https://github.com/hikling/TG-Manage/tags',
+    })
+  })
+
+  it('preserves custom JSON 404 errors without a GitHub tag request', async () => {
+    const mockFetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 404 })
+    vi.stubGlobal('fetch', mockFetch)
+    await expect(fetchGithubLatestRelease('https://example.com/latest.json')).rejects.toThrow('HTTP 404')
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('discards the HTML response body once the redirect is resolved', async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 200, url: 'https://github.com/hikling/TG-Manage/releases/tag/v4.0.0',
+      headers: { get: () => null }, body: { cancel },
+    }))
+    await fetchGithubLatestReleaseViaRedirect()
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the timeout active until the JSON response body finishes', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('fetch', vi.fn((_url: string, options?: RequestInit) => Promise.resolve({
+        ok: true,
+        json: () => new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+        }),
+      })))
+      const pending = fetchGithubLatestRelease('https://example.com/latest.json', 1000)
+      const rejected = expect(pending).rejects.toThrow(/timed out/i)
+      await vi.advanceTimersByTimeAsync(1000)
+      await rejected
+      expect(vi.getTimerCount()).toBe(0)
+    } finally { vi.useRealTimers() }
+  })
+
   it('tagFromReleaseUrl extracts tag', () => {
     expect(
       tagFromReleaseUrl(

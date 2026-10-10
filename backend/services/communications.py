@@ -12,7 +12,12 @@ from backend.services.telegram import get_telegram_service
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
 from backend.utils.proxy import build_proxy_dict, normalize_proxy_url
-from backend.utils.tg_session import get_account_proxy, set_account_profile
+from backend.utils.tg_session import (
+    get_account_proxy,
+    get_global_semaphore,
+    get_media_upload_semaphore,
+    set_account_profile,
+)
 
 MAX_MEDIA_BYTES = 20 * 1024 * 1024
 
@@ -42,14 +47,17 @@ def checked_account(account: str):
 
 
 @asynccontextmanager
-async def account_client(account: str):
-    service, account = checked_account(account)
+async def _client_for_account(service: Any, account: str):
     # 与签到、设备及账号修改共用锁和带引用计数的 Client。
     async with get_account_lock(account):
-        client, _ = service._build_account_client(account, no_updates=True)
         try:
-            async with client:
-                yield client
+            # Match the established account-lock -> global Telegram permit order.
+            async with get_global_semaphore():
+                # Waiting or canceled requests must not retain an unstarted
+                # client in the shared client cache.
+                client, _ = service._build_account_client(account, no_updates=True)
+                async with client:
+                    yield client
         except HTTPException:
             raise
         except Exception as exc:
@@ -61,6 +69,22 @@ async def account_client(account: str):
                 code = getattr(exc, "ID", "TELEGRAM_ERROR")
                 raise HTTPException(400, f"Telegram 操作失败：{code}") from None
             raise HTTPException(502, "Telegram 连接或操作失败，请检查账号授权及代理") from None
+
+
+@asynccontextmanager
+async def account_client(account: str):
+    service, account = checked_account(account)
+    async with _client_for_account(service, account) as client:
+        yield client
+
+
+@asynccontextmanager
+async def media_upload_admission(account: str):
+    """Bound upload buffers before reading, then retain Telegram admission through send."""
+    service, account = checked_account(account)
+    async with get_media_upload_semaphore():
+        async with _client_for_account(service, account) as client:
+            yield client
 
 
 def timestamp(value: Any) -> str | None:
@@ -145,14 +169,20 @@ async def delete_message(account: str, chat_id: str, message_id: int):
     return {"ok": True}
 
 
-async def send_media(account: str, chat_id: str, data: bytes, filename: str, caption: str, reply: int | None):
+async def send_media_with_client(client: Any, chat_id: str, data: bytes, filename: str, caption: str, reply: int | None):
     from pyrogram.enums import ParseMode
     if len(data) > MAX_MEDIA_BYTES:
         raise HTTPException(413, "附件不能超过 20 MiB")
-    stream = BytesIO(data)
-    stream.name = filename
-    async with account_client(account) as client:
+    with BytesIO(data) as stream:
+        stream.name = filename
         return message_data(await client.send_document(peer_id(chat_id), stream, file_name=filename, caption=caption, reply_to_message_id=reply, parse_mode=ParseMode.DISABLED))
+
+
+async def send_media(account: str, chat_id: str, data: bytes, filename: str, caption: str, reply: int | None):
+    async with account_client(account) as client:
+        return await send_media_with_client(
+            client, chat_id, data, filename, caption, reply
+        )
 
 
 async def download_media(account: str, chat_id: str, message_id: int) -> bytes:

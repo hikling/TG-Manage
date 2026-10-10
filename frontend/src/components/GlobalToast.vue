@@ -5,6 +5,7 @@ import { useI18n } from '../composables/useI18n'
 
 const { toasts, dismiss, pause, resume } = useToast()
 const { t } = useI18n()
+const messageFor = (toast: typeof toasts.value[number]) => toast.messageKey ? t(toast.messageKey, toast.messageParams) : toast.message
 </script>
 
 <template>
@@ -55,7 +56,7 @@ const { t } = useI18n()
           />
           <div class="flex-1 min-w-0">
             <div class="break-words leading-relaxed font-medium">
-              {{ toast.count > 1 ? `${toast.message} ×${toast.count}` : toast.message }}
+              {{ toast.count > 1 ? `${messageFor(toast)} ×${toast.count}` : messageFor(toast) }}
             </div>
             <div
               v-if="toast.description"
