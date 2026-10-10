@@ -169,11 +169,11 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .dark .panel-success { color: #86e6c0; background: #1b3c33; }
 .panel-empty, .ui-empty { color: var(--tg-text-muted); }
 
-/* Dashboard and crop preview share their ratio and image framing. */
+/* Dashboard keeps the cover as a compact visual header so the data stays above the fold. */
 .dashboard { max-width: 1500px; }
 .dashboard-hero {
   position: relative; isolation: isolate; display: flex; align-items: center; overflow: hidden;
-  aspect-ratio: 16 / 7; min-height: 0; padding: clamp(16px, 3vw, 38px); border-radius: 23px;
+  min-height: 310px; max-height: 310px; padding: clamp(28px, 4vw, 58px); border-radius: 23px;
   background: var(--tg-themed-surface); color: var(--tg-themed-text); box-shadow: var(--tg-shadow-md);
 }
 .dashboard-hero::before {
@@ -181,7 +181,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
   background: linear-gradient(90deg, var(--tg-themed-surface) 0%, color-mix(in srgb, var(--tg-themed-surface) 90%, transparent) 44%, transparent 100%);
 }
 .dashboard-hero--custom { color: #fff; }
-.dashboard-hero--custom::before { background: linear-gradient(180deg, transparent 45%, rgb(8 22 33 / .35)); pointer-events: none; }
+.dashboard-hero--custom::before { background: linear-gradient(90deg, rgb(8 22 33 / .98) 0%, rgb(8 22 33 / .88) 46%, rgb(8 22 33 / .34) 100%); pointer-events: none; }
 .dashboard-hero-image { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center; }
 .dashboard-hero-copy { position: relative; z-index: 2; max-width: 680px; }
 .login-intro-pulse { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--tg-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--tg-accent) 18%, transparent); }
@@ -190,7 +190,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .dashboard-hero-copy > p { max-width: 43ch; color: var(--tg-themed-muted); font-size: .96rem; line-height: 1.7; }
 .dashboard-hero--custom h2, .dashboard-hero--custom .dashboard-hero-copy > p { color: #fff; text-shadow: 0 2px 5px rgb(0 0 0 / .45); }
 .dashboard-hero--custom h2 span { color: #e8f3ff; }
-.dashboard-hero-actions { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap; gap: 12px; margin-top: 0; }
+.dashboard-hero-actions { position: relative; z-index: 2; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
 .dashboard-hero-primary, .dashboard-hero-refresh {
   display: inline-flex; align-items: center; justify-content: center; gap: 9px;
   min-height: 44px; padding: 0 17px; border-radius: 10px; font-size: .86rem; font-weight: 700;
@@ -383,7 +383,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
 @media (max-width: 1100px) { .dashboard-hero-visual { right: -70px; opacity: .5; } }
 @media (max-width: 1350px) { .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
-  .dashboard-hero { align-items: center; aspect-ratio: auto; min-height: 280px; }
+  .dashboard-hero { align-items: center; aspect-ratio: auto; min-height: 280px; max-height: none; }
   .dashboard-hero::before { background: linear-gradient(90deg, var(--tg-themed-surface), color-mix(in srgb, var(--tg-themed-surface) 85%, transparent)); }
   .dashboard-hero-visual { right: -150px; opacity: .25; }
   .dashboard-metrics { grid-template-columns: 1fr; }
