@@ -35,7 +35,7 @@ def test_rejects_invalid_or_large_upload(content):
         appearance.save_hero(content)
 
 
-def test_accepts_exactly_one_mebibyte(cover_workdir):
+def test_accepts_exactly_two_mebibytes(cover_workdir):
     content = b"\x89PNG\r\n\x1a\n" + b"x" * (appearance.MAX_HERO_UPLOAD_BYTES - 8)
     appearance.save_hero(content)
     assert appearance.read_hero() == (content, "image/png")

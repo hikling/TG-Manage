@@ -572,7 +572,7 @@ class TestAppearanceSettings:
         assert loaded.status_code == 200
         assert loaded.json()["appearance_accent_color"] == "#aabbcc"
 
-    def test_hero_upload_rejects_more_than_one_mebibyte(self, api_client):
+    def test_hero_upload_rejects_more_than_two_mebibytes(self, api_client):
         from backend.services.appearance import MAX_HERO_UPLOAD_BYTES
 
         token = _login(api_client)

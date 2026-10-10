@@ -2,7 +2,7 @@ import { fetchWithAuth, getAuthToken, request, requestBlob } from './core'
 
 const PATH = '/appearance/hero-image'
 const SETTINGS_PATH = '/appearance/hero-settings'
-export const MAX_HERO_IMAGE_BYTES = 1 * 1024 * 1024
+export const MAX_HERO_IMAGE_BYTES = 2 * 1024 * 1024
 
 export interface HeroSettings {
   present: boolean
