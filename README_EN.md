@@ -4,18 +4,54 @@
 <p align="center"><a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a></p>
 <p align="center"><a href="#features">✨ Features</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-0b7285?style=flat-square" alt="BSD 3-Clause license"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.10 to 3.13"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.109%2B-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI 0.109 or later"></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue.js-3.5-42B883?style=flat-square&amp;logo=vuedotjs&amp;logoColor=white" alt="Vue.js 3.5"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6%20%7C%207-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript 6 and 7"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js 22 and 24"></a>
+  <a href="https://github.com/TeleBoxOrg/TeleBox"><img src="https://img.shields.io/badge/TeleBox-0.2.9-6f42c1?style=flat-square" alt="TeleBox 0.2.9"></a>
+</p>
+
 > Based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrating [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). The current project is [hikling/TG-Manage](https://github.com/hikling/TG-Manage); build from this repository because upstream images do not include these UI and TeleBox changes.
 
 <a id="features"></a>
 ## ✨ Features
 
-- **👥 Account management** — Sign in by code or QR, check status, refresh avatars on demand, and set per-account proxies. Single and batch checks share a 45-second interval after each successful account check.
-- **💬 Chat center** — Browse group conversations by account, search, send attachments, reply, edit, and delete messages. Chat can be switched on independently.
-- **🤖 Private bot** — Only the configured private target ID may use `/code account-name` to query a code from the last five minutes of `777000`, or `/me` to list local account names and remarks. Both commands share a 45-second interval; idle operation never scans account messages.
-- **🎨 Dashboard and appearance** — The dashboard contains a cover with Manage accounts and Refresh actions. Accent colors and custom covers are saved on the server. Covers support horizontal and vertical positioning, reset to default, and a 1 MiB upload limit.
-- **🔌 Integrated TeleBox** — Each enabled account gets a separate Telegram session and runtime directory, with status and logs on its account card. The pinned upstream revision is recorded in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json).
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>👥 Account management</h3>
+      <p>Sign in by code or QR, check status, refresh avatars on demand, and set per-account proxies. Single and batch checks share a 45-second interval after each successful account check.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>💬 Chat center</h3>
+      <p>Browse group conversations by account, search, send attachments, reply, edit, and delete messages. Chat can be switched on independently.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🤖 Private bot</h3>
+      <p>The configured private target ID may use <code>/code account-name</code> to query a code from the last five minutes of <code>777000</code>, or <code>/me</code> to list local account names and remarks. Both commands share a 45-second interval; idle operation never scans account messages.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🎨 Dashboard and appearance</h3>
+      <p>The dashboard provides the cover, Manage accounts, and Refresh entry points. Accent colors and custom covers are saved on the server, with positioning, reset, and a 1 MiB upload limit.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🔌 Integrated TeleBox</h3>
+      <p>Each enabled account gets a separate Telegram session and runtime directory, with status and logs on its account card. Start, stop, or log out from the same card; the pinned upstream revision is recorded in <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🔐 Separate session boundary</h3>
+      <p>Logging out of TeleBox clears only its separate authorization, not the main account session. Keep the two session stores separate.</p>
+    </td>
+  </tr>
+</table>
 
-> **Session boundary:** Logging out of TeleBox clears only its separate authorization, not the main account session. Do not merge the two session stores manually.
 
 <a id="quick-start"></a>
 ## 🚀 Quick start

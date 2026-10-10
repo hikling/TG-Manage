@@ -4,18 +4,54 @@
 <p align="center"><a href="README.md"><strong>简体中文</strong></a> · <a href="README_EN.md">English</a></p>
 <p align="center"><a href="#features">✨ 功能</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-0b7285?style=flat-square" alt="BSD 3-Clause license"></a>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.10 to 3.13"></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.109%2B-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI 0.109 or later"></a>
+  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue.js-3.5-42B883?style=flat-square&amp;logo=vuedotjs&amp;logoColor=white" alt="Vue.js 3.5"></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6%20%7C%207-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript 6 and 7"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js 22 and 24"></a>
+  <a href="https://github.com/TeleBoxOrg/TeleBox"><img src="https://img.shields.io/badge/TeleBox-0.2.9-6f42c1?style=flat-square" alt="TeleBox 0.2.9"></a>
+</p>
+
 > 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，集成 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)。当前项目源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；请从本仓库构建，上游镜像不包含这里的界面和集成改动。
 
 <a id="features"></a>
 ## ✨ 核心功能
 
-- **👥 多账号管理** — 手机验证码或二维码登录，按需检测账号、刷新头像、配置代理；单检和批检共用每账号成功后 45 秒的检测间隔。
-- **💬 聊天中心** — 按账号浏览群组对话，搜索、收发附件、回复、编辑和删除消息；聊天功能可独立开启或关闭。
-- **🤖 私人机器人** — 只有配置的私人目标 ID 能用 `/code 账号名` 按需查询 `777000` 最近 5 分钟内的验证码，或用 `/me` 查看本地账号名称和备注；两种命令共用 45 秒间隔，空闲时不扫描账号消息。
-- **🎨 仪表盘与外观** — 仪表盘保留封面与账号管理、刷新两个操作；主题色与自定义封面同步保存到服务器。封面限 1 MiB，可调整水平和垂直位置或恢复默认。
-- **🔌 内置 TeleBox** — 每个启用的账号使用独立 Telegram 会话和运行目录；可在账号卡片查看状态、日志以及启动、停止和退出登录。上游版本见 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>👥 多账号管理</h3>
+      <p>支持手机验证码或二维码登录，按需检测账号、刷新头像和配置代理。单检与批检共用每个账号成功后 45 秒的检测间隔。</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>💬 聊天中心</h3>
+      <p>按账号浏览群组对话，支持搜索、收发附件、回复、编辑和删除消息。聊天能力可以独立开启或关闭。</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🤖 私人机器人</h3>
+      <p>配置的私人目标 ID 可用 <code>/code 账号名</code> 查询 <code>777000</code> 最近 5 分钟内的验证码，也可用 <code>/me</code> 查看本地账号名称和备注。两种命令共用 45 秒间隔，空闲时不扫描账号消息。</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🎨 仪表盘与外观</h3>
+      <p>仪表盘提供封面、账号管理和刷新入口。主题色与自定义封面同步保存到服务器，封面支持位置调整、恢复默认和 1 MiB 上传限制。</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🔌 内置 TeleBox</h3>
+      <p>每个启用的账号使用独立 Telegram 会话和运行目录，可在账号卡片查看状态、日志并启动、停止或退出登录。上游版本见 <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>。</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🔐 独立会话边界</h3>
+      <p>退出 TeleBox 只清除它的独立授权，不会退出账号管理中的主账号。两套 session 文件必须保持独立。</p>
+    </td>
+  </tr>
+</table>
 
-> **会话边界：**退出 TeleBox 只清除它的独立授权，不会退出账号管理中的主账号；不要手工合并两套 session 文件。
 
 <a id="quick-start"></a>
 ## 🚀 快速部署
