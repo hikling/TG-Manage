@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import i18n from '../i18n'
 import { useConfirm } from '../composables/useConfirm'
 
 describe('useConfirm', () => {
@@ -32,5 +33,15 @@ describe('useConfirm', () => {
     await expect(first).resolves.toBe(false)
     accept()
     await expect(second).resolves.toBe(true)
+  })
+
+  it('cancels a pending localized decision when the UI language changes', async () => {
+    const previous = i18n.global.locale.value
+    const { confirm, state } = useConfirm()
+    const pending = confirm({ title: '确认删除', message: '是否继续？' })
+    i18n.global.locale.value = previous === 'zh-CN' ? 'en-US' : 'zh-CN'
+    await expect(pending).resolves.toBe(false)
+    expect(state.value.open).toBe(false)
+    i18n.global.locale.value = previous
   })
 })

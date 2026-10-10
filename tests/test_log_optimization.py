@@ -8,9 +8,9 @@
 4. run_id 错误日志格式
 """
 
+import io
 import logging
 import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -103,88 +103,128 @@ ValueError: invalid literal
             assert "  " not in content, f"行内容部分不应有连续空格: {line!r}"
 
 
+@pytest.fixture
+def isolated_loggers(monkeypatch):
+    """Restore global Pyrogram state and close every test-owned handler."""
+    from tg_manage.logger import configure_logger
+
+    monkeypatch.setenv("PYROGRAM_LOG_ON", "0")
+    configured = []
+    pyrogram_logger = logging.getLogger("pyrogram")
+    original_handlers = pyrogram_logger.handlers[:]
+    original_level = pyrogram_logger.level
+    original_propagate = pyrogram_logger.propagate
+
+    def configure(**kwargs):
+        logger = logging.getLogger(kwargs["name"])
+        configured.append(logger)
+        return configure_logger(**kwargs)
+
+    try:
+        yield configure
+    finally:
+        for logger in configured:
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+                handler.close()
+        for handler in pyrogram_logger.handlers[:]:
+            if handler not in original_handlers:
+                pyrogram_logger.removeHandler(handler)
+                handler.close()
+        pyrogram_logger.handlers[:] = original_handlers
+        pyrogram_logger.setLevel(original_level)
+        pyrogram_logger.propagate = original_propagate
+
+
 class TestConfigureLogger:
-    """测试 configure_logger 函数"""
+    """Logger configuration must release resources and remain idempotent."""
 
-    def test_invalid_log_level_fallback(self):
-        """测试无效日志等级自动降级到 INFO"""
-        from tg_manage.logger import configure_logger
+    def test_invalid_log_level_fallback(self, isolated_loggers, tmp_path):
+        logger = isolated_loggers(
+            name="test-invalid", log_level="INVALID_LEVEL", log_dir=tmp_path,
+        )
+        assert logger.level == logging.INFO
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            logger = configure_logger(
-                name="test-invalid",
-                log_level="INVALID_LEVEL",
-                log_dir=tmpdir,
-            )
+    def test_warn_log_creation(self, isolated_loggers, tmp_path):
+        isolated_loggers(name="test-warn", log_level="WARNING", log_dir=tmp_path)
+        assert (tmp_path / "warn.log").exists()
 
-            # 应该降级到 INFO (20)
-            assert logger.level == logging.INFO
+    def test_error_log_creation(self, isolated_loggers, tmp_path):
+        isolated_loggers(name="test-error", log_level="ERROR", log_dir=tmp_path)
+        assert not (tmp_path / "warn.log").exists()
+        assert (tmp_path / "error.log").exists()
 
-    def test_warn_log_creation(self):
-        """测试 WARNING 等级时 warn.log 创建"""
-        from tg_manage.logger import configure_logger
+    def test_reconfiguration_closes_previous_file_handles(self, isolated_loggers, tmp_path):
+        first_dir = tmp_path / "first"
+        logger = isolated_loggers(name="test-reconfigure", log_dir=first_dir)
+        logger.warning("first-directory")
+        previous_handlers = logger.handlers[:]
+        previous_streams = [
+            handler.stream for handler in previous_handlers
+            if isinstance(handler, logging.FileHandler)
+        ]
+        reconfigured = isolated_loggers(name="test-reconfigure", log_dir=tmp_path / "second")
+        assert reconfigured is logger
+        assert len(logger.handlers) == len(previous_handlers)
+        assert all(stream.closed for stream in previous_streams)
+        assert all(handler not in logger.handlers for handler in previous_handlers)
+        # Windows refuses unlink while any old FileHandler still owns the file.
+        for old_log in first_dir.iterdir():
+            old_log.unlink()
+        first_dir.rmdir()
+        logger.warning("second-directory")
+        for handler in logger.handlers:
+            handler.flush()
+        contents = (tmp_path / "second" / "test-reconfigure.log").read_text(encoding="utf-8")
+        assert contents.count("second-directory") == 1
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            configure_logger(
-                name="test-warn",
-                log_level="WARNING",
-                log_dir=tmpdir,
-            )
+    def test_pyrogram_handler_no_duplicate(self, isolated_loggers, tmp_path, monkeypatch):
+        monkeypatch.setenv("PYROGRAM_LOG_ON", "1")
+        output = io.StringIO()
+        monkeypatch.setattr("sys.stderr", output)
+        pyrogram_logger = logging.getLogger("pyrogram")
+        pyrogram_logger.propagate = False
+        external_handler = logging.NullHandler()
+        pyrogram_logger.addHandler(external_handler)
+        before = pyrogram_logger.handlers[:]
+        isolated_loggers(name="test-pyrogram-1", log_level="INFO", log_dir=tmp_path)
+        first_handlers = pyrogram_logger.handlers[:]
+        added = [handler for handler in first_handlers if handler not in before]
+        assert len(added) == 1
+        isolated_loggers(name="test-pyrogram-2", log_level="DEBUG", log_dir=tmp_path)
+        assert pyrogram_logger.handlers == first_handlers
+        assert pyrogram_logger.level == logging.DEBUG
+        assert external_handler in pyrogram_logger.handlers
+        pyrogram_logger.warning("single-pyrogram-output")
+        assert output.getvalue().count("single-pyrogram-output") == 1
 
-            warn_log = Path(tmpdir) / "warn.log"
-            assert warn_log.exists(), "WARNING 等级应该创建 warn.log"
+    def test_disabled_pyrogram_preserves_external_configuration(
+        self, isolated_loggers, tmp_path,
+    ):
+        pyrogram_logger = logging.getLogger("pyrogram")
+        external_handler = logging.NullHandler()
+        pyrogram_logger.addHandler(external_handler)
+        pyrogram_logger.setLevel(logging.CRITICAL)
+        before = pyrogram_logger.handlers[:]
+        isolated_loggers(name="test-pyrogram-disabled", log_level="DEBUG", log_dir=tmp_path)
+        assert pyrogram_logger.handlers == before
+        assert pyrogram_logger.level == logging.CRITICAL
 
-    def test_error_log_creation(self):
-        """测试 ERROR 等级时 error.log 创建"""
-        from tg_manage.logger import configure_logger
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            configure_logger(
-                name="test-error",
-                log_level="ERROR",
-                log_dir=tmpdir,
-            )
-
-            warn_log = Path(tmpdir) / "warn.log"
-            error_log = Path(tmpdir) / "error.log"
-
-            # ERROR 等级不应创建 warn.log，但应创建 error.log
-            assert not warn_log.exists(), "ERROR 等级不应创建 warn.log"
-            assert error_log.exists(), "ERROR 等级应该创建 error.log"
-
-    def test_pyrogram_handler_no_duplicate(self):
-        """测试 Pyrogram logger 不会重复添加 handler"""
-        from tg_manage.logger import configure_logger
-
-        # 设置环境变量启用 Pyrogram 日志
-        original_value = os.environ.get("PYROGRAM_LOG_ON")
-        os.environ["PYROGRAM_LOG_ON"] = "1"
-
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                # 第一次调用
-                configure_logger(
-                    name="test-pyrogram-1",
-                    log_level="INFO",
-                    log_dir=tmpdir,
-                )
-
-                # 第二次调用（模拟重复配置）
-                configure_logger(
-                    name="test-pyrogram-2",
-                    log_level="INFO",
-                    log_dir=tmpdir,
-                )
-
-                # 注意：当前实现可能会重复添加，这是已知问题
-                # 这个测试会失败，标记为 xfail
-                # assert second_count == first_count, "不应重复添加 Pyrogram handler"
-        finally:
-            if original_value is None:
-                os.environ.pop("PYROGRAM_LOG_ON", None)
-            else:
-                os.environ["PYROGRAM_LOG_ON"] = original_value
-
+    def test_disabling_pyrogram_removes_only_owned_handler(
+        self, isolated_loggers, tmp_path, monkeypatch,
+    ):
+        pyrogram_logger = logging.getLogger("pyrogram")
+        external_handler = logging.NullHandler()
+        pyrogram_logger.addHandler(external_handler)
+        before = pyrogram_logger.handlers[:]
+        monkeypatch.setenv("PYROGRAM_LOG_ON", "1")
+        isolated_loggers(name="test-pyrogram-enable", log_level="WARNING", log_dir=tmp_path)
+        owned_handler = next(handler for handler in pyrogram_logger.handlers if handler not in before)
+        monkeypatch.setenv("PYROGRAM_LOG_ON", "0")
+        isolated_loggers(name="test-pyrogram-disable", log_level="DEBUG", log_dir=tmp_path)
+        assert pyrogram_logger.handlers == before
+        assert pyrogram_logger.level == logging.WARNING
+        assert owned_handler._closed
 
 class TestBackendLoggingConfig:
     """测试后端日志配置（需要 import backend.main）"""

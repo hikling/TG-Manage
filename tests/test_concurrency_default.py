@@ -60,7 +60,7 @@ class TestResolveConcurrencyLimit:
         from backend.utils.tg_session import _effective_cpu_count
 
         with patch("backend.utils.tg_session.os.cpu_count", return_value=32), \
-             patch("backend.utils.tg_session.os.sched_getaffinity", return_value=set(range(32))), \
+             patch("backend.utils.tg_session.os.sched_getaffinity", return_value=set(range(32)), create=True), \
              patch("backend.utils.tg_session.Path.read_text", return_value="200000 100000"):
             assert _effective_cpu_count() == 2
 

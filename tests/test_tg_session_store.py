@@ -364,6 +364,27 @@ class TestAccountStoreCache:
         assert tg_session.list_account_names() == ["y"]
 
 
+    def test_changing_data_directories_keeps_account_documents_bounded(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tg_session, '_account_store_cache', {})
+        for index in range(10):
+            path = tmp_path / f'accounts-{index}.json'
+            path.write_text(json.dumps({'accounts': {str(index): {}}}), encoding='utf-8')
+            monkeypatch.setattr(tg_session, '_account_store_path', lambda path=path: path)
+            assert tg_session.list_account_names() == [str(index)]
+            assert len(tg_session._account_store_cache) <= tg_session._ACCOUNT_STORE_CACHE_MAX_ENTRIES
+        assert set(tg_session._account_store_cache) == {
+            str(tmp_path / 'accounts-8.json'), str(tmp_path / 'accounts-9.json'),
+        }
+
+    def test_loading_a_new_directory_discards_expired_account_documents(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tg_session, '_account_store_cache', {'old': (0.0, {'accounts': {}})})
+        monkeypatch.setattr(tg_session.time, 'monotonic', lambda: 10.0)
+        path = _monkeypatch_store(tmp_path, monkeypatch)
+        path.write_text(json.dumps({'accounts': {'current': {}}}), encoding='utf-8')
+        assert tg_session.list_account_names() == ['current']
+        assert set(tg_session._account_store_cache) == {str(path)}
+
+
 class TestGlobalSemaphore:
     def test_resolve_limit_from_env(self, monkeypatch):
         monkeypatch.setenv("TG_GLOBAL_CONCURRENCY", "7")

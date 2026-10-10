@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,7 +20,83 @@ _SESSION_MODE_ENV = "TG_SESSION_MODE"
 _SESSION_MODE_FILE = "file"
 _SESSION_MODE_STRING = "string"
 
-_GLOBAL_SEMAPHORE: Optional[asyncio.Semaphore] = None
+_MAX_CONCURRENT_MEDIA_UPLOADS = 2
+
+
+class _ResizableSemaphore(asyncio.Semaphore):
+    """Stable FIFO admission, including reservations held by woken waiters.
+
+    Keep Semaphore's public acquire/release/context API, but own scheduling:
+    Python 3.10-3.13 differ in their private waiter wake/cancel implementation.
+    Availability may be negative while existing reservations repay a shrink.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = max(1, limit)
+        super().__init__(self._limit)
+        self._permit_waiters: deque[asyncio.Future[bool]] = deque()
+
+    def set_limit(self, limit: int) -> None:
+        bounded_limit = max(1, limit)
+        if bounded_limit == self._limit:
+            return
+        # Negative availability represents existing permits above a lowered
+        # limit. Releases pay down that debt before admitting another waiter.
+        self._value += bounded_limit - self._limit
+        self._limit = bounded_limit
+        self._wake_waiters()
+
+    def locked(self) -> bool:
+        return self._value <= 0 or any(not waiter.done() for waiter in self._permit_waiters)
+
+    async def acquire(self) -> bool:
+        if not self.locked():
+            self._value -= 1
+            return True
+
+        waiter = asyncio.get_running_loop().create_future()
+        self._permit_waiters.append(waiter)
+        try:
+            await waiter
+        except asyncio.CancelledError:
+            # A resolved future already owns a reserved permit, even if its
+            # task has not resumed. A canceled unresolved future owns none.
+            if not waiter.cancelled():
+                self._value += 1
+            raise
+        finally:
+            try:
+                self._permit_waiters.remove(waiter)
+            except ValueError:
+                pass  # Waking already removed the reservation from the queue.
+            self._wake_waiters()
+        return True
+
+    def release(self) -> None:
+        self._value += 1
+        self._wake_waiters()
+
+    def _wake_waiters(self) -> None:
+        while self._value > 0 and self._permit_waiters:
+            waiter = self._permit_waiters.popleft()
+            if waiter.done():
+                continue
+            self._value -= 1
+            waiter.set_result(True)
+
+    async def __aenter__(self) -> None:
+        await self.acquire()
+
+    async def __aexit__(self, exc_type, exc, tb) -> None:
+        self.release()
+
+    def __repr__(self) -> str:
+        return (f"<{type(self).__name__} limit:{self._limit} "
+                f"available:{self._value} waiters:{len(self._permit_waiters)}>")
+
+
+_GLOBAL_SEMAPHORE: Optional[_ResizableSemaphore] = None
+_MEDIA_UPLOAD_SEMAPHORE: Optional[_ResizableSemaphore] = None
 
 
 def get_session_mode() -> str:
@@ -35,8 +112,17 @@ def get_global_semaphore() -> asyncio.Semaphore:
     global _GLOBAL_SEMAPHORE
     if _GLOBAL_SEMAPHORE is None:
         limit = _resolve_concurrency_limit()
-        _GLOBAL_SEMAPHORE = asyncio.Semaphore(limit)
+        _GLOBAL_SEMAPHORE = _ResizableSemaphore(limit)
     return _GLOBAL_SEMAPHORE
+
+
+def get_media_upload_semaphore() -> asyncio.Semaphore:
+    """Admit a small, configuration-aware number of buffered chat uploads."""
+    global _MEDIA_UPLOAD_SEMAPHORE
+    if _MEDIA_UPLOAD_SEMAPHORE is None:
+        limit = min(_resolve_concurrency_limit(), _MAX_CONCURRENT_MEDIA_UPLOADS)
+        _MEDIA_UPLOAD_SEMAPHORE = _ResizableSemaphore(limit)
+    return _MEDIA_UPLOAD_SEMAPHORE
 
 
 def _effective_cpu_count() -> int:
@@ -82,10 +168,18 @@ def _resolve_concurrency_limit() -> int:
 
 def update_global_semaphore(new_limit: int) -> None:
     """Update the global semaphore with a new concurrency limit at runtime."""
-    global _GLOBAL_SEMAPHORE
+    global _GLOBAL_SEMAPHORE, _MEDIA_UPLOAD_SEMAPHORE
     if new_limit < 1:
         new_limit = 1
-    _GLOBAL_SEMAPHORE = asyncio.Semaphore(new_limit)
+    if _GLOBAL_SEMAPHORE is None:
+        _GLOBAL_SEMAPHORE = _ResizableSemaphore(new_limit)
+    else:
+        _GLOBAL_SEMAPHORE.set_limit(new_limit)
+    upload_limit = min(new_limit, _MAX_CONCURRENT_MEDIA_UPLOADS)
+    if _MEDIA_UPLOAD_SEMAPHORE is None:
+        _MEDIA_UPLOAD_SEMAPHORE = _ResizableSemaphore(upload_limit)
+    else:
+        _MEDIA_UPLOAD_SEMAPHORE.set_limit(upload_limit)
 
 
 def _account_store_path() -> Path:
@@ -99,6 +193,7 @@ def _account_store_path() -> Path:
 # 监听与状态检查等热路径，短窗口内复用避免每次请求全量读盘；
 # 写入路径 _save_account_store 显式失效，保证读写一致
 _ACCOUNT_STORE_CACHE_TTL = 2.0
+_ACCOUNT_STORE_CACHE_MAX_ENTRIES = 2
 _account_store_cache: dict[str, tuple[float, dict]] = {}
 
 
@@ -111,6 +206,14 @@ def _cached_account_store() -> dict:
     if hit is not None and now - hit[0] < _ACCOUNT_STORE_CACHE_TTL:
         return hit[1]
     data = _read_account_store_file(path)
+    # Changing the configured data directory must not retain every historical
+    # accounts document; mirror the two-entry global-settings cache bound.
+    for old_key, (created_at, _) in list(_account_store_cache.items()):
+        if now - created_at >= _ACCOUNT_STORE_CACHE_TTL:
+            _account_store_cache.pop(old_key, None)
+    if key not in _account_store_cache and len(_account_store_cache) >= _ACCOUNT_STORE_CACHE_MAX_ENTRIES:
+        oldest = min(_account_store_cache, key=lambda item: _account_store_cache[item][0])
+        _account_store_cache.pop(oldest, None)
     _account_store_cache[key] = (now, data)
     return data
 

@@ -21,6 +21,14 @@ function collectKeys(node: JsonNode, prefix = '', out: string[] = []): string[] 
 }
 
 describe('locales 键一致性', () => {
+  it('English translations contain no Chinese interface text', () => {
+    const values = (node: JsonNode): string[] => {
+      if (typeof node === 'string') return [node]
+      if (node && typeof node === 'object') return Object.values(node).flatMap(value => values(value as JsonNode))
+      return []
+    }
+    expect(values(enUS as JsonNode).filter(value => /\p{Script=Han}/u.test(value))).toEqual([])
+  })
   it('zh-CN 与 en-US 叶键完全一致', () => {
     const zh = collectKeys(zhCN as JsonNode).sort()
     const en = collectKeys(enUS as JsonNode).sort()

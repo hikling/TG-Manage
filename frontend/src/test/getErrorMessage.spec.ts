@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { createI18n } from 'vue-i18n'
+import enUS from '../locales/en-US.json'
+import zhCN from '../locales/zh-CN.json'
 import {
   getErrorCode,
   getErrorMessage,
@@ -130,5 +133,20 @@ describe('getErrorMessage', () => {
 describe('getErrorCode', () => {
   it('提取 record.error_code', () => {
     expect(getErrorCode({ error_code: 'ACCOUNT_BANNED' })).toBe('ACCOUNT_BANNED')
+  })
+})
+
+
+describe('localized server diagnostics', () => {
+  it('preserves Chinese details in Chinese mode and safely falls back after switching to English', () => {
+    const i18n = createI18n({ legacy: false, locale: 'zh-CN', messages: { 'zh-CN': zhCN, 'en-US': enUS } })
+    const t = (key: string) => String(i18n.global.t(key))
+    const error = { detail: '代理连接失败，请检查代理地址' }
+    expect(getLocalizedErrorMessage(error, t)).toBe(error.detail)
+    i18n.global.locale.value = 'en-US'
+    expect(getLocalizedErrorMessage(error, t)).toBe(enUS.common.requestFailed)
+    expect(getLocalizedErrorMessage(new Error('Connection refused'), t)).toBe('Connection refused')
+    i18n.global.locale.value = 'zh-CN'
+    expect(getLocalizedErrorMessage(error, t)).toBe(error.detail)
   })
 })

@@ -1,75 +1,78 @@
-"""
-分级日志文件过滤语义测试
-
-覆盖 tg_manage/logger.py 的 configure_logger：
-- warn.log 应收 WARNING 及以上（含 ERROR/CRITICAL，完整问题视图）
-- error.log 应收 ERROR 及以上
-- 两文件均不混入 INFO/DEBUG
-"""
+"""Level-specific log filtering with deterministic file-handler cleanup."""
 
 import logging
-import tempfile
 from pathlib import Path
 
+import pytest
+
 from tg_manage.logger import MinLevelFilter, configure_logger
+
+
+@pytest.fixture
+def isolated_loggers(monkeypatch):
+    """Close handlers owned by these tests before tmp_path cleanup."""
+    monkeypatch.setenv("PYROGRAM_LOG_ON", "0")
+    configured = []
+
+    def configure(**kwargs):
+        logger = logging.getLogger(kwargs["name"])
+        configured.append(logger)
+        return configure_logger(**kwargs)
+
+    try:
+        yield configure
+    finally:
+        for logger in configured:
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+                handler.close()
+
+
+class TestLevelFileFiltering:
+    def test_warn_log_contains_warning_and_above(self, isolated_loggers, tmp_path):
+        logger = isolated_loggers(name="level-file-info", log_level="INFO", log_dir=tmp_path)
+        logger.info("info-line")
+        logger.warning("warn-line")
+        logger.error("error-line")
+        logger.critical("critical-line")
+        for handler in logger.handlers:
+            handler.flush()
+
+        warn_lines = _read_lines(tmp_path / "warn.log")
+        assert any("warn-line" in line for line in warn_lines)
+        assert any("error-line" in line for line in warn_lines)
+        assert any("critical-line" in line for line in warn_lines)
+        assert not any("info-line" in line for line in warn_lines)
+
+        error_lines = _read_lines(tmp_path / "error.log")
+        assert any("error-line" in line for line in error_lines)
+        assert any("critical-line" in line for line in error_lines)
+        assert not any("warn-line" in line for line in error_lines)
+        assert not any("info-line" in line for line in error_lines)
+
+    def test_error_level_skips_warn_file(self, isolated_loggers, tmp_path):
+        isolated_loggers(name="level-file-error", log_level="ERROR", log_dir=tmp_path)
+        assert not (tmp_path / "warn.log").exists()
+        assert (tmp_path / "error.log").exists()
+
+    def test_info_level_creates_grade_files(self, isolated_loggers, tmp_path):
+        isolated_loggers(name="level-file-create", log_level="INFO", log_dir=tmp_path)
+        assert (tmp_path / "warn.log").exists()
+        assert (tmp_path / "error.log").exists()
+
+
+class TestMinLevelFilter:
+    def test_filters_below_min_level(self):
+        level_filter = MinLevelFilter(logging.WARNING)
+        assert level_filter.filter(_record(logging.INFO)) is False
+        assert level_filter.filter(_record(logging.WARNING)) is True
+        assert level_filter.filter(_record(logging.ERROR)) is True
 
 
 def _read_lines(path: Path) -> list[str]:
     if not path.exists():
         return []
     return path.read_text(encoding="utf-8").splitlines()
-
-
-class TestLevelFileFiltering:
-    def test_warn_log_contains_warning_and_above(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            log_dir = Path(tmp)
-            logger = configure_logger(name="t1", log_level="INFO", log_dir=log_dir)
-            logger.info("info-line")
-            logger.warning("warn-line")
-            logger.error("error-line")
-            logger.critical("critical-line")
-            # 手动 flush 让 RotatingFileHandler 落盘
-            for h in logger.handlers:
-                h.flush()
-
-            warn_lines = _read_lines(log_dir / "warn.log")
-            assert any("warn-line" in line for line in warn_lines)
-            assert any("error-line" in line for line in warn_lines)
-            assert any("critical-line" in line for line in warn_lines)
-            # 分级文件不含 INFO 噪音
-            assert not any("info-line" in line for line in warn_lines)
-
-            error_lines = _read_lines(log_dir / "error.log")
-            assert any("error-line" in line for line in error_lines)
-            assert any("critical-line" in line for line in error_lines)
-            # error.log 不收 WARNING 与 INFO
-            assert not any("warn-line" in line for line in error_lines)
-            assert not any("info-line" in line for line in error_lines)
-
-    def test_error_level_skips_warn_file(self):
-        """ERROR 级配置下收不到 WARNING 记录，不创建 warn.log；error.log 正常创建。"""
-        with tempfile.TemporaryDirectory() as tmp:
-            log_dir = Path(tmp)
-            configure_logger(name="t2", log_level="ERROR", log_dir=log_dir)
-            assert not (log_dir / "warn.log").exists()
-            assert (log_dir / "error.log").exists()
-
-    def test_info_level_creates_grade_files(self):
-        """INFO 级配置下 WARNING/ERROR 均能被记录，分级文件都会创建。"""
-        with tempfile.TemporaryDirectory() as tmp:
-            log_dir = Path(tmp)
-            configure_logger(name="t3", log_level="INFO", log_dir=log_dir)
-            assert (log_dir / "warn.log").exists()
-            assert (log_dir / "error.log").exists()
-
-
-class TestMinLevelFilter:
-    def test_filters_below_min_level(self):
-        f = MinLevelFilter(logging.WARNING)
-        assert f.filter(_record(logging.INFO)) is False
-        assert f.filter(_record(logging.WARNING)) is True
-        assert f.filter(_record(logging.ERROR)) is True
 
 
 def _record(level: int) -> logging.LogRecord:

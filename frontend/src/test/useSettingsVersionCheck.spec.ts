@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mockI18nPassthrough } from './composable-test-utils'
+import { ref } from 'vue'
+
+const i18nState = vi.hoisted(() => ({ locale: 'zh' }))
+let testLocale = ref(i18nState.locale)
 
 const api = vi.hoisted(() => ({
   getAppVersion: vi.fn(),
@@ -22,7 +26,7 @@ const versionUtils = vi.hoisted(() => ({
 }))
 
 vi.mock('../composables/useI18n', () => ({
-  useI18n: () => mockI18nPassthrough(),
+  useI18n: () => ({ ...mockI18nPassthrough(), locale: testLocale }),
 }))
 vi.mock('../lib/api', () => api)
 vi.mock('../lib/version-utils', () => versionUtils)
@@ -36,6 +40,7 @@ describe('useSettingsVersionCheck', () => {
     useAuthStore().setToken('tok')
     versionUtils.loadCachedUpdateCheck.mockReturnValue(null)
     versionUtils.safeHttpUrl.mockImplementation((u: string | null) => u)
+    testLocale = ref('zh')
   })
 
   it('loadVersion sets appVersion and applies cache banner', async () => {
@@ -133,5 +138,60 @@ describe('useSettingsVersionCheck', () => {
     await vc.loadVersion('tok')
     await vc.handleCheckUpdate()
     expect(vc.versionBanner.value?.kind).toBe('latest')
+  })
+
+  it.each(['github_no_releases', 'github_no_releases_stale'])('keeps %s informational', async (source) => {
+    api.getAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true })
+    api.checkAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true,
+      update_check: { source, latest_version: null, latest_url: null, update_available: false, error: null },
+    })
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    await vc.handleCheckUpdate()
+    expect(vc.versionBanner.value?.kind).toBe('info')
+    expect(vc.versionBanner.value?.text).toBe('settings.noPublishedRelease')
+  })
+
+  it('shows an informational result for browser fallback without stable tags', async () => {
+    api.getAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true })
+    api.checkAppVersion.mockRejectedValue(new Error('offline'))
+    versionUtils.fetchGithubLatestRelease.mockResolvedValue({ version: null, url: 'https://github.com/hikling/TG-Manage/tags' })
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    await vc.handleCheckUpdate()
+    expect(vc.versionBanner.value?.kind).toBe('info')
+    expect(vc.versionBanner.value?.text).toBe('settings.noPublishedRelease')
+    expect(versionUtils.saveCachedUpdateCheck).toHaveBeenLastCalledWith(expect.objectContaining({ latest_version: null, update_available: false }))
+  })
+
+  it('coalesces concurrent update requests', async () => {
+    api.getAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true })
+    let finish!: (value: unknown) => void
+    api.checkAppVersion.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    const first = vc.handleCheckUpdate()
+    await vc.handleCheckUpdate()
+    expect(api.checkAppVersion).toHaveBeenCalledTimes(1)
+    finish({ version: '1.0.0', update_check_enabled: true,
+      update_check: { latest_version: '1.0.0', update_available: false, error: null },
+    })
+    await first
+    expect(vc.checkLoading.value).toBe(false)
+  })
+
+  it('removes Chinese error details when the language switches to English', async () => {
+    api.getAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true })
+    api.checkAppVersion.mockResolvedValue({ version: '1.0.0', update_check_enabled: true,
+      update_check: { latest_version: null, update_available: false, error: '连接版本源超时，请检查网络后重试' },
+    })
+    versionUtils.fetchGithubLatestRelease.mockRejectedValue(new Error('offline'))
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    await vc.handleCheckUpdate()
+    expect(vc.versionBanner.value?.text).toMatch(/[\u3400-\u9fff]/)
+    testLocale.value = 'en'
+    expect(vc.versionBanner.value?.text).not.toMatch(/[\u3400-\u9fff]/)
+    expect(vc.versionBanner.value?.text).toContain('common.requestFailed')
   })
 })

@@ -165,6 +165,29 @@ class TestRemoteCheck:
         assert "api.github.com" not in called_url
         assert "github.com" in called_url and "releases/latest" in called_url
 
+    def test_real_httpx_redirect_uses_location_without_api_fallback(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.setenv("APP_VERSION", "2.0.0")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        requests = []
+
+        def respond(request):
+            requests.append(request)
+            return httpx.Response(302, headers={
+                "Location": "https://github.com/hikling/TG-Manage/releases/tag/v2.4.0",
+            })
+
+        client = httpx.Client(transport=httpx.MockTransport(respond), follow_redirects=False)
+        with patch("backend.utils.version_info.httpx.Client", return_value=client):
+            result = check_remote_update(force=True)
+
+        assert result["error"] is None
+        assert result["source"] == "github_releases_redirect"
+        assert result["latest_version"] == "2.4.0"
+        assert len(requests) == 1
+        assert requests[0].url.host == "github.com"
+        assert client.is_closed
+
     def test_cache_hit_second_call(self, monkeypatch):
         monkeypatch.setenv("APP_UPDATE_CHECK", "1")
         monkeypatch.setenv("APP_VERSION", "2.0.0")
@@ -269,6 +292,112 @@ class TestRemoteCheck:
         assert result["error"] is None
         assert result["latest_version"] == "2.2.0"
         assert result["source"] == "github_releases"
+
+    def test_release_404_falls_back_to_stable_repository_tag(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.setenv("APP_VERSION", "2.0.0")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = [
+            {"name": "v2.5.0"},
+            {"name": "preview"},
+            {"name": "v1.9.0"},
+        ]
+        tags_client = MagicMock()
+        tags_client.__enter__.return_value = tags_client
+        tags_client.__exit__.return_value = None
+        tags_client.get.return_value = response
+        missing_release = httpx.HTTPStatusError(
+            "404", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+        with patch(
+            "backend.utils.version_info._fetch_via_html_redirect",
+            side_effect=ValueError("html unavailable"),
+        ), patch(
+            "backend.utils.version_info._fetch_json_release",
+            side_effect=missing_release,
+        ), patch(
+            "backend.utils.version_info.httpx.Client",
+            return_value=tags_client,
+        ):
+            result = check_remote_update(force=True)
+        assert result["latest_version"] == "2.5.0"
+        assert result["source"] == "github_tags"
+        assert result["update_available"] is True
+        assert "releases/tag/v2.5.0" not in (result["latest_url"] or "")
+
+    def test_empty_repository_tags_are_informational_and_cached(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.setenv("APP_VERSION", "2.0.0")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        response = MagicMock()
+        response.status_code = 200
+        response.json.return_value = []
+        tags_client = MagicMock()
+        tags_client.__enter__.return_value = tags_client
+        tags_client.__exit__.return_value = None
+        tags_client.get.return_value = response
+        missing_release = httpx.HTTPStatusError(
+            "404", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+        with patch(
+            "backend.utils.version_info._fetch_via_html_redirect",
+            side_effect=ValueError("html unavailable"),
+        ), patch(
+            "backend.utils.version_info._fetch_json_release",
+            side_effect=missing_release,
+        ), patch(
+            "backend.utils.version_info.httpx.Client",
+            return_value=tags_client,
+        ):
+            first = check_remote_update(force=True)
+            second = check_remote_update(force=False)
+        assert first["source"] == "github_no_releases"
+        assert first["latest_version"] is None
+        assert first["error"] is None
+        assert second["cached"] is True
+
+    def test_tag_fallback_reports_actual_timeout_instead_of_release_404(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        missing_release = httpx.HTTPStatusError(
+            "404", request=MagicMock(), response=MagicMock(status_code=404)
+        )
+        with patch(
+            "backend.utils.version_info._fetch_via_html_redirect",
+            side_effect=ValueError("html unavailable"),
+        ), patch(
+            "backend.utils.version_info._fetch_json_release",
+            side_effect=missing_release,
+        ), patch(
+            "backend.utils.version_info._fetch_github_latest_tag",
+            side_effect=httpx.ReadTimeout("tag source timeout"),
+        ):
+            result = check_remote_update(force=True)
+        assert result["latest_version"] is None
+        assert "404" not in result["error"]
+        assert "超时" in result["error"]
+
+    def test_empty_repository_tags_remain_informational_when_stale(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        no_releases = {
+            "enabled": True, "latest_version": None, "latest_url": None,
+            "update_available": False, "checked_at": "2026-10-10T00:00:00Z",
+            "error": None, "source": "github_no_releases", "cached": False,
+        }
+        with patch("backend.utils.version_info._fetch_latest_release", return_value=no_releases):
+            check_remote_update(force=True)
+        from backend.utils import version_info as vi
+        with vi._cache_lock:
+            vi._cache["expires_at"] = 0.0
+        with patch("backend.utils.version_info._fetch_latest_release", side_effect=httpx.ReadTimeout("offline")):
+            result = check_remote_update(force=True)
+        assert result["source"] == "github_no_releases_stale"
+        assert result["latest_version"] is None
+        assert result["error"] is None
+        assert result["cached"] is True
 
     def test_friendly_error_hides_httpx_and_token(self, monkeypatch):
         monkeypatch.setenv("APP_UPDATE_CHECK", "1")

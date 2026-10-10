@@ -96,7 +96,7 @@ const {
 
       <div class="settings-accordions">
         <details class="settings-accordion">
-          <summary>通用设置 <span>时区、运行与基础配置</span></summary>
+          <summary>{{ t('settings.general') }} <span>{{ t('settings.generalSummary') }}</span></summary>
           <GeneralSettings
             v-model="settings"
             :timezone-options="timezoneOptions"
@@ -107,7 +107,7 @@ const {
           />
         </details>
         <details class="settings-accordion">
-          <summary>数据管理 <span>导出、恢复与远程备份</span></summary>
+          <summary>{{ t('settings.dataManagement') }} <span>{{ t('settings.dataManagementSummary') }}</span></summary>
           <DataManagementSettings
             v-model="settings"
             :webdav-password-set="webdavPasswordSet"
@@ -131,7 +131,7 @@ const {
         </details>
 
         <details class="settings-accordion">
-          <summary>机器人通知 <span>通知配置与连通性测试</span></summary>
+          <summary>{{ t('settings.botNotify') }} <span>{{ t('settings.botNotifySummary') }}</span></summary>
           <BotNotifySettings
             v-model="settings"
             :bot-token-set="botTokenSet"

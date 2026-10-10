@@ -303,6 +303,10 @@ def _fetch_via_html_redirect(html_latest_url: str) -> Dict[str, Any]:
     # 不跟随跳转，只读 Location
     with httpx.Client(timeout=_HTTP_TIMEOUT_SECONDS, follow_redirects=False) as client:
         resp = client.get(safe_url, headers=headers)
+        # httpx treats redirects as non-success too; Location is the intended
+        # result here, so only actual HTTP errors should trigger the fallback.
+        if not resp.is_redirect:
+            resp.raise_for_status()
     # 部分环境可能直接 200 渲染；优先 Location
     location = resp.headers.get("location") or resp.headers.get("Location") or ""
     tag = _tag_from_release_location(location)
@@ -324,6 +328,7 @@ def _fetch_via_html_redirect(html_latest_url: str) -> Dict[str, Any]:
             timeout=_HTTP_TIMEOUT_SECONDS, follow_redirects=True
         ) as client:
             resp2 = client.get(safe_url, headers=headers)
+            resp2.raise_for_status()
         tag = _tag_from_release_location(str(resp2.url))
         final_url = str(resp2.url)
         if not tag:
@@ -384,6 +389,45 @@ def _fetch_json_release(url: str) -> Dict[str, Any]:
     return _payload_from_release_json(data, source=source)
 
 
+def _fetch_github_latest_tag(url: str) -> Dict[str, Any]:
+    """Use the newest repository tag when no GitHub Release has been published."""
+    match = _GITHUB_API_RELEASES_RE.match((url or "").strip())
+    if not match:
+        raise ValueError("GitHub tag fallback requires a GitHub releases API URL")
+    owner, repo = match.group(1), match.group(2)
+    tags_url = f"https://api.github.com/repos/{owner}/{repo}/tags?per_page=100"
+    with httpx.Client(timeout=_HTTP_TIMEOUT_SECONDS, follow_redirects=True) as client:
+        resp = client.get(tags_url, headers=_request_headers())
+        resp.raise_for_status()
+        data = resp.json()
+    if not isinstance(data, list):
+        raise ValueError("repository tags payload is not a list")
+    stable_tags = [
+        str(item.get("name") or "").strip()
+        for item in data[:100]
+        if isinstance(item, dict)
+        and re.fullmatch(r"[vV]?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?", str(item.get("name") or "").strip())
+    ]
+    if not stable_tags:
+        result = _empty_update_payload(enabled=True)
+        result["source"] = "github_no_releases"
+        result["latest_url"] = f"https://github.com/{owner}/{repo}/tags"
+        return result
+    tag = max(stable_tags, key=parse_semver)
+    latest = normalize_version(tag)
+    local = get_local_version_info()
+    return {
+        "enabled": True,
+        "latest_version": latest,
+        "latest_url": f"https://github.com/{owner}/{repo}/tree/{tag}",
+        "update_available": is_update_available(local["version"], latest),
+        "checked_at": utc_now_iso(),
+        "error": None,
+        "source": "github_tags",
+        "cached": False,
+    }
+
+
 def _fetch_latest_release(url: str) -> Dict[str, Any]:
     """
     解析最新版本。
@@ -405,6 +449,21 @@ def _fetch_latest_release(url: str) -> Dict[str, Any]:
     try:
         return _fetch_json_release(safe_url)
     except Exception as json_exc:
+        # Repositories can publish tags without creating GitHub Releases.
+        # Treat a missing latest release as a valid tag-based version source.
+        if (
+            html_url
+            and isinstance(json_exc, httpx.HTTPStatusError)
+            and json_exc.response.status_code == 404
+            and _GITHUB_API_RELEASES_RE.match(safe_url)
+        ):
+            try:
+                return _fetch_github_latest_tag(safe_url)
+            except Exception as tag_exc:
+                logger.info("GitHub tag fallback failed: %s", tag_exc)
+                # The missing Release is expected; report the actual failure
+                # of the tag source instead of masking a timeout/rate limit.
+                raise tag_exc from json_exc
         if html_error is not None:
             logger.warning(
                 "版本检查 HTML 与 JSON 均失败: html=%s json=%s",
@@ -425,7 +484,7 @@ def _cached_success_payload(*, allow_stale: bool) -> Optional[Dict[str, Any]]:
         if (
             payload is None
             or payload.get("error")
-            or not payload.get("latest_version")
+            or (not payload.get("latest_version") and payload.get("source") != "github_no_releases")
         ):
             return None
         if not allow_stale and now >= expires_at:

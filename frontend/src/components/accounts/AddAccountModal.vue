@@ -11,7 +11,7 @@ import { getErrorCode, getLocalizedErrorMessage } from '../../lib/types'
 import { devLog } from '../../lib/devLog'
 import { panelRequest } from '../../lib/api/communications'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toast = useToast()
 
 const props = defineProps<{ isOpen: boolean, initialMethod?: 'code' | 'qr', initialAccountName?: string }>()
@@ -33,6 +33,7 @@ const form = ref({
 
 const loading = ref(false)
 const error = ref('')
+watch(locale, () => { error.value = '' })
 
 // 验证码重发倒计时：防止重复点击触发 Telegram 限流
 const codeCountdown = ref(0)
@@ -142,9 +143,9 @@ const applyTeleboxPreference = async () => {
   const name = encodeURIComponent(form.value.account_name)
   try {
     await panelRequest(`/telebox/${name}/${enableTelebox.value ? 'start' : 'stop'}`, 'POST')
-    if (enableTelebox.value) toast.info('TeleBox 已请求启动，请在账号管理查看运行状态')
+    if (enableTelebox.value) toast.info(t('addAccount.teleboxStarted'))
   } catch (err) {
-    toast.error(`账号登录成功，但 TeleBox 设置失败：${getLocalizedErrorMessage(err, t)}`)
+    toast.error(t('addAccount.teleboxSetupFailed', { error: getLocalizedErrorMessage(err, t) }))
   }
 }
 
@@ -179,7 +180,7 @@ const pollStatus = async (token: string, lid: string) => {
       pollHandle = null
       // 二维码已失效：清空图片避免用户继续扫描无意义的旧码
       qrImage.value = ''
-      error.value = res.status === 'expired' ? t('addAccount.qrExpired') : (res.message || t('addAccount.qrFailed'))
+      error.value = res.status === 'expired' ? t('addAccount.qrExpired') : getLocalizedErrorMessage(res.message, t, t('addAccount.qrFailed'))
       loading.value = false
     }
   } catch (e) {
@@ -216,7 +217,7 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
 
 const handleGetQr = async () => {
   if (enableTelebox.value && (!form.value.api_id || !form.value.api_hash)) {
-    error.value = '请填写此账号的 Telegram API ID 和 API Hash'
+    error.value = t('addAccount.apiCredentialsRequired')
     return
   }
   if (!form.value.account_name) {
@@ -252,7 +253,7 @@ const handleGetQr = async () => {
 
 const handleSendCode = async () => {
   if (enableTelebox.value && (!form.value.api_id || !form.value.api_hash)) {
-    error.value = '请填写此账号的 Telegram API ID 和 API Hash'
+    error.value = t('addAccount.apiCredentialsRequired')
     return
   }
   if (!form.value.account_name || !form.value.phone_number) {
@@ -390,8 +391,8 @@ onUnmounted(() => {
       </div>
 
       <label class="flex items-center gap-3 rounded-xl border border-[var(--tg-border)] p-3 cursor-pointer">
-        <input v-model="enableTelebox" type="checkbox" class="h-4 w-4" aria-label="启用 TeleBox">
-        <span><strong class="block text-sm">启用 TeleBox</strong><small class="panel-muted">登录成功后自动启动；关闭时可直接登录普通账号，无需填写 API 凭据。</small></span>
+        <input v-model="enableTelebox" type="checkbox" class="h-4 w-4" :aria-label="t('addAccount.enableTelebox')">
+        <span><strong class="block text-sm">{{ t('addAccount.enableTelebox') }}</strong><small class="panel-muted">{{ t('addAccount.teleboxHint') }}</small></span>
       </label>
       <!-- Common Fields -->
       <div v-if="enableTelebox" class="grid grid-cols-1 sm:grid-cols-2 gap-3">

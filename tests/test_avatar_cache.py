@@ -53,6 +53,12 @@ def test_read_cached_avatar_fresh_and_expired(tmp_path):
     assert avatar_cache.read_cached_avatar(cache) is None
 
 
+def test_fresh_oversized_chat_avatar_is_not_served(tmp_path):
+    cache = tmp_path / 'chat_12345.jpg'
+    cache.write_bytes(b'x' * (avatar_cache.CHAT_AVATAR_MAX_BYTES + 1))
+    assert avatar_cache.read_cached_avatar(cache) is None
+
+
 @pytest.mark.asyncio
 async def test_get_avatar_bytes_writes_cache_and_clears_marker(tmp_path):
     cache = tmp_path / "a.jpg"

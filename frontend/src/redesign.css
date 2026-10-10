@@ -169,11 +169,11 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .dark .panel-success { color: #86e6c0; background: #1b3c33; }
 .panel-empty, .ui-empty { color: var(--tg-text-muted); }
 
-/* Dashboard: the main visual focal point, followed by scannable metrics. */
+/* Dashboard and crop preview share their ratio and image framing. */
 .dashboard { max-width: 1500px; }
 .dashboard-hero {
   position: relative; isolation: isolate; display: flex; align-items: center; overflow: hidden;
-  min-height: 310px; padding: clamp(28px, 4vw, 58px); border-radius: 23px;
+  aspect-ratio: 16 / 7; min-height: 0; padding: clamp(16px, 3vw, 38px); border-radius: 23px;
   background: var(--tg-themed-surface); color: var(--tg-themed-text); box-shadow: var(--tg-shadow-md);
 }
 .dashboard-hero::before {
@@ -181,7 +181,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
   background: linear-gradient(90deg, var(--tg-themed-surface) 0%, color-mix(in srgb, var(--tg-themed-surface) 90%, transparent) 44%, transparent 100%);
 }
 .dashboard-hero--custom { color: #fff; }
-.dashboard-hero--custom::before { background: linear-gradient(90deg, rgb(8 22 33 / .98) 0%, rgb(8 22 33 / .9) 48%, rgb(8 22 33 / .55) 100%); }
+.dashboard-hero--custom::before { background: linear-gradient(180deg, transparent 45%, rgb(8 22 33 / .35)); pointer-events: none; }
 .dashboard-hero-image { position: absolute; inset: 0; z-index: 0; background-size: cover; background-position: center; }
 .dashboard-hero-copy { position: relative; z-index: 2; max-width: 680px; }
 .login-intro-pulse { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--tg-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--tg-accent) 18%, transparent); }
@@ -190,7 +190,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .dashboard-hero-copy > p { max-width: 43ch; color: var(--tg-themed-muted); font-size: .96rem; line-height: 1.7; }
 .dashboard-hero--custom h2, .dashboard-hero--custom .dashboard-hero-copy > p { color: #fff; text-shadow: 0 2px 5px rgb(0 0 0 / .45); }
 .dashboard-hero--custom h2 span { color: #e8f3ff; }
-.dashboard-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+.dashboard-hero-actions { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap; gap: 12px; margin-top: 0; }
 .dashboard-hero-primary, .dashboard-hero-refresh {
   display: inline-flex; align-items: center; justify-content: center; gap: 9px;
   min-height: 44px; padding: 0 17px; border-radius: 10px; font-size: .86rem; font-weight: 700;
@@ -224,17 +224,19 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .appearance-custom-control input { width: 60px; height: 44px; cursor: pointer; }
 .appearance-custom-control code { color: var(--tg-text-muted); }
 .appearance-cover-preview {
-  min-height: 132px;
-  border: 1px solid var(--tg-border);
+  aspect-ratio: 16 / 7;
+  outline: 1px solid var(--tg-border);
   border-radius: 14px;
   background-color: var(--tg-bg-muted);
-  background-repeat: no-repeat;
-  background-size: cover;
   display: grid;
   place-items: end start;
   overflow: hidden;
   position: relative;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+.appearance-cover-preview--dragging { cursor: grabbing; }
 .appearance-cover-preview::after {
   content: "";
   position: absolute;
@@ -253,7 +255,7 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .appearance-cover-position { display: grid; gap: 8px; }
 .appearance-cover-position label {
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr) 42px;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 1.8fr) 42px;
   align-items: center;
   gap: 10px;
   color: var(--tg-text-muted);
@@ -381,9 +383,8 @@ button, a, summary, [role="button"] { cursor: pointer; }
 @media (max-width: 1100px) { .dashboard-hero-visual { right: -70px; opacity: .5; } }
 @media (max-width: 1350px) { .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
-  .dashboard-hero { min-height: 370px; align-items: flex-start; padding-bottom: 76px; }
+  .dashboard-hero { align-items: center; }
   .dashboard-hero::before { background: linear-gradient(90deg, var(--tg-themed-surface), color-mix(in srgb, var(--tg-themed-surface) 85%, transparent)); }
-  .dashboard-hero--custom::before { background: linear-gradient(90deg, rgb(8 22 33 / .98), rgb(8 22 33 / .72)); }
   .dashboard-hero-visual { right: -150px; opacity: .25; }
   .dashboard-metrics { grid-template-columns: 1fr; }
   .dashboard-metric { min-height: 160px; }
@@ -403,10 +404,10 @@ button, a, summary, [role="button"] { cursor: pointer; }
   .account-tile-avatar-frame { width: 72px; height: 72px; }
   .account-tile-avatar { width: 56px; height: 56px; }
   .panel-shell .ui-header-glass { height: 68px; }
-  .dashboard-hero { padding: 28px 23px; }
+  .dashboard-hero { padding: 14px; }
   .dashboard-hero h2 { font-size: 2.2rem; }
-  .dashboard-hero-actions > * { width: 100%; }
-  .dashboard-hero { min-height: 440px; }
+  .dashboard-hero-actions { gap: 8px; }
+  .dashboard-hero-actions > * { padding-inline: 12px; font-size: .78rem; }
   .dashboard-section-heading { padding: 20px; }
   .dashboard-section-heading .panel-button { width: 100%; }
   .settings-accordion summary span { width: 100%; }
@@ -417,4 +418,23 @@ button, a, summary, [role="button"] { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-metric, .account-tile, .panel-button { transition: none; }
   .dashboard-metric:hover, .account-tile:hover { transform: none; }
+}
+
+
+/* Keep the collapsed brand comfortably below the edge with a full-size toggle hit target. */
+@media (min-width: 1024px) {
+  .panel-shell.sidebar-collapsed .ui-sidebar .sidebar-brand {
+    box-sizing: border-box;
+    height: 112px;
+    min-height: 112px;
+    flex-shrink: 0;
+    padding: 16px 10px 14px;
+    gap: 14px;
+  }
+  .panel-shell.sidebar-collapsed .ui-sidebar .sidebar-collapse-toggle {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
 }

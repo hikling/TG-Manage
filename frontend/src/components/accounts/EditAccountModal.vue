@@ -124,7 +124,7 @@ const handleSave = async () => {
         :disabled="loading"
         @click="handleSave"
       >
-        {{ loading ? t('editAccount.saving') : t('editAccount.saveChanges') }}
+        {{ loading ? t('common.saving') : t('editAccount.saveChanges') }}
       </button>
     </template>
   </Modal>

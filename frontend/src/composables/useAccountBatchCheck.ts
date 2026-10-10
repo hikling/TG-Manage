@@ -12,6 +12,7 @@ import {
 import { withToken, getAuthToken } from '../lib/api/core'
 import type { AccountStatusJob, AccountStatusItem } from '../lib/api'
 import type { AccountUiItem } from '../lib/types'
+import { getLocalizedErrorMessage } from '../lib/types'
 import { notifyApiError } from '../lib/notify'
 import { useI18n } from './useI18n'
 import { useToast } from './useToast'
@@ -110,7 +111,7 @@ export function useAccountBatchCheck(options: {
     }
     if (job.status === 'failed') {
       toast.error(t('accounts.checkFailed'), {
-        description: job.error || t('accounts.batchCheckFailed'),
+        description: getLocalizedErrorMessage(job.error, t, t('accounts.batchCheckFailed')),
       })
       return
     }
@@ -122,7 +123,7 @@ export function useAccountBatchCheck(options: {
       const failedPreview = (job.results || [])
         .filter((item) => !item.ok)
         .slice(0, 5)
-        .map((item) => `${item.account_name}: ${item.message || item.code || t('accounts.loginExpiredAction')}`)
+        .map((item) => `${item.account_name}: ${getLocalizedErrorMessage({ message: item.message, code: item.code }, t, t('accounts.loginExpiredAction'))}`)
         .join('\n')
       toast.warning(t('accounts.batchCheckDone'), {
         description: `${t('accounts.checkOkCount')}: ${ok} · ${t('accounts.checkFailedCount')}: ${failed}\n${failedPreview}`,
@@ -203,10 +204,10 @@ export function useAccountBatchCheck(options: {
       const result = res.results?.[0]
       if (result) {
         if (result.ok) {
-          if (result.avatar_refresh_error) toast.warning(`${name}: 状态正常，但头像刷新失败，已保留旧头像`)
+          if (result.avatar_refresh_error) toast.warning(t('accounts.avatarRefreshFailed', { name }))
           else toast.success(`${name}: ${t('accounts.checkOk')}`)
         } else {
-          toast.error(`${name}: ${result.message || t('accounts.loginExpiredAction')}`)
+          toast.error(`${name}: ${getLocalizedErrorMessage(result.message, t, t('accounts.loginExpiredAction'))}`)
         }
       }
     } catch (e: unknown) {
@@ -282,7 +283,7 @@ export function useAccountBatchCheck(options: {
           ? res.results
               .filter((item) => !item.ok)
               .slice(0, 5)
-              .map((item) => `${item.account_name}: ${item.message || item.code || t('accounts.loginExpiredAction')}`)
+              .map((item) => `${item.account_name}: ${getLocalizedErrorMessage({ message: item.message, code: item.code }, t, t('accounts.loginExpiredAction'))}`)
               .join('\n')
           : undefined
         toast.warning(t('accounts.batchCheckDone'), {

@@ -144,7 +144,7 @@ describe('useSettingsBackup', () => {
     expect(backup.webdavPasswordSet.value).toBe(true)
   })
 
-  it('handleListRemoteBackups surfaces API failure message', async () => {
+  it('handleListRemoteBackups presents a localized failure state', async () => {
     api.saveGlobalSettings.mockResolvedValue({})
     api.listWebdavBackupFiles.mockResolvedValue({
       success: false,
@@ -153,7 +153,8 @@ describe('useSettingsBackup', () => {
     })
     const { backup } = setup()
     await backup.handleListRemoteBackups()
-    expect(toastSpy.error).toHaveBeenCalledWith('denied')
+    expect(toastSpy.error).toHaveBeenCalledWith('settings.webdavListFailed')
+    expect(backup.remoteWebdavMessage.value).toBe('settings.webdavListFailed')
     expect(backup.remoteWebdavFiles.value).toEqual([])
   })
 
@@ -189,7 +190,7 @@ describe('useSettingsBackup', () => {
     api.testWebdavBackup.mockResolvedValue({ success: true, message: 'pong' })
     const { backup } = setup()
     await backup.handleWebdavTest()
-    expect(toastSpy.success).toHaveBeenCalledWith('pong')
+    expect(toastSpy.success).toHaveBeenCalledWith('settings.webdavTestOk')
 
     api.testWebdavBackup.mockResolvedValue({ success: false, message: 'nope' })
     await backup.handleWebdavTest()

@@ -1,7 +1,7 @@
 /**
  * 设置页：应用版本加载与更新检查。
  */
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   getAppVersion,
   checkAppVersion,
@@ -27,19 +27,32 @@ export type VersionBanner = {
 }
 
 export function useSettingsVersionCheck() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
 
   const appVersion = ref<AppVersionInfo | null>(null)
   const versionLoading = ref(false)
   const checkLoading = ref(false)
-  const versionBanner = ref<VersionBanner | null>(null)
+  const bannerState = ref<{
+    kind: VersionBanner['kind']; key: string; url?: string | null;
+    named?: Record<string, unknown>
+  } | null>(null)
+  const versionBanner = computed<VersionBanner | null>(() => {
+    const state = bannerState.value
+    if (!state) return null
+    const named = state.named ? { ...state.named } : undefined
+    if (named?.error && locale.value === 'en' && /\p{Script=Han}/u.test(String(named.error))) {
+      named.error = t('common.requestFailed')
+    }
+    return { kind: state.kind, text: t(state.key, named), url: state.url }
+  })
 
   const setUpdateBanner = (
     kind: VersionBanner['kind'],
-    text: string,
+    key: string,
     url?: string | null,
+    named?: Record<string, unknown>,
   ) => {
-    versionBanner.value = { kind, text, url: safeHttpUrl(url ?? null) }
+    bannerState.value = { kind, key, named, url: safeHttpUrl(url ?? null) }
   }
 
   const applyClientCache = () => {
@@ -47,12 +60,14 @@ export function useSettingsVersionCheck() {
     if (!cached?.update_available || !cached.latest_version) return
     setUpdateBanner(
       'update',
-      t('settings.updateAvailable', { version: cached.latest_version }),
+      'settings.updateAvailable',
       cached.latest_url,
+      { version: cached.latest_version },
     )
   }
 
   const loadVersion = async (token: string) => {
+    if (versionLoading.value) return
     versionLoading.value = true
     try {
       appVersion.value = await getAppVersion(token)
@@ -66,7 +81,7 @@ export function useSettingsVersionCheck() {
 
   const runBrowserFallbackCheck = async (currentVersion: string) => {
     const latest = await fetchGithubLatestRelease()
-    const available = isUpdateAvailable(currentVersion, latest.version)
+    const available = Boolean(latest.version && isUpdateAvailable(currentVersion, latest.version))
     const safeUrl = safeHttpUrl(latest.url)
     saveCachedUpdateCheck({
       latest_version: latest.version,
@@ -75,22 +90,38 @@ export function useSettingsVersionCheck() {
       checked_at: new Date().toISOString(),
       error: null,
     })
-    if (available) {
+    if (!latest.version) {
+      setUpdateBanner('info', 'settings.noPublishedRelease', safeUrl)
+    } else if (available) {
       setUpdateBanner(
         'update',
-        t('settings.updateAvailable', { version: latest.version }),
+        'settings.updateAvailable',
         safeUrl,
+        { version: latest.version },
       )
     } else {
-      setUpdateBanner('latest', t('settings.alreadyLatest'))
+      setUpdateBanner('latest', 'settings.alreadyLatest')
     }
   }
 
   const showFromRemote = (uc: UpdateCheckInfo) => {
+    if (uc.source?.replace(/_stale$/, '') === 'github_no_releases' && !uc.latest_version && !uc.error) {
+      saveCachedUpdateCheck({
+        latest_version: null,
+        latest_url: null,
+        update_available: false,
+        checked_at: uc.checked_at || new Date().toISOString(),
+        error: null,
+      })
+      setUpdateBanner('info', 'settings.noPublishedRelease', uc.latest_url)
+      return
+    }
     if (uc.error && !uc.latest_version) {
       setUpdateBanner(
         'error',
-        t('settings.updateCheckFailed', { error: uc.error }),
+        'settings.updateCheckFailed',
+        null,
+        { error: uc.error },
       )
       return
     }
@@ -105,8 +136,9 @@ export function useSettingsVersionCheck() {
       })
       setUpdateBanner(
         'update',
-        t('settings.updateAvailable', { version: uc.latest_version }),
+        'settings.updateAvailable',
         safeUrl,
+        { version: uc.latest_version },
       )
       return
     }
@@ -117,15 +149,15 @@ export function useSettingsVersionCheck() {
       checked_at: uc.checked_at || new Date().toISOString(),
       error: null,
     })
-    setUpdateBanner('latest', t('settings.alreadyLatest'))
+    setUpdateBanner('latest', 'settings.alreadyLatest')
   }
 
   const handleCheckUpdate = async (force = true) => {
-    if (!appVersion.value) return
+    if (!appVersion.value || checkLoading.value) return
     return withToken(async (token) => {
       if (!appVersion.value) return
       checkLoading.value = true
-      versionBanner.value = null
+      bannerState.value = null
       const current = appVersion.value.version
 
       try {
@@ -150,7 +182,9 @@ export function useSettingsVersionCheck() {
                   friendlyGithubError(browserErr)
                 setUpdateBanner(
                   'error',
-                  t('settings.updateCheckFailed', { error: msg }),
+                  'settings.updateCheckFailed',
+                  null,
+                  { error: msg },
                 )
               }
               return
@@ -163,23 +197,27 @@ export function useSettingsVersionCheck() {
             } catch (browserErr) {
               setUpdateBanner(
                 'error',
-                t('settings.updateCheckFailed', {
+                'settings.updateCheckFailed',
+                null,
+                {
                   error: friendlyGithubError(browserErr),
-                }),
+                },
               )
             }
             return
           }
         }
-        setUpdateBanner('info', t('settings.updateCheckDisabled'))
+        setUpdateBanner('info', 'settings.updateCheckDisabled')
         try {
           await runBrowserFallbackCheck(current)
         } catch (browserErr) {
           setUpdateBanner(
             'error',
-            t('settings.updateCheckFailed', {
+            'settings.updateCheckFailed',
+            null,
+            {
               error: friendlyGithubError(browserErr),
-            }),
+            },
           )
         }
       } finally {

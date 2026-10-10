@@ -10,7 +10,8 @@ const savedLocale = storageGetMigrated('tg-manage-locale', 'tg-signer-locale') |
 const i18n = createI18n({
   legacy: false, // 使用 Composition API 模式
   locale: savedLocale === 'en' ? 'en-US' : 'zh-CN',
-  fallbackLocale: 'zh-CN',
+  // English mode must never fall through to a Chinese string when a new key is missing.
+  fallbackLocale: 'en-US',
   messages: {
     'zh-CN': zhCN,
     'en-US': enUS,

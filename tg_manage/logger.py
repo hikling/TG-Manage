@@ -17,6 +17,43 @@ format_str = (
     "[%(levelname)s] [%(name)s] %(asctime)s %(filename)s %(lineno)s %(message)s"
 )
 formatter = logging.Formatter(format_str)
+_PYROGRAM_HANDLER_MARKER = "_tg_manage_owned_handler"
+
+
+def _replace_handlers(logger: logging.Logger) -> None:
+    """Close handlers before replacing them so files can be rotated or removed."""
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
+
+
+def _configure_pyrogram_logger(level_no: int) -> None:
+    pyrogram_logger = logging.getLogger("pyrogram")
+    owned_handlers = [
+        handler for handler in pyrogram_logger.handlers
+        if getattr(handler, _PYROGRAM_HANDLER_MARKER, False)
+    ]
+    if os.environ.get("PYROGRAM_LOG_ON", "0") != "1":
+        for handler in owned_handlers:
+            pyrogram_logger.removeHandler(handler)
+            handler.close()
+        return
+
+    pyrogram_logger.setLevel(level_no)
+    handler = owned_handlers[0] if owned_handlers else logging.StreamHandler()
+    for duplicate in owned_handlers[1:]:
+        pyrogram_logger.removeHandler(duplicate)
+        duplicate.close()
+    setattr(handler, _PYROGRAM_HANDLER_MARKER, True)
+    stream = getattr(handler, "stream", None)
+    if hasattr(stream, "reconfigure"):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+    handler.setFormatter(formatter)
+    if not owned_handlers:
+        pyrogram_logger.addHandler(handler)
 
 
 def configure_logger(
@@ -36,7 +73,7 @@ def configure_logger(
 
     logger = logging.getLogger(name)
     logger.setLevel(level_no)
-    logger.handlers.clear()
+    _replace_handlers(logger)
     logger.propagate = False
 
     console_handler = logging.StreamHandler()
@@ -88,19 +125,5 @@ def configure_logger(
         error_file_handler.setFormatter(formatter)
         logger.addHandler(error_file_handler)
 
-    # 配置 Pyrogram 日志（如果启用）
-    if os.environ.get("PYROGRAM_LOG_ON", "0") == "1":
-        pyrogram_logger = logging.getLogger("pyrogram")
-        pyrogram_logger.setLevel(level_no)  # 使用 level_no 而不是 level 字符串
-        # 创建新的 handler 避免复用导致的重复输出
-        pyrogram_handler = logging.StreamHandler()
-        pyrogram_stream = getattr(pyrogram_handler, "stream", None)
-        if hasattr(pyrogram_stream, "reconfigure"):
-            try:
-                pyrogram_stream.reconfigure(encoding="utf-8")
-            except Exception:
-                pass
-        pyrogram_handler.setFormatter(formatter)
-        pyrogram_logger.addHandler(pyrogram_handler)
-
+    _configure_pyrogram_logger(level_no)
     return logger

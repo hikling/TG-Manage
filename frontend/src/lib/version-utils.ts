@@ -128,16 +128,20 @@ export function friendlyGithubError(raw: unknown): string {
   return msg || 'GitHub releases network error'
 }
 
-async function fetchWithTimeout(
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response>
+async function fetchWithTimeout<T>(url: string, init: RequestInit, timeoutMs: number, consume: (response: Response) => Promise<T>): Promise<T>
+async function fetchWithTimeout<T>(
   url: string,
   init: RequestInit,
   timeoutMs: number,
-): Promise<Response> {
+  consume?: (response: Response) => Promise<T>,
+): Promise<Response | T> {
   const controller = new AbortController()
   const timer =
     timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    return consume ? await consume(response) : response
   } catch (e: unknown) {
     const isAbort =
       (e instanceof DOMException && e.name === 'AbortError') ||
@@ -170,6 +174,9 @@ export async function fetchGithubLatestReleaseViaRedirect(
     },
     timeoutMs,
   )
+  // Only the redirect URL is needed; do not retain/download the HTML body.
+  void res.body?.cancel().catch(() => {})
+  if (!res.ok) throw new Error(`GitHub releases HTTP ${res.status}`)
   const headerGet =
     res.headers && typeof res.headers.get === 'function'
       ? (k: string) => res.headers.get(k)
@@ -199,16 +206,15 @@ export async function fetchGithubLatestReleaseViaRedirect(
 export async function fetchGithubLatestRelease(
   url: string = DEFAULT_GITHUB_RELEASES_URL,
   timeoutMs: number = GITHUB_RELEASE_TIMEOUT_MS,
-): Promise<{ version: string; url: string | null }> {
-  const preferHtml =
-    !url ||
-    url === DEFAULT_GITHUB_RELEASES_URL ||
-    /api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/latest/i.test(url)
+): Promise<{ version: string | null; url: string | null }> {
+  const apiUrl = url || DEFAULT_GITHUB_RELEASES_URL
+  const repository = apiUrl.match(/^https:\/\/api\.github\.com\/repos\/([^/]+)\/([^/]+)\/releases\/latest\/?$/i)
+  const preferHtml = Boolean(repository)
 
   if (preferHtml) {
     try {
       return await fetchGithubLatestReleaseViaRedirect(
-        DEFAULT_GITHUB_HTML_LATEST_URL,
+        `https://github.com/${repository![1]}/${repository![2]}/releases/latest`,
         timeoutMs,
       )
     } catch (htmlErr) {
@@ -226,8 +232,8 @@ export async function fetchGithubLatestRelease(
     }
   }
 
-  const res = await fetchWithTimeout(
-    url || DEFAULT_GITHUB_RELEASES_URL,
+  const release = await fetchWithTimeout(
+    apiUrl,
     {
       headers: {
         Accept: 'application/vnd.github+json',
@@ -235,15 +241,39 @@ export async function fetchGithubLatestRelease(
       cache: 'no-store',
     },
     timeoutMs,
+    async (res) => {
+      if (res.status === 404 && repository) {
+        void res.body?.cancel().catch(() => {})
+        return null
+      }
+      if (!res.ok) throw new Error(`GitHub releases HTTP ${res.status}`)
+      return await res.json() as { tag_name?: string; name?: string; html_url?: string }
+    },
   )
-  if (!res.ok) {
-    throw new Error(`GitHub releases HTTP ${res.status}`)
+  if (release === null && repository) {
+    const [, owner, repo] = repository
+    const data = await fetchWithTimeout(
+      `https://api.github.com/repos/${owner}/${repo}/tags?per_page=100`,
+      { headers: { Accept: 'application/vnd.github+json' }, cache: 'no-store' },
+      timeoutMs,
+      async (res): Promise<unknown> => {
+        if (!res.ok) throw new Error(`GitHub tags HTTP ${res.status}`)
+        return res.json()
+      },
+    )
+    if (!Array.isArray(data)) throw new Error('repository tags payload is not a list')
+    const tags = data.slice(0, 100)
+      .filter((item): item is { name: string } => typeof item?.name === 'string')
+      .map((item) => item.name.trim())
+      .filter((tag) => /^[vV]?\d+\.\d+\.\d+(?:\+[0-9A-Za-z.-]+)?$/.test(tag))
+    const newest = tags.reduce((latest, tag) => !latest || isUpdateAvailable(latest, tag) ? tag : latest, '')
+    return {
+      version: newest ? normalizeVersion(newest) : null,
+      url: newest ? `https://github.com/${owner}/${repo}/tree/${encodeURIComponent(newest)}` : `https://github.com/${owner}/${repo}/tags`,
+    }
   }
-  const data = (await res.json()) as {
-    tag_name?: string
-    name?: string
-    html_url?: string
-  }
+  const data = release
+  if (!data || typeof data !== 'object') throw new Error('release payload is not an object')
   const tag = String(data.tag_name || data.name || '').trim()
   if (!tag) throw new Error('release missing tag_name')
   return {

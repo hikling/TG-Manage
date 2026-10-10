@@ -23,6 +23,7 @@ from backend.utils.tg_session import (
     get_account_profile,
     get_account_session_string,
     get_account_status,
+    get_global_semaphore,
     get_session_mode,
     is_string_session_mode,
     list_account_names,
@@ -371,6 +372,7 @@ class TelegramAccountsMixin:
         Raises:
             瞬时错误（网络/会话/限流）向上抛出，由调用方决定是否缓存判定
         """
+        from backend.services.avatar_cache import CHAT_AVATAR_MAX_BYTES
         from tg_manage.core import get_client
 
         account_name = self._normalize_account_name(account_name)
@@ -404,34 +406,39 @@ class TelegramAccountsMixin:
             in_memory = True
 
         try:
-            client = get_client(
-                account_name,
-                proxy=proxy_dict,
-                workdir=self.session_dir,
-                session_string=session_string,
-                in_memory=in_memory,
-                no_updates=True,
-            )
-
-            lock = get_account_lock(account_name)
-            async with lock:
-                async with client:
-                    chat = await asyncio.wait_for(
-                        client.get_chat(chat_id), timeout=10
+            async with get_account_lock(account_name):
+                async with get_global_semaphore():
+                    client = get_client(
+                        account_name,
+                        proxy=proxy_dict,
+                        workdir=self.session_dir,
+                        session_string=session_string,
+                        in_memory=in_memory,
+                        no_updates=True,
                     )
-                    if not chat or not getattr(chat, "photo", None):
+                    async with client:
+                        chat = await asyncio.wait_for(
+                            client.get_chat(chat_id), timeout=10
+                        )
+                        if not chat or not getattr(chat, "photo", None):
+                            return None
+
+                        photo_bytes = await asyncio.wait_for(
+                            client.download_media(
+                                chat.photo.small_file_id, in_memory=True
+                            ),
+                            timeout=15,
+                        )
+                        if photo_bytes:
+                            try:
+                                photo_bytes.seek(0)
+                                data = photo_bytes.read(CHAT_AVATAR_MAX_BYTES + 1)
+                                if len(data) > CHAT_AVATAR_MAX_BYTES:
+                                    raise ValueError("头像超过大小限制")
+                                return data
+                            finally:
+                                photo_bytes.close()
                         return None
-
-                    photo_bytes = await asyncio.wait_for(
-                        client.download_media(
-                            chat.photo.small_file_id, in_memory=True
-                        ),
-                        timeout=15,
-                    )
-                    if photo_bytes:
-                        photo_bytes.seek(0)
-                        return photo_bytes.read()
-                    return None
         except Exception as e:
             # 瞬时错误不能与"该 chat 无头像"混为一谈：抛出让路由层区分
             logger.warning(
