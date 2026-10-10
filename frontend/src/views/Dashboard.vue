@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, RefreshCw, Users } from 'lucide-vue-next'
+import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, Users } from 'lucide-vue-next'
 import { useI18n } from '../composables/useI18n'
 import { errorText } from '../composables/usePanelAccount'
 import { getHeroImage, getHeroSettings } from '../lib/api/appearance'
@@ -154,10 +154,6 @@ function onHeroPositionChanged(event: Event) {
   heroPositionY.value = clampCoverPosition(detail.y)
 }
 
-async function refreshDashboard() {
-  if (loading.value) return
-  await Promise.all([loadDashboardData(), loadHeroImage(), refreshMemory()])
-}
 
 onMounted(() => {
   active = true
@@ -181,16 +177,8 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
-    <section class="dashboard-hero" :class="{ 'dashboard-hero--custom': !!heroImageUrl }">
+    <section class="dashboard-hero" aria-hidden="true">
       <HeroCover v-if="heroImageUrl" :src="heroImageUrl" :position-x="heroPositionX" :position-y="heroPositionY" />
-      <div class="dashboard-hero-copy">
-        <h2>{{ t('dashboard.heroTitle') }}<br><span>{{ t('dashboard.heroTitleAccent') }}</span></h2>
-        <p>{{ t('dashboard.heroDescription') }}</p>
-        <div class="dashboard-hero-actions" :aria-label="t('dashboard.actions')">
-          <RouterLink to="/accounts" class="dashboard-hero-primary">{{ t('dashboard.manageAccounts') }} <ArrowUpRight :size="17" aria-hidden="true" /></RouterLink>
-          <button type="button" class="dashboard-hero-refresh" :disabled="loading" @click="refreshDashboard"><RefreshCw :size="16" :class="{ 'animate-spin': loading }" aria-hidden="true" />{{ loading ? t('dashboard.refreshing') : t('dashboard.refresh') }}</button>
-        </div>
-      </div>
     </section>
 
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>

@@ -66,6 +66,8 @@ describe('dashboard data and cover lifecycle', () => {
     const { wrapper } = mountDashboard()
     try {
       await flushPromises()
+      expect(wrapper.find('.dashboard-hero-copy').exists()).toBe(false)
+      expect(wrapper.find('.dashboard-hero-actions').exists()).toBe(false)
       expect(wrapper.findAll('.dashboard-metric')).toHaveLength(4)
       expect(wrapper.find('.dashboard-metric--accounts').text()).toContain('2')
       expect(wrapper.find('.dashboard-metric--telebox').text()).toContain('1')
