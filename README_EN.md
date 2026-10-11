@@ -47,6 +47,9 @@
 <a id="screenshots"></a>
 ## 🖼️ Screenshots
 
+<details>
+<summary><strong>View project screenshots</strong></summary>
+
 Click an image to view the full screenshot.
 
 <table>
@@ -81,6 +84,8 @@ Click an image to view the full screenshot.
     <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="Telegram verification code retrieved with the private bot"></a></td>
   </tr>
 </table>
+
+</details>
 
 <a id="quick-start"></a>
 ## 🚀 Quick start
