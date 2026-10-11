@@ -47,6 +47,9 @@
 <a id="screenshots"></a>
 ## 🖼️ 屏幕截图
 
+<details>
+<summary><strong>查看项目截图</strong></summary>
+
 点击图片可查看完整截图。
 
 <table>
@@ -81,6 +84,8 @@
     <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="私人机器人获取 Telegram 验证码的聊天截图"></a></td>
   </tr>
 </table>
+
+</details>
 
 <a id="quick-start"></a>
 ## 🚀 快速部署
