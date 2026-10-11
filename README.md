@@ -2,17 +2,8 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">一个清爽的 Telegram 多账号管理面板，内置独立运行的 TeleBox。</p>
 <p align="center"><a href="README.md"><strong>简体中文</strong></a> · <a href="README_EN.md">English</a></p>
-<p align="center"><a href="#features">✨ 功能</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
+<p align="center"><a href="#features">✨ 功能</a> · <a href="#screenshots">🖼️ 截图</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-0b7285?style=flat-square" alt="BSD 3-Clause license"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.10 to 3.13"></a>
-  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.109%2B-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI 0.109 or later"></a>
-  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue.js-3.5-42B883?style=flat-square&amp;logo=vuedotjs&amp;logoColor=white" alt="Vue.js 3.5"></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6%20%7C%207-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript 6 and 7"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js 22 and 24"></a>
-  <a href="https://github.com/TeleBoxOrg/TeleBox"><img src="https://img.shields.io/badge/TeleBox-0.2.9-6f42c1?style=flat-square" alt="TeleBox 0.2.9"></a>
-</p>
 
 > 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，集成 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)。当前项目源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；请从本仓库构建，上游镜像不包含这里的界面和集成改动。
 
@@ -52,6 +43,44 @@
   </tr>
 </table>
 
+
+<a id="screenshots"></a>
+## 🖼️ 屏幕截图
+
+点击图片可查看完整截图。
+
+<table>
+  <tr>
+    <th width="50%">登录</th>
+    <th width="50%">仪表盘</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/登录.png"><img src="docs/public/screenshots/登录.png" width="100%" alt="TG Manage 登录页面"></a></td>
+    <td align="center"><a href="docs/public/screenshots/仪表盘.png"><img src="docs/public/screenshots/仪表盘.png" width="100%" alt="TG Manage 仪表盘与账号指标"></a></td>
+  </tr>
+  <tr>
+    <th>账户管理</th>
+    <th>聊天中心</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/账户管理.png"><img src="docs/public/screenshots/账户管理.png" width="100%" alt="TG Manage 账户管理页面"></a></td>
+    <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage 聊天中心页面"></a></td>
+  </tr>
+  <tr>
+    <th>系统设置</th>
+    <th>查看日志</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/系统设置.png"><img src="docs/public/screenshots/系统设置.png" width="100%" alt="TG Manage 系统设置页面"></a></td>
+    <td align="center"><a href="docs/public/screenshots/查看日志.png"><img src="docs/public/screenshots/查看日志.png" width="100%" alt="TG Manage 日志查看页面"></a></td>
+  </tr>
+  <tr>
+    <th colspan="2">Bot 获取验证码</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="私人机器人获取 Telegram 验证码的聊天截图"></a></td>
+  </tr>
+</table>
 
 <a id="quick-start"></a>
 ## 🚀 快速部署
