@@ -70,6 +70,7 @@ const mobileQuery = window.matchMedia('(max-width: 1023px)')
 const isMobileView = ref(mobileQuery.matches)
 const onViewportChange = () => {
   isMobileView.value = mobileQuery.matches
+  if (!isMobileView.value) isMobileMenuOpen.value = false
 }
 const sidebarHidden = computed(() => isMobileView.value && !isMobileMenuOpen.value)
 const heroFeedbackIsError = computed(() => heroFeedbackKind.value === 'error')
@@ -439,9 +440,10 @@ const handleNavClick = () => {
       <header class="ui-header-glass sticky top-0 z-30 h-14 flex items-center justify-between px-4 lg:px-8 shrink-0">
         <div class="flex items-center gap-3 min-w-0">
           <button
+            v-if="isMobileView"
             ref="menuButtonRef"
             type="button"
-            class="ui-icon-btn lg:hidden"
+            class="ui-icon-btn"
             :aria-label="t('nav.openMenu')"
             :aria-expanded="isMobileMenuOpen"
             @click="isMobileMenuOpen = true"

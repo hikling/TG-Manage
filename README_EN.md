@@ -2,17 +2,8 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">A focused Telegram multi-account dashboard with an isolated TeleBox runtime.</p>
 <p align="center"><a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a></p>
-<p align="center"><a href="#features">✨ Features</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
+<p align="center"><a href="#features">✨ Features</a> · <a href="#screenshots">🖼️ Screenshots</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-0b7285?style=flat-square" alt="BSD 3-Clause license"></a>
-  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%E2%80%933.13-3776AB?style=flat-square&amp;logo=python&amp;logoColor=white" alt="Python 3.10 to 3.13"></a>
-  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.109%2B-009688?style=flat-square&amp;logo=fastapi&amp;logoColor=white" alt="FastAPI 0.109 or later"></a>
-  <a href="https://vuejs.org/"><img src="https://img.shields.io/badge/Vue.js-3.5-42B883?style=flat-square&amp;logo=vuedotjs&amp;logoColor=white" alt="Vue.js 3.5"></a>
-  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6%20%7C%207-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" alt="TypeScript 6 and 7"></a>
-  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-22%20%7C%2024-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" alt="Node.js 22 and 24"></a>
-  <a href="https://github.com/TeleBoxOrg/TeleBox"><img src="https://img.shields.io/badge/TeleBox-0.2.9-6f42c1?style=flat-square" alt="TeleBox 0.2.9"></a>
-</p>
 
 > Based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrating [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). The current project is [hikling/TG-Manage](https://github.com/hikling/TG-Manage); build from this repository because upstream images do not include these UI and TeleBox changes.
 
@@ -52,6 +43,44 @@
   </tr>
 </table>
 
+
+<a id="screenshots"></a>
+## 🖼️ Screenshots
+
+Click an image to view the full screenshot.
+
+<table>
+  <tr>
+    <th width="50%">Login</th>
+    <th width="50%">Dashboard</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/登录.png"><img src="docs/public/screenshots/登录.png" width="100%" alt="TG Manage login page"></a></td>
+    <td align="center"><a href="docs/public/screenshots/仪表盘.png"><img src="docs/public/screenshots/仪表盘.png" width="100%" alt="TG Manage dashboard and account metrics"></a></td>
+  </tr>
+  <tr>
+    <th>Account management</th>
+    <th>Chat center</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/账户管理.png"><img src="docs/public/screenshots/账户管理.png" width="100%" alt="TG Manage account management page"></a></td>
+    <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage chat center page"></a></td>
+  </tr>
+  <tr>
+    <th>System settings</th>
+    <th>Logs</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="docs/public/screenshots/系统设置.png"><img src="docs/public/screenshots/系统设置.png" width="100%" alt="TG Manage system settings page"></a></td>
+    <td align="center"><a href="docs/public/screenshots/查看日志.png"><img src="docs/public/screenshots/查看日志.png" width="100%" alt="TG Manage log viewer page"></a></td>
+  </tr>
+  <tr>
+    <th colspan="2">Bot verification codes</th>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="Telegram verification code retrieved with the private bot"></a></td>
+  </tr>
+</table>
 
 <a id="quick-start"></a>
 ## 🚀 Quick start
