@@ -584,10 +584,11 @@
   },
   "logs": {
     "runtimeTitle": "Runtime logs",
-    "runtimeDescription": "View TeleBox process output for each account.",
+    "runtimeDescription": "View process output for accounts with TeleBox enabled.",
     "teleboxTitle": "TeleBox process",
     "accountLabel": "Account",
-    "noAccounts": "No accounts",
+    "noAccounts": "No accounts with TeleBox enabled",
+    "enableTeleboxForLogs": "Enable TeleBox in Accounts to view logs.",
     "noTeleboxLogs": "No TeleBox logs",
     "taskLogs": "Task Execution Logs",
     "auditLogs": "System Audit Logs",

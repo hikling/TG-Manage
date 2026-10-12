@@ -397,8 +397,10 @@ class TeleBoxService:
         return self.status(account)
 
     def log_items(self, account: str):
-        account = self._account(account)
-        return {"items": list(self.logs.get(account, []))}
+        status = self.status(account)
+        if not status["enabled"]:
+            return {"items": []}
+        return {"items": list(self.logs.get(status["account"], []))}
 
     async def startup(self):
         self.closing = False

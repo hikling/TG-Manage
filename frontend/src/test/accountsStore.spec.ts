@@ -111,6 +111,25 @@ describe('accountsStore', () => {
     expect(list).toEqual([])
   })
 
+  it.each(['resolve', 'reject'])('旧会话请求在 token 切换后%s不能恢复缓存或报错', async (outcome) => {
+    let resolve!: (value: { accounts: Array<{ name: string }>; total: number }) => void
+    let reject!: (error: Error) => void
+    api.listAccounts.mockReturnValueOnce(new Promise((done, fail) => { resolve = done; reject = fail }))
+    const store = useAccountsStore()
+    const pending = store.ensureAccounts(true)
+    useAuthStore().clearToken()
+    useAuthStore().setToken('tok')
+    if (outcome === 'resolve') resolve({ accounts: [{ name: 'previous-session' }], total: 1 })
+    else reject(new Error('previous session error'))
+    expect(await pending).toEqual([])
+    expect(store.accounts).toEqual([])
+    expect(store.total).toBe(0)
+    expect(store.fetchedAt).toBe(0)
+    expect(store.loading).toBe(false)
+    await store.ensureAccounts(true)
+    expect(store.accounts.map(account => account.name)).toEqual(['a1', 'a2'])
+  })
+
   it('失败透传且不写入缓存时间戳，立即重试可成功', async () => {
     api.listAccounts.mockRejectedValueOnce(new Error('boom'))
     const store = useAccountsStore()

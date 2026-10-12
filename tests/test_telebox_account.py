@@ -34,6 +34,52 @@ def test_deleted_account_releases_worker_and_secret_references(tmp_path):
     assert "removed" not in service.secrets
 
 
+@pytest.mark.parametrize("worker_status", ["running", "failed", "stopped"])
+def test_enabled_logs_remain_available_independent_of_worker_status(monkeypatch, tmp_path, worker_status):
+    service = telebox.TeleBoxService(root=tmp_path)
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        _normalize_account_name=lambda name: name.strip(), account_exists=lambda name: name == "one"))
+    service.workers["one"] = {"status": worker_status}
+    service._marker("one", True)
+    service._log("one", "diagnostic output")
+
+    assert service.log_items(" one ")["items"] == list(service.logs["one"])
+
+
+@pytest.mark.asyncio
+async def test_disabled_logs_are_hidden_without_deleting_retained_history(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        _normalize_account_name=lambda name: name, account_exists=lambda name: name == "one"))
+    service._log("one", "retained output")
+    retained = list(service.logs["one"])
+    assert service.log_items("one") == {"items": []}
+
+    service._marker("one", True)
+    assert service.log_items("one") == {"items": retained}
+    await service.stop("one")
+    assert service.log_items("one") == {"items": []}
+    assert list(service.logs["one"]) == retained
+
+    service._marker("one", True)
+    assert service.log_items("one") == {"items": retained}
+    with pytest.raises(ValueError, match="账号不存在"):
+        service.log_items("unknown")
+
+
+def test_overview_still_includes_disabled_telebox_accounts(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        _normalize_account_name=lambda name: name,
+        account_exists=lambda name: name in {"one", "two"},
+        list_accounts=lambda: [{"name": "one"}, {"name": "two"}],
+    ))
+    service._marker("one", True)
+    assert [(account["account"], account["enabled"]) for account in service.overview()["accounts"]] == [
+        ("one", True), ("two", False),
+    ]
+
+
 def test_worker_passes_telebox_settings_without_panel_secrets(tmp_path, monkeypatch):
     monkeypatch.setenv("TB_PREFIX", "! .")
     monkeypatch.setenv("TB_LISTENER_HANDLE_EDITED", "kitt checkin")

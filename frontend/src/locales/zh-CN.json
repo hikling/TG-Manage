@@ -584,10 +584,11 @@
   },
   "logs": {
     "runtimeTitle": "运行日志",
-    "runtimeDescription": "查看各账号 TeleBox 进程输出。",
+    "runtimeDescription": "只显示已启用 TeleBox 的账号进程输出。",
     "teleboxTitle": "TeleBox 进程",
     "accountLabel": "账号",
-    "noAccounts": "暂无账号",
+    "noAccounts": "暂无已启用 TeleBox 的账号",
+    "enableTeleboxForLogs": "暂无已启用 TeleBox 的账号，请在账户管理中启用后查看日志。",
     "noTeleboxLogs": "暂无 TeleBox 日志",
     "taskLogs": "任务执行日志",
     "auditLogs": "系统审计日志",
