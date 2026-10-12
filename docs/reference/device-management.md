@@ -20,10 +20,9 @@
 
 ### 3. 设备保活
 
-- 定期轻量唤醒账号会话
-- 防止 6 个月不活跃被 Telegram 自动踢下线
-- 可配置保活间隔（建议 30 天）
-- 每天凌晨 3:30 自动执行
+- 每日零点的全局状态检测会轻量连接账号会话
+- 原凌晨 3:30 的自动保活检测已停用，其他时间仅手动检测
+- 手动保活接口仍可显式调用；不会自动在错过零点后补启动检测
 
 ### 4. 官方消息查看
 
@@ -62,8 +61,8 @@ POST /api/config/settings/device-keepalive/run
 
 | 配置项 | 默认值 | 说明 |
 |--------|--------|------|
-| `device_keepalive_enabled` | `true` | 是否启用设备保活 |
-| `device_keepalive_interval_days` | `30` | 保活间隔天数（最大 170） |
+| `device_keepalive_enabled` | `true` | 兼容旧保活配置，不再创建独立自动检测任务 |
+| `device_keepalive_interval_days` | `30` | 兼容旧保活间隔（最大 170），不改变固定零点检测时间 |
 
 ## 使用场景
 

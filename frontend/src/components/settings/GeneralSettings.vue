@@ -32,7 +32,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-type NumberInputKey = 'logDays' | 'concurrency' | 'deviceKeepaliveIntervalDays'
+type NumberInputKey = 'logDays' | 'concurrency'
 
 /** 字段级更新：浅拷贝并覆盖单个字段，保证父组件 ref 收到新对象引用 */
 const update = <K extends keyof SettingsFormState>(key: K, value: SettingsFormState[K]) => {
@@ -82,28 +82,13 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
       <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
         <div class="flex items-center justify-between gap-3">
           <div>
-            <label class="text-xs text-gray-600 dark:text-gray-300 block">{{ t('settings.deviceKeepalive') }}</label>
+            <h3 class="text-xs text-gray-600 dark:text-gray-300">{{ t('settings.deviceKeepalive') }}</h3>
             <p class="text-[10px] text-gray-500 mt-1">{{ t('settings.deviceKeepaliveDesc') }}</p>
           </div>
-          <button
-            type="button"
-            class="ui-switch"
-            role="switch"
-            :aria-label="t('settings.deviceKeepalive')"
-            :aria-checked="modelValue.deviceKeepaliveEnabled"
-            :class="modelValue.deviceKeepaliveEnabled ? 'ui-switch-on' : ''"
-            @click="update('deviceKeepaliveEnabled', !modelValue.deviceKeepaliveEnabled)"
-          >
-            <span class="ui-switch-knob" />
-          </button>
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-          <input :value="modelValue.deviceKeepaliveIntervalDays" @input="onNumberInput('deviceKeepaliveIntervalDays', $event)" type="number" min="1" max="170" :disabled="!modelValue.deviceKeepaliveEnabled" class="ui-input disabled:opacity-50">
-          <button type="button" class="ui-btn-secondary !px-3 !py-2 !text-xs" :disabled="keepaliveLoading" @click="emit('run-keepalive')">
-            {{ keepaliveLoading ? t('common.saving') : t('settings.keepaliveNow') }}
-          </button>
-        </div>
-        <p class="text-[10px] text-gray-500">{{ t('settings.deviceKeepaliveIntervalHint') }}</p>
+        <button type="button" class="ui-btn-secondary !px-3 !py-2 !text-xs" :disabled="keepaliveLoading" @click="emit('run-keepalive')">
+          {{ keepaliveLoading ? t('common.saving') : t('settings.keepaliveNow') }}
+        </button>
       </div>
       <div class="space-y-1.5">
         <label class="ui-label">{{ t('settings.timezone') }}</label>
