@@ -85,25 +85,6 @@ def create_cron_trigger(cron_str: str, timezone: str = "") -> CronTrigger:
 
 
 
-async def _job_device_keepalive() -> None:
-    """定期保活 Telegram 授权设备/会话，避免长期不活跃被自动踢下线。"""
-    logger = logging.getLogger("backend.scheduler")
-    try:
-        from backend.services.device_keepalive import get_device_keepalive_service
-
-        result = await get_device_keepalive_service().run_due()
-        logger.info(
-            "Device keepalive finished: checked=%s ok=%s skipped=%s failed=%s",
-            result.get("checked"),
-            result.get("kept_alive"),
-            result.get("skipped"),
-            result.get("failed"),
-        )
-    except Exception as exc:
-        # 顶层兜底：保活 Job 失败不能阻塞调度器
-        logger.error("设备保活任务失败: %s", exc, exc_info=True)
-
-
 async def _job_auto_backup() -> None:
     """按全局设置执行自动备份。"""
     from pathlib import Path
@@ -219,6 +200,13 @@ def _sync_auto_backup_job() -> None:
 
 async def _job_account_status_report() -> None:
     logger = logging.getLogger("backend.scheduler")
+    timezone = _resolve_scheduler_timezone() or (
+        scheduler.timezone if scheduler is not None else None
+    )
+    now = datetime.now(timezone)
+    if now.hour != 0 or now.minute != 0:
+        # A delayed or stale trigger must not begin a new all-account scan.
+        return
     try:
         from backend.services.account_status_report import (
             get_account_status_report_service,
@@ -248,18 +236,25 @@ def _sync_account_status_report_job() -> None:
             replace_existing=True,
             max_instances=1,
             coalesce=True,
+            misfire_grace_time=59,
         )
     elif str(job.trigger.timezone) != str(timezone):
         # Preserve running-job admission limits; only update the next midnight.
         scheduler.reschedule_job(ACCOUNT_STATUS_REPORT_JOB_ID, trigger=trigger)
 
 
-async def sync_jobs() -> None:
-    """Refresh system jobs; remove jobs from the retired task orchestration."""
+def _remove_retired_jobs() -> None:
     if scheduler is not None:
         for job in scheduler.get_jobs():
-            if str(job.id).startswith(("tb-", "sign-", "db-")):
+            if job.id == "system-device-keepalive" or str(job.id).startswith(
+                ("tb-", "sign-", "db-")
+            ):
                 scheduler.remove_job(job.id)
+
+
+async def sync_jobs() -> None:
+    """Refresh system jobs; remove jobs from the retired task orchestration."""
+    _remove_retired_jobs()
     _sync_auto_backup_job()
     _sync_account_status_report_job()
 
@@ -297,19 +292,12 @@ async def init_scheduler(sync_on_startup: bool = True) -> AsyncIOScheduler:
         )
         scheduler.start()
 
-        # 添加每日凌晨 3:30 执行的设备保活任务
-        scheduler.add_job(
-            _job_device_keepalive,
-            trigger=CronTrigger.from_crontab("30 3 * * *"),
-            id="system-device-keepalive",
-            replace_existing=True,
-        )
-
         _sync_auto_backup_job()
         _sync_account_status_report_job()
 
         if sync_on_startup:
             await sync_jobs()
+    _remove_retired_jobs()
     return scheduler
 
 

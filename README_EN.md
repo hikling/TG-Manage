@@ -24,7 +24,7 @@
   <tr>
     <td valign="top" width="50%">
       <h3>🤖 Private bot</h3>
-      <p>The configured private target ID may use <code>/code account-name</code> to query a code from the last five minutes of <code>777000</code>, or <code>/me</code> to list local account names and remarks. Both commands share a 45-second interval; idle operation never scans account messages.</p>
+      <p>The configured private target ID may use <code>/me</code> to list numbered account names and remarks, then <code>/code 4</code> to query the fourth account's code from the last five minutes. <code>/code account-name</code> remains supported. Repeating the same complete command has a 45-second cooldown; different commands may follow immediately. Idle operation never scans account messages.</p>
     </td>
     <td valign="top" width="50%">
       <h3>🎨 Dashboard and appearance</h3>
