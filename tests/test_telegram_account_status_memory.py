@@ -40,7 +40,7 @@ class _Client:
             raise ConnectionError("network unavailable")
         if self.behavior == "timeout":
             await asyncio.sleep(60)
-        return SimpleNamespace(id=123)
+        return SimpleNamespace(id=123, username="sample_user")
 
 
 @pytest.fixture
@@ -68,6 +68,8 @@ async def test_status_probe_releases_client_on_all_outcomes(tmp_path, monkeypatc
     for _ in range(iterations):
         result = await _Service(tmp_path).check_account_status("sample", timeout_seconds=1)
         assert result["ok"] is (behavior == "ok")
+        if behavior == "ok":
+            assert result["username"] == "sample_user"
         assert client.active == 0
     assert client.enters == client.exits == iterations
 
