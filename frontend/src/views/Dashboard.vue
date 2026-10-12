@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Activity, ArrowRight, ArrowUpRight, CheckCircle2, HardDrive, Users } from 'lucide-vue-next'
 import { useI18n } from '../composables/useI18n'
@@ -13,13 +13,17 @@ import type { AccountInfo } from '../lib/api'
 import { formatMemoryRssFromStats } from '../lib/memory-format'
 import { clampCoverPosition } from '../lib/cover-frame'
 import { useAccountsStore } from '../stores/accounts'
+import { useAuthStore } from '../stores/auth'
 import HeroCover from '../components/HeroCover.vue'
 
 const { t } = useI18n()
 const store = useAccountsStore()
+const auth = useAuthStore()
 const telebox = ref<TeleBoxAccount[]>([])
 const loading = ref(false)
 const error = ref('')
+const accountsFailure = ref<{ cause: unknown } | null>(null)
+const accountsError = computed(() => accountsFailure.value ? errorText(accountsFailure.value.cause) : '')
 const memoryRss = ref('')
 const memoryStatusKey = ref<'memoryReading' | 'memoryCurrent' | 'memoryUnavailable' | 'memoryFailed'>('memoryReading')
 const memoryUpdatedAt = ref('')
@@ -31,11 +35,16 @@ let heroObjectUrl = ''
 let heroRequest: Promise<void> | undefined
 let heroReloadPending = false
 let dashboardRequest: Promise<void> | undefined
+let accountsRequest: Promise<void> | undefined
+let accountsTimer: ReturnType<typeof setTimeout> | undefined
+let accountsGeneration = 0
+let accountsRefreshPending = false
 let memoryTimer: ReturnType<typeof setTimeout> | undefined
 let memoryInFlight = false
 let active = true
 let heroPositionEdited = false
 const MEMORY_REFRESH_MS = 15_000
+const ACCOUNTS_REFRESH_MS = 30_000
 
 const runningCount = computed(() => telebox.value.filter(item => item.status === 'running').length)
 const healthyCount = computed(() => store.accounts.filter(isAccountHealthy).length)
@@ -49,15 +58,14 @@ function attentionReason(item: AccountInfo): string {
 }
 
 async function fetchDashboardData() {
-  const [teleboxResult, accountsResult] = await Promise.allSettled([
+  const [teleboxResult] = await Promise.allSettled([
     listTeleBoxAccounts(),
-    store.ensureAccounts(true),
+    refreshAccountMetadata(),
   ])
   if (!active) return
   const failures: string[] = []
   if (teleboxResult.status === 'fulfilled') telebox.value = teleboxResult.value.accounts || []
   else failures.push(errorText(teleboxResult.reason))
-  if (accountsResult.status === 'rejected') failures.push(errorText(accountsResult.reason))
   error.value = failures[0] || ''
 }
 
@@ -70,6 +78,50 @@ function loadDashboardData(): Promise<void> {
   })
   return dashboardRequest
 }
+
+function clearAccountsTimer() {
+  if (accountsTimer) clearTimeout(accountsTimer)
+  accountsTimer = undefined
+}
+
+function refreshAccountMetadata(): Promise<void> {
+  if (!active || document.hidden || !getAuthToken()) return Promise.resolve()
+  if (accountsRequest) return accountsRequest
+  clearAccountsTimer()
+  const generation = accountsGeneration
+  const token = getAuthToken()
+  const ownsRequest = () => active && !document.hidden
+    && generation === accountsGeneration && token === getAuthToken()
+  // Only read persisted results. Account probing remains manual or midnight scheduled.
+  accountsRequest = store.ensureAccounts(true).then(() => {
+    if (ownsRequest()) accountsFailure.value = null
+  }).catch(cause => {
+    if (ownsRequest()) accountsFailure.value = { cause }
+  }).finally(() => {
+    accountsRequest = undefined
+    if (!active || document.hidden || !getAuthToken()) return
+    if (accountsRefreshPending) {
+      accountsRefreshPending = false
+      void refreshAccountMetadata()
+    } else {
+      accountsTimer = setTimeout(() => void refreshAccountMetadata(), ACCOUNTS_REFRESH_MS)
+    }
+  })
+  return accountsRequest
+}
+
+function resumeAccountMetadata() {
+  if (accountsRequest) accountsRefreshPending = true
+  else void refreshAccountMetadata()
+}
+
+watch(() => auth.token, () => {
+  ++accountsGeneration
+  clearAccountsTimer()
+  accountsFailure.value = null
+  accountsRefreshPending = false
+  if (active && !document.hidden && getAuthToken()) resumeAccountMetadata()
+}, { flush: 'sync' })
 
 async function refreshMemory() {
   if (memoryInFlight) return
@@ -96,10 +148,14 @@ async function refreshMemory() {
 
 function onVisibilityChange() {
   if (document.hidden) {
+    ++accountsGeneration
+    accountsRefreshPending = false
+    clearAccountsTimer()
     if (memoryTimer) clearTimeout(memoryTimer)
     memoryTimer = undefined
   } else if (active) {
     void refreshMemory()
+    resumeAccountMetadata()
   }
 }
 
@@ -167,6 +223,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   active = false
+  ++accountsGeneration
+  accountsRefreshPending = false
+  clearAccountsTimer()
   document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('tg-manage:hero-changed', onHeroChanged)
   window.removeEventListener('tg-manage:hero-position-changed', onHeroPositionChanged)
@@ -182,6 +241,7 @@ onUnmounted(() => {
     </section>
 
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
+    <p v-if="accountsError" class="panel-error" role="alert">{{ accountsError }}</p>
 
     <section :aria-label="t('dashboard.overview')" class="dashboard-metrics">
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--accounts">

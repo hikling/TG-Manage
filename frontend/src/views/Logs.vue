@@ -21,6 +21,16 @@ let inFlight = false
 let selectionReload = false
 let choosingDefault = false
 
+function applyOverview(items: TeleBoxAccount[]) {
+  accounts.value = items.filter(item => item.enabled === true)
+  if (!accounts.value.some(item => item.account === selected.value)) {
+    logs.value = []
+    choosingDefault = true
+    selected.value = accounts.value[0]?.account || ''
+    choosingDefault = false
+  }
+}
+
 async function load() {
   if (!active || inFlight) return
   if (timer) clearTimeout(timer)
@@ -31,14 +41,22 @@ async function load() {
   try {
     const overview = await listTeleBoxAccounts()
     if (!active || current !== generation) return
-    accounts.value = overview.accounts
-    if (!accounts.value.some(item => item.account === selected.value)) {
-      choosingDefault = true
-      selected.value = accounts.value[0]?.account || ''
-      choosingDefault = false
-    }
-    const items = selected.value ? (await panelRequest<{ items: Entry[] }>(`/telebox/${encodeURIComponent(selected.value)}/logs`)).items : []
+    applyOverview(overview.accounts)
+    const requestedAccount = selected.value
+    const items = requestedAccount ? (await panelRequest<{ items: Entry[] }>(`/telebox/${encodeURIComponent(requestedAccount)}/logs`)).items : []
     if (!active || current !== generation) return
+    if (items.length) {
+      // The account may be disabled while a log payload is in transit. Recheck
+      // local enabled metadata before displaying it; this never probes Telegram.
+      const latest = await listTeleBoxAccounts()
+      if (!active || current !== generation) return
+      applyOverview(latest.accounts)
+      if (selected.value !== requestedAccount) {
+        selectionReload = !!selected.value
+        error.value = ''
+        return
+      }
+    }
     logs.value = items.slice().reverse()
     error.value = ''
   } catch (cause) { if (active && current === generation) error.value = errorText(cause) }
@@ -69,6 +87,8 @@ onUnmounted(() => { active = false; ++generation; if (timer) clearTimeout(timer)
 <template>
   <div class="panel-stack"><section class="panel-card"><div class="panel-row"><div class="flex-1"><h2 class="panel-title">{{ t('logs.runtimeTitle') }}</h2><p class="panel-muted">{{ t('logs.runtimeDescription') }}</p></div><button class="panel-button" :disabled="loading" @click="load"><RefreshCw :size="17" />{{ t('common.refresh') }}</button></div></section>
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
-    <section class="panel-card panel-stack"><h3>{{ t('logs.teleboxTitle') }}</h3><label>{{ t('logs.accountLabel') }}<select v-model="selected" class="panel-input mt-2"><option v-if="!accounts.length" value="">{{ t('logs.noAccounts') }}</option><option v-for="item in accounts" :key="item.account" :value="item.account">{{ item.account }} · {{ item.status }}</option></select></label><p v-if="!logs.length" class="panel-empty">{{ t('logs.noTeleboxLogs') }}</p><div class="max-h-[550px] overflow-y-auto panel-stack"><p v-for="(entry, index) in logs" :key="index" class="text-sm break-words border-b border-[var(--tg-border)] pb-2"><time class="panel-muted">{{ new Date(entry.time).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN') }}</time> · <span :class="entry.level === 'error' ? 'text-rose-600' : ''">{{ entry.message }}</span></p></div></section>
+    <section class="panel-card panel-stack"><h3>{{ t('logs.teleboxTitle') }}</h3>
+      <!-- Native account selection intentionally retains the platform popup and keyboard behavior. -->
+      <label>{{ t('logs.accountLabel') }}<select v-model="selected" class="panel-input mt-2" :disabled="!accounts.length"><option v-if="!accounts.length" value="">{{ t('logs.noAccounts') }}</option><option v-for="item in accounts" :key="item.account" :value="item.account">{{ item.account }} · {{ item.status }}</option></select></label><p v-if="!logs.length" class="panel-empty">{{ t(accounts.length ? 'logs.noTeleboxLogs' : 'logs.enableTeleboxForLogs') }}</p><div class="max-h-[550px] overflow-y-auto panel-stack"><p v-for="(entry, index) in logs" :key="index" class="text-sm break-words border-b border-[var(--tg-border)] pb-2"><time class="panel-muted">{{ new Date(entry.time).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN') }}</time> · <span :class="entry.level === 'error' ? 'text-rose-600' : ''">{{ entry.message }}</span></p></div></section>
   </div>
 </template>

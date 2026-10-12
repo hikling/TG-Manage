@@ -13,6 +13,7 @@ import { useAuthStore } from './auth'
 const ACCOUNTS_TTL_MS = 30_000
 
 export const useAccountsStore = defineStore('accounts', () => {
+  const auth = useAuthStore()
   const accounts = ref<AccountInfo[]>([])
   const total = ref(0)
   const loading = ref(false)
@@ -20,12 +21,13 @@ export const useAccountsStore = defineStore('accounts', () => {
   const fetchedAt = ref(0)
   /** 同刻只允许一次真实请求，后来者复用同一 Promise */
   let inFlight: Promise<AccountInfo[]> | null = null
+  let sessionGeneration = 0
 
-  /** 会话失效（登出/token 清空）时同步清空缓存，避免跨会话残留上一租户的列表 */
+  /** 会话变化时清空缓存并使旧请求失效，包括令牌切换后又切回原值。 */
   watch(
-    () => useAuthStore().token,
-    (token) => {
-      if (token) return
+    () => auth.token,
+    () => {
+      ++sessionGeneration
       accounts.value = []
       total.value = 0
       fetchedAt.value = 0
@@ -37,13 +39,19 @@ export const useAccountsStore = defineStore('accounts', () => {
   const fetchAccounts = async (): Promise<AccountInfo[]> => {
     const token = getAuthToken()
     if (!token) return accounts.value
+    const generation = sessionGeneration
+    const ownsSession = () => generation === sessionGeneration && token === getAuthToken()
     loading.value = true
     try {
       const res = await listAccounts(token)
+      if (!ownsSession()) return accounts.value
       accounts.value = res.accounts || []
       total.value = res.total ?? accounts.value.length
       fetchedAt.value = Date.now()
       return accounts.value
+    } catch (error) {
+      if (!ownsSession()) return accounts.value
+      throw error
     } finally {
       loading.value = false
     }
