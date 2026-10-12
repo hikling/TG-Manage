@@ -626,6 +626,7 @@ class TelegramAccountsMixin:
                 "checked_at": checked_at,
                 "needs_relogin": False,
                 "user_id": getattr(me, "id", None),
+                "username": getattr(me, "username", None),
             }
         except asyncio.TimeoutError:
             return {

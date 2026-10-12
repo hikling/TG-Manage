@@ -8,6 +8,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 scheduler: AsyncIOScheduler | None = None
+ACCOUNT_STATUS_REPORT_JOB_ID = "system-account-status-report"
 
 
 def _parse_clock_time(value: str):
@@ -216,6 +217,43 @@ def _sync_auto_backup_job() -> None:
         logger.exception("同步自动备份任务发生未知异常")
 
 
+async def _job_account_status_report() -> None:
+    logger = logging.getLogger("backend.scheduler")
+    try:
+        from backend.services.account_status_report import (
+            get_account_status_report_service,
+        )
+
+        result = await get_account_status_report_service().run()
+        logger.info("Midnight account status report finished: %s", result)
+    except Exception as exc:
+        logger.error("零点账户状态日报失败（%s）", type(exc).__name__)
+
+
+def _sync_account_status_report_job() -> None:
+    if scheduler is None:
+        return
+    from backend.scheduler.instance_lock import has_scheduler_lock
+
+    if not has_scheduler_lock():
+        return
+    timezone = _resolve_scheduler_timezone() or scheduler.timezone
+    trigger = CronTrigger(hour=0, minute=0, second=0, timezone=timezone)
+    job = scheduler.get_job(ACCOUNT_STATUS_REPORT_JOB_ID)
+    if job is None:
+        scheduler.add_job(
+            _job_account_status_report,
+            trigger=trigger,
+            id=ACCOUNT_STATUS_REPORT_JOB_ID,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+    elif str(job.trigger.timezone) != str(timezone):
+        # Preserve running-job admission limits; only update the next midnight.
+        scheduler.reschedule_job(ACCOUNT_STATUS_REPORT_JOB_ID, trigger=trigger)
+
+
 async def sync_jobs() -> None:
     """Refresh system jobs; remove jobs from the retired task orchestration."""
     if scheduler is not None:
@@ -223,6 +261,7 @@ async def sync_jobs() -> None:
             if str(job.id).startswith(("tb-", "sign-", "db-")):
                 scheduler.remove_job(job.id)
     _sync_auto_backup_job()
+    _sync_account_status_report_job()
 
 
 async def init_scheduler(sync_on_startup: bool = True) -> AsyncIOScheduler:
@@ -267,6 +306,7 @@ async def init_scheduler(sync_on_startup: bool = True) -> AsyncIOScheduler:
         )
 
         _sync_auto_backup_job()
+        _sync_account_status_report_job()
 
         if sync_on_startup:
             await sync_jobs()
