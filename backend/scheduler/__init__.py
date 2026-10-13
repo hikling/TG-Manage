@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 scheduler: AsyncIOScheduler | None = None
 ACCOUNT_STATUS_REPORT_JOB_ID = "system-account-status-report"
+_midnight_workflow_running = False
 
 
 def _parse_clock_time(value: str):
@@ -199,23 +201,45 @@ def _sync_auto_backup_job() -> None:
 
 
 async def _job_account_status_report() -> None:
+    global _midnight_workflow_running
     logger = logging.getLogger("backend.scheduler")
     timezone = _resolve_scheduler_timezone() or (
         scheduler.timezone if scheduler is not None else None
     )
-    now = datetime.now(timezone)
+    now = datetime.now(timezone).astimezone(timezone)
     if now.hour != 0 or now.minute != 0:
         # A delayed or stale trigger must not begin a new all-account scan.
         return
+    if _midnight_workflow_running:
+        return
+    # Capture once before status work. UTC subtraction describes exactly 24
+    # elapsed hours even in timezones with daylight-saving transitions.
+    end = now.replace(second=0, microsecond=0).astimezone(datetime_timezone.utc)
+    start = end - timedelta(hours=24)
+    _midnight_workflow_running = True
     try:
-        from backend.services.account_status_report import (
-            get_account_status_report_service,
-        )
+        try:
+            from backend.services.account_status_report import (
+                get_account_status_report_service,
+            )
 
-        result = await get_account_status_report_service().run()
-        logger.info("Midnight account status report finished: %s", result)
-    except Exception as exc:
-        logger.error("零点账户状态日报失败（%s）", type(exc).__name__)
+            result = await get_account_status_report_service().run()
+            logger.info("Midnight account status report finished: %s", result)
+        except Exception as exc:
+            logger.error("零点账户状态日报失败（%s）", type(exc).__name__)
+        try:
+            from backend.services.official_message_report import (
+                get_official_message_report_service,
+            )
+
+            result = await get_official_message_report_service().run(
+                start=start, end=end, timezone=now.tzinfo,
+            )
+            logger.info("Midnight official message report finished: %s", result)
+        except Exception as exc:
+            logger.error("零点官方消息日报失败（%s）", type(exc).__name__)
+    finally:
+        _midnight_workflow_running = False
 
 
 def _sync_account_status_report_job() -> None:
