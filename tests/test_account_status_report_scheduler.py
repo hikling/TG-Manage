@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from zoneinfo import ZoneInfo
@@ -17,6 +17,7 @@ from backend.scheduler import instance_lock
 def scheduler_env(monkeypatch):
     config = {"timezone": "Asia/Shanghai"}
     monkeypatch.setattr(scheduling, "scheduler", None)
+    monkeypatch.setattr(scheduling, "_midnight_workflow_running", False)
     monkeypatch.setattr(
         "backend.core.config.get_settings",
         lambda: SimpleNamespace(timezone="Asia/Hong_Kong"),
@@ -31,6 +32,17 @@ def scheduler_env(monkeypatch):
     monkeypatch.setattr(instance_lock, "release_scheduler_lock", Mock())
     yield config
     scheduling.shutdown_scheduler()
+
+
+@pytest.fixture(autouse=True)
+def official_run(monkeypatch):
+    # Existing scheduler tests must never connect to Telegram in the new phase.
+    run = AsyncMock(return_value={"accounts": 0, "messages_sent": 0})
+    monkeypatch.setattr(
+        "backend.services.official_message_report.get_official_message_report_service",
+        lambda: SimpleNamespace(run=run),
+    )
+    return run
 
 
 @pytest.fixture
@@ -165,7 +177,7 @@ async def test_retired_keepalive_job_removed_without_replacing_midnight(schedule
     ],
 )
 async def test_job_only_starts_within_configured_midnight_minute(
-    scheduler_env, scheduler_clock, monkeypatch, utc_time, starts,
+    scheduler_env, scheduler_clock, monkeypatch, utc_time, starts, official_run,
 ):
     scheduler_clock[0] = datetime(2026, 10, 12, *utc_time, tzinfo=ZoneInfo("UTC"))
     run = AsyncMock(return_value={"checked": 1})
@@ -180,9 +192,11 @@ async def test_job_only_starts_within_configured_midnight_minute(
     if starts:
         run.assert_awaited_once()
         service.assert_called_once()
+        official_run.assert_awaited_once()
     else:
         run.assert_not_awaited()
         service.assert_not_called()
+        official_run.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -206,7 +220,7 @@ async def test_midnight_guard_uses_updated_saved_timezone(
 
 @pytest.mark.asyncio
 async def test_midnight_run_can_finish_after_the_start_window(
-    scheduler_env, scheduler_clock, monkeypatch,
+    scheduler_env, scheduler_clock, monkeypatch, official_run,
 ):
     entered, finish = asyncio.Event(), asyncio.Event()
 
@@ -227,6 +241,10 @@ async def test_midnight_run_can_finish_after_the_start_window(
         finish.set()
         await asyncio.wait_for(task, 1)
         run.assert_awaited_once()
+        window = official_run.await_args.kwargs
+        assert window["end"] == datetime(2026, 10, 12, 16, tzinfo=timezone.utc)
+        assert window["start"] == datetime(2026, 10, 11, 16, tzinfo=timezone.utc)
+        assert str(window["timezone"]) == "Asia/Shanghai"
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -242,6 +260,7 @@ async def test_job_cancellation_propagates(scheduler_env, scheduler_clock, monke
     with pytest.raises(asyncio.CancelledError):
         await scheduling._job_account_status_report()
     run.assert_awaited_once()
+    assert scheduling._midnight_workflow_running is False
 
 
 @pytest.mark.asyncio
@@ -264,3 +283,99 @@ async def test_job_invokes_report_and_contains_sanitized_failures(
 def test_sync_report_before_scheduler_exists_is_noop(monkeypatch):
     monkeypatch.setattr(scheduling, "scheduler", None)
     scheduling._sync_account_status_report_job()
+
+
+@pytest.mark.asyncio
+async def test_status_failure_still_runs_official_report(
+    scheduler_env, scheduler_clock, monkeypatch, official_run, caplog,
+):
+    run = AsyncMock(side_effect=RuntimeError("secret status source"))
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=run),
+    )
+    await scheduling._job_account_status_report()
+    official_run.assert_awaited_once()
+    assert "secret status source" not in caplog.text
+    assert not scheduling._midnight_workflow_running
+
+
+@pytest.mark.asyncio
+async def test_official_failure_is_contained_and_cancellation_propagates(
+    scheduler_env, scheduler_clock, monkeypatch, official_run, caplog,
+):
+    status = AsyncMock(return_value={"checked": 0})
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status),
+    )
+    official_run.side_effect = RuntimeError("secret official source")
+    await scheduling._job_account_status_report()
+    assert "RuntimeError" in caplog.text and "secret official source" not in caplog.text
+    assert not scheduling._midnight_workflow_running
+    official_run.side_effect = asyncio.CancelledError
+    with pytest.raises(asyncio.CancelledError):
+        await scheduling._job_account_status_report()
+    assert not scheduling._midnight_workflow_running
+    assert status.await_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["status", "official"])
+async def test_whole_workflow_single_flight_survives_timezone_sync(
+    scheduler_env, scheduler_clock, monkeypatch, official_run, phase,
+):
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def blocked():
+        entered.set()
+        await finish.wait()
+        return {}
+
+    status = AsyncMock(side_effect=blocked if phase == "status" else None, return_value={})
+    if phase == "official":
+        async def official_blocked(**kwargs):
+            return await blocked()
+        official_run.side_effect = official_blocked
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status),
+    )
+    await scheduling.init_scheduler()
+    task = asyncio.create_task(scheduling._job_account_status_report())
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        await scheduling._job_account_status_report()
+        scheduler_env["timezone"] = "Asia/Hong_Kong"
+        await scheduling.sync_jobs()
+        await scheduling._job_account_status_report()
+        assert scheduling._midnight_workflow_running
+        assert status.await_count == 1
+        assert official_run.await_count == (1 if phase == "official" else 0)
+        finish.set()
+        await asyncio.wait_for(task, 1)
+        assert official_run.await_count == 1
+        assert not scheduling._midnight_workflow_running
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("end_day", [(2026, 3, 9), (2026, 11, 2)])
+async def test_dst_window_uses_24_elapsed_hours(
+    scheduler_env, scheduler_clock, monkeypatch, official_run, end_day,
+):
+    scheduler_env["timezone"] = "America/New_York"
+    admitted = datetime(*end_day, 0, 0, 59, tzinfo=ZoneInfo("America/New_York"))
+    scheduler_clock[0] = admitted.astimezone(timezone.utc)
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=AsyncMock(return_value={})),
+    )
+    await scheduling._job_account_status_report()
+    window = official_run.await_args.kwargs
+    assert window["end"] == admitted.replace(second=0).astimezone(timezone.utc)
+    assert window["end"] - window["start"] == timedelta(hours=24)
+    assert window["end"].tzinfo is timezone.utc
+    assert window["start"].astimezone(ZoneInfo("America/New_York")).hour in {1, 23}
