@@ -6,7 +6,6 @@
 export type SettingsFormState = {
   logDays: number | ''
   dataDir: string
-  proxy: string
   concurrency: number | ''
   deviceKeepaliveEnabled: boolean
   deviceKeepaliveIntervalDays: number | ''
@@ -62,7 +61,6 @@ export function buildGeneralPayload(s: SettingsFormState) {
   return {
     log_retention_days: emptyToNull(s.logDays) ?? 7,
     data_dir: s.dataDir || null,
-    global_proxy: s.proxy || null,
     tg_global_concurrency: clampNumber(s.concurrency, 1, 10),
     device_keepalive_enabled: s.deviceKeepaliveEnabled,
     device_keepalive_interval_days: clampNumber(s.deviceKeepaliveIntervalDays, 1, 170) ?? 30,
@@ -114,7 +112,6 @@ export function snapSection(
       return JSON.stringify({
         logDays: s.logDays,
         dataDir: s.dataDir,
-        proxy: s.proxy,
         concurrency: s.concurrency,
         deviceKeepaliveEnabled: s.deviceKeepaliveEnabled,
         deviceKeepaliveIntervalDays: s.deviceKeepaliveIntervalDays,
@@ -183,7 +180,6 @@ export function applyGlobalSettingsToForm(
   res: {
     log_retention_days?: number
     data_dir?: string | null
-    global_proxy?: string | null
     tg_global_concurrency?: number | null
     device_keepalive_enabled?: boolean
     chat_center_enabled?: boolean
@@ -209,7 +205,6 @@ export function applyGlobalSettingsToForm(
 ): { botTokenSet: boolean; webdavPasswordSet: boolean } {
   s.logDays = res.log_retention_days || 7
   s.dataDir = res.data_dir || ''
-  s.proxy = res.global_proxy || ''
   s.concurrency = res.tg_global_concurrency ?? ''
   s.deviceKeepaliveEnabled = res.device_keepalive_enabled !== false
   s.deviceKeepaliveIntervalDays = res.device_keepalive_interval_days || 30

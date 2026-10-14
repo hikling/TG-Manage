@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { Eye, EyeOff } from 'lucide-vue-next'
 import Modal from '../Modal.vue'
 import { updateAccount } from '../../lib/api'
 import { getAuthToken } from '../../lib/api/core'
@@ -25,6 +26,7 @@ const form = ref({
 })
 const loading = ref(false)
 const error = ref('')
+const revealProxy = ref(false)
 
 watch(() => props.isOpen, (val) => {
   if (val && props.account) {
@@ -34,12 +36,13 @@ watch(() => props.isOpen, (val) => {
       proxy: props.account.raw.proxy || ''
     }
     error.value = ''
+    revealProxy.value = false
   }
-})
+}, { immediate: true })
 
 const handleSave = async () => {
   const token = getAuthToken()
-  if (!token || !props.account) return
+  if (!token || !props.account || loading.value) return
 
   loading.value = true
   error.value = ''
@@ -47,7 +50,7 @@ const handleSave = async () => {
     await updateAccount(token, props.account.name, {
       new_account_name: form.value.new_account_name || null,
       remark: form.value.remark || null,
-      proxy: form.value.proxy || null
+      proxy: form.value.proxy.trim()
     })
     toast.success(t('editAccount.saveSuccess'))
     emit('success')
@@ -91,13 +94,26 @@ const handleSave = async () => {
 
       <div class="space-y-1.5">
         <label class="ui-label" for="edit-account-proxy">{{ t('editAccount.proxyLabel') }}</label>
-        <input 
-          id="edit-account-proxy"
-          v-model="form.proxy"
-          type="text" 
-          placeholder="socks5://..."
-          class="ui-input"
-        >
+        <div class="relative">
+          <input
+            id="edit-account-proxy"
+            v-model="form.proxy"
+            :type="revealProxy ? 'text' : 'password'"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="socks5://..."
+            aria-describedby="edit-account-proxy-hint"
+            class="ui-input !pr-12"
+          >
+          <button
+            type="button"
+            class="absolute right-0 top-0 h-full w-11 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
+            :aria-label="revealProxy ? t('settings.hideSecret') : t('settings.showSecret')"
+            :aria-pressed="revealProxy"
+            @click="revealProxy = !revealProxy"
+          ><EyeOff v-if="revealProxy" class="w-4 h-4" /><Eye v-else class="w-4 h-4" /></button>
+        </div>
+        <p id="edit-account-proxy-hint" class="text-xs text-gray-500">{{ t('editAccount.proxyHint') }}</p>
       </div>
     </div>
 

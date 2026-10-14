@@ -1,5 +1,7 @@
 """Client 生命周期与工厂（从 core 拆分）。"""
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import pathlib
@@ -10,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 from typing import (
     Union,
 )
-from urllib import parse
 
 from pydantic import BaseModel
 
@@ -346,40 +347,10 @@ def get_api_config():
 
 
 def get_proxy(proxy: str = None):
-    raw = proxy or os.environ.get("TG_PROXY")
-    if not raw or not isinstance(raw, str):
-        return None
-    val = raw.strip()
-    if not val:
-        return None
-    if "://" not in val:
-        if "@" in val:
-            val = f"socks5://{val}"
-        else:
-            parts = val.split(":")
-            if len(parts) == 2:
-                val = f"socks5://{parts[0]}:{parts[1]}"
-            elif len(parts) == 4:
-                val = f"socks5://{parts[2]}:{parts[3]}@{parts[0]}:{parts[1]}"
-            else:
-                val = f"socks5://{val}"
-    try:
-        r = parse.urlparse(val)
-        port = r.port
-    except (ValueError, AttributeError):
-        return None
-    scheme = (r.scheme or "").lower()
-    if not (scheme in {"http", "https", "socks4", "socks5"} and r.hostname and port):
-        return None
-    if not (1 <= port <= 65535):
-        return None
-    return {
-        "scheme": scheme,
-        "hostname": r.hostname,
-        "port": port,
-        "username": r.username,
-        "password": r.password,
-    }
+    """Parse an explicit account proxy without environment fallback."""
+    from backend.utils.proxy import require_proxy_dict
+
+    return require_proxy_dict(proxy)
 
 
 def get_client(
@@ -392,7 +363,8 @@ def get_client(
     api_hash: str = None,
     **kwargs,
 ) -> Client:
-    proxy = proxy or get_proxy()
+    # None explicitly means direct. Legacy TG_PROXY must never override it.
+    proxy = dict(proxy) if proxy else None
     if not api_id or not api_hash:
         from backend.utils.tg_session import get_account_api_credentials
         api_id, api_hash = get_account_api_credentials(name)
@@ -402,6 +374,14 @@ def get_client(
     # task execution (in-memory mode) run on the same account
     base_key = str(pathlib.Path(workdir).joinpath(name).resolve())
     key = f"{base_key}::memory" if (in_memory and session_string) else base_key
+    if proxy:
+        # Active users retain their own route and lifecycle references. A saved
+        # route change gets a distinct client instead of stopping their session.
+        # Hashing also keeps proxy credentials out of diagnostic cache keys.
+        fingerprint = hashlib.sha256(
+            json.dumps(proxy, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        key = f"{key}::proxy:{fingerprint}"
 
     if key in _CLIENT_INSTANCES:
         existing = _CLIENT_INSTANCES[key]
@@ -466,7 +446,7 @@ async def close_client_by_name(name: str, workdir: Union[str, pathlib.Path] = ".
                     if getattr(client, "is_connected", False):
                         await client.stop()
                 except Exception as e:
-                    logger.warning("停止客户端 %s 失败: %s", name, e)
+                    logger.warning("停止客户端 %s 失败 (%s)", name, type(e).__name__)
                 finally:
                     _CLIENT_INSTANCES.pop(key, None)
             _CLIENT_REFS.pop(key, None)

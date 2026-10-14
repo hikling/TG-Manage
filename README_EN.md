@@ -134,7 +134,6 @@ Expand a section only when you need its details.
 | `SIGNPULSE_TG_API_ID/HASH`, `TG_API_ID/HASH` | Legacy aliases still read during upgrades. |
 | `APP_SECRET_KEY` | Authentication and credential encryption key; persisted in `data/.app_secret_key` and essential to backups. |
 | `APP_DATA_DIR` | Database, sessions, logs, and TeleBox data directory; Compose uses `/data`. |
-| `TG_PROXY` | Global Telegram proxy; per-account proxies can also be set in the UI. |
 | `APP_DATABASE_URL` | Override the default SQLite connection. |
 | `TG_GLOBAL_CONCURRENCY` | Limit for concurrent Telegram operations, not the total number of signed-in accounts. |
 | `TELEBOX_NODE` | Select the Node 24 executable for local TeleBox development. |

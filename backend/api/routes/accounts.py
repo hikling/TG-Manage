@@ -122,7 +122,7 @@ async def start_account_login(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("发送验证码失败 account=%s: %s", request.account_name, e, exc_info=True)
+        logger.error("发送验证码失败 account=%s error=%s", request.account_name, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="发送验证码失败，请稍后重试",
@@ -189,7 +189,7 @@ async def verify_account_login(
             status_code=status.HTTP_400_BAD_REQUEST, detail=message
         ) from e
     except Exception as e:
-        logger.error("登录验证失败 account=%s: %s", request.account_name, e, exc_info=True)
+        logger.error("登录验证失败 account=%s error=%s", request.account_name, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="登录验证失败，请稍后重试",
@@ -229,7 +229,7 @@ async def start_qr_login(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("开始扫码登录失败 account=%s: %s", request.account_name, e, exc_info=True)
+        logger.error("开始扫码登录失败 account=%s error=%s", request.account_name, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="开始扫码登录失败，请稍后重试",
@@ -256,7 +256,7 @@ async def get_qr_login_status(
             username=result.get("username"),
         )
     except Exception as e:
-        logger.error("获取扫码状态失败 login_id=%s: %s", login_id, e, exc_info=True)
+        logger.error("获取扫码状态失败 login_id=%s error=%s", login_id, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="获取扫码状态失败，请稍后重试",
@@ -296,10 +296,10 @@ async def submit_qr_login_password(
             username=result.get("username"),
         )
     except ValueError as e:
-        logger.warning("QR 密码校验失败 login_id=%s error=%s", request.login_id, e)
+        logger.warning("QR 密码校验失败 login_id=%s error=%s", request.login_id, type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        logger.error("提交 2FA 密码失败 login_id=%s: %s", request.login_id, e, exc_info=True)
+        logger.error("提交 2FA 密码失败 login_id=%s error=%s", request.login_id, type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="提交 2FA 密码失败，请稍后重试",
@@ -393,6 +393,9 @@ async def check_accounts_status(
                             item["avatar_refresh_error"] = True
                 except Exception as exc:
                     item = build_status_check_error_item(name, exc)
+                from backend.services.account_proxy_status import check_account_proxy
+
+                item = {**item, **await check_account_proxy(name, timeout_seconds=timeout_seconds)}
                 result = AccountStatusItem(**item)
                 reservation.finish(name, success=bool(result.ok))
                 results.append(result)
@@ -411,7 +414,7 @@ async def check_accounts_status(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("账号状态检测失败: %s", e, exc_info=True)
+        logger.error("账号状态检测失败（%s）", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ACCOUNT_CHECK_FAILED",
@@ -678,7 +681,12 @@ async def update_account(
         )
 
     try:
-        from backend.utils.tg_session import set_account_profile
+        from backend.utils.proxy import require_proxy_dict
+        from backend.utils.tg_session import get_account_proxy, set_account_profile
+
+        proxy_supplied = "proxy" in request.__fields_set__
+        if proxy_supplied:
+            require_proxy_dict(request.proxy)
 
         actual_account_name = str(current_account.get("name") or account_name).strip()
         target_account_name, renamed = resolve_account_rename_target(
@@ -701,12 +709,18 @@ async def update_account(
                 actual_account_name, target_account_name
             )
 
+        previous_proxy = get_account_proxy(target_account_name)
         set_account_profile(
             target_account_name,
             remark=request.remark,
-            proxy=request.proxy,
+            **({"proxy": request.proxy} if proxy_supplied else {}),
             tags=request.tags,
         )
+
+        if proxy_supplied and previous_proxy != get_account_proxy(target_account_name):
+            from backend.services.telebox import get_telebox_service
+
+            await get_telebox_service().refresh_account_proxy(target_account_name)
 
         updated = find_account_by_name(
             service.list_accounts(force_refresh=True),
@@ -728,7 +742,7 @@ async def update_account(
             detail=str(e),
         )
     except Exception as e:
-        logger.error("更新账号信息失败: %s", e, exc_info=True)
+        logger.error("更新账号信息失败（%s）", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ACCOUNT_UPDATE_FAILED",

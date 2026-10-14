@@ -21,6 +21,7 @@ _SESSION_MODE_FILE = "file"
 _SESSION_MODE_STRING = "string"
 
 _MAX_CONCURRENT_MEDIA_UPLOADS = 2
+_PROFILE_UNSET = object()
 
 
 class _ResizableSemaphore(asyncio.Semaphore):
@@ -410,7 +411,7 @@ def set_account_profile(
     account_name: str,
     *,
     remark: Optional[str] = None,
-    proxy: Optional[str] = None,
+    proxy: Any = _PROFILE_UNSET,
     tags: Optional[list[str]] = None,
 ) -> None:
     data = _load_account_store()
@@ -420,13 +421,53 @@ def set_account_profile(
         entry = {}
     if remark is not None:
         entry["remark"] = remark.strip() if isinstance(remark, str) else remark
-    if proxy is not None:
-        entry["proxy"] = proxy.strip() if isinstance(proxy, str) else proxy
+    if proxy is not _PROFILE_UNSET:
+        from backend.utils.proxy import require_proxy_dict
+
+        cleaned_proxy = proxy.strip() if isinstance(proxy, str) else None
+        require_proxy_dict(cleaned_proxy)
+        if (entry.get("proxy") or "") != (cleaned_proxy or ""):
+            for field in ("proxy_status", "proxy_status_code", "proxy_checked_at"):
+                entry.pop(field, None)
+        entry["proxy"] = cleaned_proxy or None
     if tags is not None:
         entry["tags"] = [str(t).strip() for t in tags if str(t).strip()]
     entry["updated_at"] = utc_now_iso()
     accounts[account_name] = entry
     _save_account_store(data)
+
+
+def get_account_proxy_status(account_name: str) -> dict[str, Any]:
+    """Read saved probe results only; a changed route remains pending."""
+    entry = _load_account_store().get("accounts", {}).get(account_name)
+    entry = entry if isinstance(entry, dict) else {}
+    if not entry.get("proxy"):
+        return {"proxy_status": "unconfigured", "proxy_status_code": None,
+                "proxy_checked_at": None}
+    status = entry.get("proxy_status")
+    if status not in {"healthy", "error"}:
+        return {"proxy_status": "pending", "proxy_status_code": None,
+                "proxy_checked_at": None}
+    return {"proxy_status": status, "proxy_status_code": entry.get("proxy_status_code"),
+            "proxy_checked_at": entry.get("proxy_checked_at")}
+
+
+def set_account_proxy_status(
+    account_name: str, *, expected_proxy: str, status: str, code: str, checked_at: str
+) -> bool:
+    """Save only while the account still has the route that was probed."""
+    if status not in {"healthy", "error"}:
+        raise ValueError("invalid proxy status")
+    data = _load_account_store()
+    entry = data.get("accounts", {}).get(account_name)
+    if not isinstance(entry, dict) or not expected_proxy:
+        return False
+    if str(entry.get("proxy") or "").strip() != expected_proxy.strip():
+        return False
+    entry.update(proxy_status=status, proxy_status_code=code, proxy_checked_at=checked_at)
+    entry["updated_at"] = utc_now_iso()
+    _save_account_store(data)
+    return True
 
 
 def get_account_status(account_name: str) -> dict[str, Any]:
@@ -654,13 +695,6 @@ def load_account_session_string(
     return load_session_string_file(session_dir, account_name)
 
 
-def resolve_effective_proxy(
-    account_name: str, global_proxy: Optional[str] = None
-) -> Optional[str]:
-    """解析账号生效代理：账号级代理优先，其次全局代理。"""
-    proxy_value = get_account_proxy(account_name)
-    if proxy_value:
-        return proxy_value
-    if isinstance(global_proxy, str) and global_proxy.strip():
-        return global_proxy.strip()
-    return None
+def resolve_effective_proxy(account_name: str) -> Optional[str]:
+    """Resolve only the account route; the legacy global value is inert."""
+    return get_account_proxy(account_name)

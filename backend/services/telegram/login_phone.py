@@ -15,7 +15,7 @@ from backend.services.telegram.sessions import (
     _login_sessions,
 )
 from backend.utils.account_locks import get_account_lock
-from backend.utils.proxy import build_proxy_dict
+from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     get_global_semaphore,
     get_session_mode,
@@ -87,6 +87,7 @@ class TelegramPhoneLoginMixin:
             包含 phone_code_hash 的字典
         """
 
+        proxy_dict = require_proxy_dict(proxy)
         account_name = self._normalize_account_name(account_name)
         phone_number = str(phone_number or "").strip().replace(" ", "").replace("-", "")
         if not phone_number:
@@ -133,11 +134,9 @@ class TelegramPhoneLoginMixin:
         try:
             await close_client_by_name(account_name, workdir=self.session_dir)
         except Exception as e:
-            logger.debug("start_login 清理后台客户端失败: %s", e)
+            logger.debug("start_login 清理后台客户端失败 (%s)", type(e).__name__)
 
         # Each login supplies credentials for this account.
-        from backend.services.config import get_config_service
-        config_service = get_config_service()
         from backend.services.telegram.credentials import (
             validate_telegram_api_credentials,
         )
@@ -148,12 +147,6 @@ class TelegramPhoneLoginMixin:
             _release_account_lock()
             raise ValueError("Telegram API ID / API Hash 未配置或无效") from None
 
-        if not proxy:
-            global_proxy = config_service.get_global_proxy()
-            if global_proxy:
-                proxy = global_proxy
-
-        proxy_dict = build_proxy_dict(proxy) if proxy else None
         # 4. 如果是重新登录，尝试先清理旧的 session 文件 (避免 SQLite 锁或损坏)
         # 注意: 如果 session 有效但用户只是想重登，删除也没问题，因为反正要重新验证
         if session_mode == "file":
@@ -169,7 +162,7 @@ class TelegramPhoneLoginMixin:
                             aux_file.unlink()
                 except OSError as e:
                     # 如果删除失败，说明真的被锁得很死，或者权限问题
-                    logger.debug("删除旧 Session 文件失败: %s - 可能文件仍被占用", e)
+                    logger.debug("删除旧 Session 文件失败 (%s)", type(e).__name__)
                     # 这里不抛出异常，尝试继续，也许 Pyrogram 能处理?
                     # 但通常 "unable to open database file" 就是因为这个。
                     pass
@@ -206,6 +199,7 @@ class TelegramPhoneLoginMixin:
                 "client": client,
                 "phone_code_hash": sent_code.phone_code_hash,
                 "phone_number": phone_number,
+                "proxy": proxy,
                 "lock": account_lock,
                 "account_name": account_name,
                 "api_id": api_id,
@@ -229,7 +223,7 @@ class TelegramPhoneLoginMixin:
             await _discard_login_client(client, None, _release_account_lock)
             raise ValueError(f"请求过于频繁，请等待 {e.value} 秒后重试")
         except Exception as e:
-            logger.exception("手机号登录发送验证码阶段异常: %s", e)
+            logger.warning("手机号登录发送验证码阶段异常 (%s)", type(e).__name__)
             await _discard_login_client(client, None, _release_account_lock)
 
             error_details = str(e)
@@ -238,10 +232,10 @@ class TelegramPhoneLoginMixin:
                 or "unable to open database file" in error_details
             ):
                 raise ValueError(
-                    f"会话文件被占用，请稍后重试或重启程序。错误: {error_details}"
+                    "会话文件被占用，请稍后重试或重启程序"
                 )
 
-            raise ValueError(f"发送验证码失败: {error_details}")
+            raise ValueError("发送验证码失败，请检查账号代理或网络后重试") from None
 
 
     async def verify_login(
@@ -314,7 +308,7 @@ class TelegramPhoneLoginMixin:
                     # 登录成功，获取用户信息
                     # get_me 走超时保护：网络挂起时登录接口不能无限等待
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
-                    await self._persist_client_session(client, account_name, proxy)
+                    await self._persist_client_session(client, account_name, session_data.get("proxy"))
                     set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                     # 断开连接并清理（成功路径同样容忍断连抖动，避免已登录被误报失败）
@@ -337,7 +331,7 @@ class TelegramPhoneLoginMixin:
                     try:
                         await client.check_password(password)
                         me = await asyncio.wait_for(client.get_me(), timeout=10)
-                        await self._persist_client_session(client, account_name, proxy)
+                        await self._persist_client_session(client, account_name, session_data.get("proxy"))
                         set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                         # 断开连接并清理
@@ -360,9 +354,12 @@ class TelegramPhoneLoginMixin:
             raise ValueError("验证码已过期，请重新获取")
         except ValueError as e:
             # 如果是 2FA 错误，不清理 session
-            if "两步验证" not in str(e):
+            message = str(e)
+            if message != "此账号启用了两步验证，请输入 2FA 密码":
                 await _discard_login_client(client, session_key, _release_account_lock)
-            raise e
+            if message in {"此账号启用了两步验证，请输入 2FA 密码", "2FA 密码错误", "导出 session_string 失败", "INVALID_ACCOUNT_PROXY"}:
+                raise ValueError(message) from None
+            raise ValueError("登录失败，请检查账号代理或网络后重试") from None
         except Exception as e:
             await _discard_login_client(client, session_key, _release_account_lock)
 
@@ -375,7 +372,7 @@ class TelegramPhoneLoginMixin:
             elif "SESSION_PASSWORD_NEEDED" in error_msg:
                 raise ValueError("此账号启用了两步验证，请输入 2FA 密码")
             else:
-                raise ValueError(f"登录失败: {error_msg}")
+                raise ValueError("登录失败，请检查账号代理或网络后重试") from None
 
 
     async def _persist_client_session(
@@ -402,14 +399,8 @@ class TelegramPhoneLoginMixin:
                     mark_account_connected(account_name)
                 except Exception:
                     pass
-        if not proxy:
-            from backend.services.config import get_config_service
-            global_proxy = get_config_service().get_global_proxy()
-            if global_proxy:
-                proxy = global_proxy
-        if proxy:
-            from backend.utils.tg_session import set_account_profile
+        from backend.utils.tg_session import set_account_profile
 
-            set_account_profile(account_name, proxy=proxy)
+        set_account_profile(account_name, proxy=proxy)
         mark_account_connected(account_name)
         self._accounts_cache = None

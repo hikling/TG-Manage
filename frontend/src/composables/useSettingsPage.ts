@@ -41,7 +41,6 @@ export function useSettingsPage() {
   const settings = ref<SettingsFormState>({
     logDays: 7,
     dataDir: '',
-    proxy: '',
     concurrency: '',
     deviceKeepaliveEnabled: true,
     deviceKeepaliveIntervalDays: 30,

@@ -20,7 +20,6 @@
 | `APP_DATABASE_URL` | SQLite `data/db.sqlite` | 可选 SQLAlchemy 数据库 URL |
 | `TG_SESSION_MODE` | `file` | Telegram 文件会话，或 `string` 模式 |
 | `TG_GLOBAL_CONCURRENCY` | 空（按 CPU 与 cgroup 资源自适应） | Telegram 并发上限；显式设置后覆盖自动值 |
-| `TG_PROXY` | 空 | 代理；面板也支持按账号配置 |
 | `APP_CORS_ALLOW_ORIGINS` | localhost 开发来源 | 分离部署时允许的前端 origin |
 | `ENABLE_API_DOCS` | `false` | 允许 `/docs`、`/redoc`、`/openapi.json` |
 | `TELEBOX_NODE` | `node` | 本地开发指定 Node 24 可执行文件 |

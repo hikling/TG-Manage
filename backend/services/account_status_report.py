@@ -7,6 +7,7 @@ import time
 from typing import Any
 
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
+from backend.services.account_proxy_status import check_account_proxy
 from backend.services.config import get_config_service
 from backend.services.push_notifications import _bot_config, send_telegram_bot_message
 from backend.services.telegram import get_telegram_service
@@ -82,9 +83,16 @@ async def _send_report(results: list[dict[str, Any]]) -> int:
         name = f"@{username.lstrip('@')}" if username else result["account_name"]
         name = " ".join(str(name).split())
         if result.get("ok"):
-            lines.append(f"🟢 {name} — 正常")
+            row = f"🟢 {name} — 正常"
         else:
-            lines.append(f"🔴 {name} — 异常（{_failure_reason(result)}）")
+            row = f"🔴 {name} — 异常（{_failure_reason(result)}）"
+        proxy_status = result.get("proxy_status", "unconfigured")
+        if proxy_status != "unconfigured":
+            proxy_label = {
+                "healthy": "🟢 正常", "error": "🔴 异常", "pending": "⚪ 待检测",
+            }.get(proxy_status, "⚪ 待检测")
+            row += f" · SOCKS5 {proxy_label}"
+        lines.append(row)
     if not results:
         lines.append("暂无账户")
 
@@ -178,6 +186,7 @@ class AccountStatusReportService:
                             )
                         except Exception as exc:
                             logger.warning("保存账户日报状态失败（%s）", type(exc).__name__)
+                    result.update(await check_account_proxy(name, timeout_seconds=PROBE_TIMEOUT_SECONDS))
                     reservation.finish(name, success=bool(result.get("ok")))
                     results[name] = result
                 finally:

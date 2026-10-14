@@ -74,6 +74,9 @@ class AccountInfo(BaseModel):
     remark: Optional[str] = None
     proxy: Optional[str] = None
     status: str = "connected"
+    proxy_status: str = "unconfigured"
+    proxy_status_code: Optional[str] = None
+    proxy_checked_at: Optional[str] = None
     status_message: Optional[str] = None
     status_code: Optional[str] = None
     status_checked_at: Optional[str] = None
@@ -172,6 +175,9 @@ class AccountStatusItem(BaseModel):
     message: str = ""
     code: Optional[str] = None
     checked_at: Optional[str] = None
+    proxy_status: str = "unconfigured"
+    proxy_status_code: Optional[str] = None
+    proxy_checked_at: Optional[str] = None
     needs_relogin: bool = False
     user_id: Optional[int] = None
     avatar_refreshed: bool = False

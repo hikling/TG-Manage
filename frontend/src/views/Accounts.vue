@@ -18,6 +18,7 @@ import { notifyApiError } from '../lib/notify'
 import { getLocalizedErrorMessage } from '../lib/types'
 import AddAccountModal from '../components/accounts/AddAccountModal.vue'
 import EditAccountModal from '../components/accounts/EditAccountModal.vue'
+import AccountProxyStatus from '../components/accounts/AccountProxyStatus.vue'
 import DeviceManagerModal from '../components/accounts/DeviceManagerModal.vue'
 import OfficialMessagesModal from '../components/accounts/OfficialMessagesModal.vue'
 import PageRetry from '../components/PageRetry.vue'
@@ -612,6 +613,7 @@ const goLogs = (name: string) => {
       <div class="account-tile-signals">
         <div><span class="account-signal-label">{{ t('accounts.accountStatus') }}</span><span class="account-tile-status" :class="`account-tile-status--${acc.status}`" :title="accountMessage(acc)"><span class="account-status-dot" />{{ acc.status === 'active' ? t('accounts.statusOk') : (accountMessage(acc) || t('accounts.statusUnknown')) }}</span></div>
         <div><span class="account-signal-label">TELEBOX</span><span class="account-tile-status" :class="{ 'account-tile-status--active': teleboxStates[acc.name]?.status === 'running', 'account-tile-status--error': teleboxStates[acc.name]?.status === 'failed' }" :title="teleboxMessage(acc.name)"><span class="account-status-dot" />{{ teleboxLabel(acc.name) }}</span></div>
+        <AccountProxyStatus :account="acc.raw" />
       </div>
       <form v-if="teleboxStates[acc.name]?.status === 'password_required'" class="account-tile-password" @submit.prevent="enterTeleBoxPassword(acc.name)"><label :for="`telebox-password-${acc.id}`">{{ t('accounts.teleboxPassword') }}</label><div><input :id="`telebox-password-${acc.id}`" v-model="teleboxPasswords[acc.name]" type="password" autocomplete="current-password" class="panel-input" required /><button type="submit" class="panel-button" :disabled="teleboxBusy === acc.name">{{ t('common.confirm') }}</button></div></form>
       <div class="account-tile-footer"><button type="button" class="account-card-primary" :disabled="checkingAccount === acc.name" @click="handleCheck(acc.name)"><ShieldCheck :size="17" aria-hidden="true" />{{ checkingAccount === acc.name ? t('accounts.checking') : t('accounts.checkStatus') }}</button><button type="button" class="account-card-secondary" @click="router.push({ name: 'chats', query: { account: acc.name } })">{{ t('nav.chats') }} <ArrowUpRight :size="16" aria-hidden="true" /></button></div>

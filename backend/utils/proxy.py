@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 SUPPORTED_PROXY_SCHEMES = frozenset({"http", "https", "socks4", "socks5"})
 
@@ -44,7 +44,17 @@ def build_proxy_dict(raw: str) -> Optional[dict]:
         "port": port,
     }
     if parsed.username:
-        proxy["username"] = parsed.username
+        proxy["username"] = unquote(parsed.username)
     if parsed.password:
-        proxy["password"] = parsed.password
+        proxy["password"] = unquote(parsed.password)
+    return proxy
+
+
+def require_proxy_dict(raw: Optional[str]) -> Optional[dict]:
+    """Resolve an explicitly supplied route, rejecting malformed proxies."""
+    if raw is None or not raw.strip():
+        return None
+    proxy = build_proxy_dict(raw)
+    if proxy is None:
+        raise ValueError("INVALID_ACCOUNT_PROXY")
     return proxy

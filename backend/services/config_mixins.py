@@ -9,7 +9,7 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from backend.core.config import get_settings
 from backend.utils.cache import TTLCache
@@ -27,8 +27,10 @@ _logger = logging.getLogger("backend.config")
 GLOBAL_SETTINGS_CACHE_TTL = 2.0
 
 def _is_retired_setting(key: str) -> bool:
-    """Ignore values left by the removed task runner and AI vision controls."""
-    return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_")) or key == "sign_interval"
+    """Ignore removed controls, including the legacy account proxy fallback."""
+    return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_")) or key in {
+        "sign_interval", "global_proxy",
+    }
 
 # 全局设置数值钳制表：字段名 -> (下限, 上限)；值为 None 的字段保持 None
 _GLOBAL_SETTING_INT_CLAMPS = {
@@ -218,7 +220,6 @@ class GlobalSettingsMixin:
             "chat_center_enabled": False,
             "log_retention_days": 7,
             "data_dir": str(override_data_dir) if override_data_dir else None,
-            "global_proxy": None,
             "tg_global_concurrency": None,  # None uses env or cgroup-aware CPU default
             "device_keepalive_enabled": True,
             "device_keepalive_interval_days": 30,
@@ -261,14 +262,6 @@ class GlobalSettingsMixin:
                 settings.setdefault("timezone", "Asia/Hong_Kong")
         self._global_settings_cache().set(str(config_file), settings)
         return settings
-
-    def get_global_proxy(self) -> Optional[str]:
-        """读取全局代理（global_proxy），未配置返回 None。
-
-        统一入口：各模块需要"账号代理优先、全局兜底"时先取此值，
-        避免直接散落 ``get_global_settings().get("global_proxy")`` 魔法键。
-        """
-        return self.get_global_settings().get("global_proxy")
 
     def save_global_settings(self, settings: Dict) -> bool:
         """
@@ -318,6 +311,10 @@ class GlobalSettingsMixin:
             clear_data_dir_override()
             merged["data_dir"] = None
 
+        # Keep the old on-disk value for rollback, but never project or update it.
+        stored = self._read_json_file(config_file)
+        if isinstance(stored, dict) and "global_proxy" in stored:
+            merged["global_proxy"] = stored["global_proxy"]
         if not self._write_json_file(config_file, merged):
             return False
 

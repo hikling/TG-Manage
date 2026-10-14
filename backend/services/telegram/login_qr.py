@@ -14,7 +14,7 @@ from backend.services.telegram.sessions import (
     _qr_login_sessions,
 )
 from backend.utils.account_locks import get_account_lock
-from backend.utils.proxy import build_proxy_dict
+from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     get_global_semaphore,
     get_session_mode,
@@ -51,7 +51,7 @@ class TelegramQrLoginMixin:
                 await client.storage.dc_id(migrate_dc_id)
                 await client.storage.auth_key(migrate_auth_key)
             except Exception as exc:
-                logger.warning("应用 QR 迁移 auth 失败 (dc_id=%s): %s", migrate_dc_id, exc)
+                logger.warning("应用 QR 迁移 auth 失败 (dc_id=%s): %s", migrate_dc_id, type(exc).__name__)
 
 
     @staticmethod
@@ -66,7 +66,7 @@ class TelegramQrLoginMixin:
             if dc_id:
                 data["migrate_dc_id"] = dc_id
         except Exception as exc:
-            logger.warning("捕获 QR 迁移 auth 失败: %s", exc)
+            logger.warning("捕获 QR 迁移 auth 失败 (%s)", type(exc).__name__)
 
 
     async def _cleanup_qr_login(self, login_id: str, preserve_session: bool = False) -> None:
@@ -478,6 +478,7 @@ class TelegramQrLoginMixin:
         api_id: int = None, api_hash: str = None,
     ) -> Dict[str, Any]:
 
+        proxy_dict = require_proxy_dict(proxy)
         account_name = self._normalize_account_name(account_name)
 
         from pyrogram import Client, handlers, raw
@@ -509,9 +510,6 @@ class TelegramQrLoginMixin:
             pass
 
         # API credentials
-        from backend.services.config import get_config_service
-
-        config_service = get_config_service()
         from backend.services.telegram.credentials import (
             validate_telegram_api_credentials,
         )
@@ -521,12 +519,6 @@ class TelegramQrLoginMixin:
             _release_account_lock()
             raise ValueError("Telegram API ID / API Hash 未配置或无效") from None
 
-        if not proxy:
-            global_proxy = config_service.get_global_proxy()
-            if global_proxy:
-                proxy = global_proxy
-
-        proxy_dict = build_proxy_dict(proxy) if proxy else None
 
         # 清理旧 session 文件（与手机号登录保持一致）
         if session_mode == "file":
@@ -613,7 +605,7 @@ class TelegramQrLoginMixin:
                         await client.dispatcher.start()
                     except Exception as exc:
                         # 初始化失败不致命：后续 stop 仍会尝试完整关闭
-                        logger.debug("QR 登录客户端初始化失败: %s", exc)
+                        logger.debug("QR 登录客户端初始化失败 (%s)", type(exc).__name__)
 
                 async def _raw_handler(_, update, __, ___):
                     if not isinstance(update, raw.types.UpdateLoginToken):
@@ -640,7 +632,7 @@ class TelegramQrLoginMixin:
             except Exception as exc:
                 # 注册失败会导致扫码更新永远收不到，登录卡死在 waiting_scan；
                 # 必须记录错误并标记状态，避免静默失败
-                logger.error("QR 登录注册扫码监听失败: %s", exc)
+                logger.error("QR 登录注册扫码监听失败 (%s)", type(exc).__name__)
                 session_data["status"] = "error"
                 session_data["error"] = "qr_handler_register_failed"
                 self._log_qr_state(login_id, "error", session_data)
@@ -664,13 +656,13 @@ class TelegramQrLoginMixin:
                 pass
             _release_account_lock()
             raise ValueError(f"请求过于频繁，请等待 {e.value} 秒后重试")
-        except Exception as e:
+        except Exception:
             try:
                 await client.disconnect()
             except Exception:
                 pass
             _release_account_lock()
-            raise ValueError(f"获取二维码失败: {str(e)}")
+            raise ValueError("获取二维码失败，请检查账号代理或网络后重试") from None
 
 
     async def get_qr_login_status(self, login_id: str) -> Dict[str, Any]:

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 通用设置区块：日志保留、数据目录、代理、并发、设备保活、时区。
+ * 通用设置区块：日志保留、数据目录、并发、设备保活、时区。
  * 父组件 Settings.vue 持有表单状态，本组件通过 v-model 双向同步并触发保存/立即保活事件。
  */
 import { Settings2 } from 'lucide-vue-next'
@@ -70,10 +70,6 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
       <div class="space-y-1.5">
         <label class="ui-label" for="settings-data-dir">{{ t('settings.dataDir') }}</label>
         <input id="settings-data-dir" :value="modelValue.dataDir" @input="onStringInput('dataDir', $event)" type="text" placeholder="/data" class="ui-input">
-      </div>
-      <div class="space-y-1.5">
-        <label class="ui-label" for="settings-proxy">{{ t('settings.proxy') }}</label>
-        <input id="settings-proxy" :value="modelValue.proxy" @input="onStringInput('proxy', $event)" type="text" placeholder="socks5://127.0.0.1:1080" class="ui-input">
       </div>
       <div class="space-y-1.5">
         <label class="ui-label" for="settings-concurrency">{{ t('settings.concurrency') }}</label>

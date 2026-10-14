@@ -51,12 +51,12 @@ def clamp_status_check_timeout(
 
 
 def build_status_check_error_item(account_name: str, exc: BaseException) -> Dict[str, Any]:
-    """单账号状态检测异常时的统一结果字典。"""
+    """单账号状态检测异常时的安全结果字典，避免泄露代理凭据。"""
     return {
         "account_name": account_name,
         "ok": False,
         "status": "error",
-        "message": str(exc) or "status check failed",
+        "message": "status check failed",
         "code": "STATUS_CHECK_FAILED",
         "checked_at": None,
         "needs_relogin": False,

@@ -9,7 +9,6 @@ import type { SettingsFormState } from '../lib/settings-form'
 const settingsState = (): SettingsFormState => ({
   logDays: 7,
   dataDir: '',
-  proxy: '',
   concurrency: 1,
   deviceKeepaliveEnabled: true,
   deviceKeepaliveIntervalDays: 30,
@@ -78,6 +77,7 @@ describe('设置页拆分组件契约', () => {
     })
 
     expect(wrapper.find('[role="switch"]').exists()).toBe(false)
+    expect(wrapper.find('#settings-proxy').exists()).toBe(false)
     expect(wrapper.findAll('input[type="number"]').map(input => input.attributes('id'))).toEqual([
       'settings-log-retention', 'settings-concurrency',
     ])
