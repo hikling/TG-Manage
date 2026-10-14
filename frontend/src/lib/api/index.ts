@@ -7,7 +7,6 @@
  */
 export * from "./auth";
 export * from "./accounts";
-export * from "./config";
 export * from "./settings";
 export * from "./ops";
 export * from "./telebox";

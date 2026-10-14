@@ -7,7 +7,7 @@ TG Manage 提供 Telegram 多账号管理、按需开启的聊天中心、账号
 - [快速开始](guide/quick-start.md)
 - [账号与聊天](guide/accounts.md)
 - [功能介绍](features.md)
-- [WebDAV 备份与恢复](guide/backup-webdav.md)
+- [账户登录备份与恢复](guide/account-login-backup.md)
 
 ## 部署与维护
 

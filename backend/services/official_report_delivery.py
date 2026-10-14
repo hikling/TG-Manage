@@ -139,10 +139,14 @@ class OfficialReportDelivery:
             payload["message_thread_id"] = self.target[2]
         return payload
 
-    async def send_text(self, text: str) -> None:
+    async def send_text(self, text: str, *, parse_mode: str | None = None) -> None:
         if not isinstance(text, str) or not text or not _within_budget(text, MAX_TEXT_UNITS):
             raise OfficialReportDeliveryError("官方消息日报文字超出单条预算或为空")
+        if parse_mode not in (None, "HTML"):
+            raise OfficialReportDeliveryError("官方消息日报文字格式无效")
         payload = {**self._payload(), "text": text}
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
         async with self._send_lock:
             await self._send("sendMessage", payload)
 

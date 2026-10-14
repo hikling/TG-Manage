@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Optional
 
@@ -10,7 +9,6 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
-    Response,
     status,
 )
 from pydantic import BaseModel, Field
@@ -24,105 +22,7 @@ router = APIRouter()
 logger = logging.getLogger("backend.config_api")
 
 
-class ImportAllRequest(BaseModel):
-    config_json: str
-    overwrite: bool = False
-
-
-class ImportAllResponse(BaseModel):
-    signs_imported: int
-    signs_skipped: int
-    monitors_imported: int
-    monitors_skipped: int
-    settings_imported: int
-    settings_skipped: int = 0
-    errors: list[str]
-    warnings: list[str] = []
-    message: str
-
-
-@router.get("/export/all")
-def export_all_configs(current_user: User = Depends(get_current_user)):
-    try:
-        config_json = get_config_service().export_all_configs()
-        return Response(
-            content=config_json.encode("utf-8"),
-            media_type="application/json; charset=utf-8",
-            headers={
-                "Content-Disposition": 'attachment; filename="tg_manage_all_configs.json"'
-            },
-        )
-    except Exception as e:
-        logger.error("导出全部配置失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="CONFIG_EXPORT_FAILED",
-        )
-
-
-@router.post("/import/all", response_model=ImportAllResponse)
-async def import_all_configs(
-    request: ImportAllRequest, current_user: User = Depends(get_current_user)
-):
-    try:
-        raw = json.loads(request.config_json)
-        if not isinstance(raw, dict):
-            raise ValueError("配置根节点必须是对象")
-        # Historical sign/monitor definitions are data only. Never re-import
-        # them as executable jobs after switching to TeleBox tasks.
-        skipped = sum(len(raw.get(key)) for key in ("signs", "monitors") if isinstance(raw.get(key), dict))
-        result = get_config_service().import_all_configs(
-            json.dumps({"settings": raw.get("settings") or {}}), request.overwrite
-        )
-        if skipped:
-            result["warnings"].append(f"旧任务/监听配置已跳过：{skipped} 项")
-
-        message_parts = []
-        if result.get("signs_imported", 0) > 0:
-            message_parts.append(f"sign tasks imported: {result['signs_imported']}")
-        if result.get("signs_skipped", 0) > 0:
-            message_parts.append(f"sign tasks skipped: {result['signs_skipped']}")
-        if result.get("monitors_imported", 0) > 0:
-            message_parts.append(
-                f"monitor tasks imported: {result['monitors_imported']}"
-            )
-        if result.get("monitors_skipped", 0) > 0:
-            message_parts.append(f"monitor tasks skipped: {result['monitors_skipped']}")
-        if result.get("settings_imported", 0) > 0:
-            message_parts.append(f"settings imported: {result['settings_imported']}")
-        if result.get("settings_skipped", 0) > 0:
-            message_parts.append(f"settings skipped: {result['settings_skipped']}")
-        if result.get("warnings"):
-            message_parts.append(f"warnings: {len(result['warnings'])}")
-
-        message = "; ".join(message_parts) if message_parts else "No config imported"
-        # 导入成功后已同步调度；提示前端刷新
-        if not result.get("errors"):
-            message = f"{message}; scheduler synced" if message_parts else "scheduler synced"
-
-        from backend.scheduler import sync_jobs
-
-        await sync_jobs()
-        return ImportAllResponse(
-            signs_imported=int(result.get("signs_imported", 0)),
-            signs_skipped=int(result.get("signs_skipped", 0)),
-            monitors_imported=int(result.get("monitors_imported", 0)),
-            monitors_skipped=int(result.get("monitors_skipped", 0)),
-            settings_imported=int(result.get("settings_imported", 0)),
-            settings_skipped=int(result.get("settings_skipped", 0)),
-            errors=[str(item) for item in result.get("errors", [])],
-            warnings=[str(item) for item in result.get("warnings", [])],
-            message=message,
-        )
-    except Exception as e:
-        logger.error("导入全部配置失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="CONFIG_IMPORT_FAILED",
-        )
-
-
-class AIConfigSaveResponse(BaseModel):
+class GlobalSettingsSaveResponse(BaseModel):
     success: bool
     message: str
 
@@ -144,13 +44,6 @@ class GlobalSettingsRequest(BaseModel):
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
     timezone: Optional[str] = None
-    auto_backup_enabled: Optional[bool] = None
-    auto_backup_interval_hours: Optional[int] = None
-    auto_backup_keep: Optional[int] = None
-    webdav_url: Optional[str] = None
-    webdav_username: Optional[str] = None
-    webdav_password: Optional[str] = None
-    webdav_remote_dir: Optional[str] = None
     appearance_accent_color: Optional[str] = None
     hero_position_x: Optional[float] = None
     hero_position_y: Optional[float] = None
@@ -175,15 +68,6 @@ class GlobalSettingsResponse(BaseModel):
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
     timezone: str = "Asia/Hong_Kong"
-    auto_backup_enabled: bool = False
-    auto_backup_interval_hours: Optional[int] = 24
-    auto_backup_keep: Optional[int] = 3
-    webdav_url: Optional[str] = None
-    webdav_username: Optional[str] = None
-    # GET 永不回传明文密码；用 webdav_password_set 表示已落盘
-    webdav_password: Optional[str] = None
-    webdav_password_set: bool = False
-    webdav_remote_dir: Optional[str] = "tg-manage-backups"
     appearance_accent_color: str = "#3d6fa8"
     hero_position_x: float = 50.0
     hero_position_y: float = 50.0
@@ -195,12 +79,7 @@ def get_global_settings(current_user: User = Depends(get_current_user)):
         settings = dict(get_config_service().get_global_settings())
         from backend.core.config import get_settings
         settings.setdefault("timezone", get_settings().timezone)
-        # 脱敏：API 响应不暴露 WebDAV 密码 / Bot Token 明文
-        raw_pwd = settings.get("webdav_password")
-        settings["webdav_password_set"] = bool(
-            raw_pwd is not None and str(raw_pwd).strip() != ""
-        )
-        settings["webdav_password"] = None
+        # API 响应不暴露 Bot Token 明文
         raw_token = settings.get("telegram_bot_token")
         settings["telegram_bot_token_set"] = bool(
             raw_token is not None and str(raw_token).strip() != ""
@@ -217,7 +96,7 @@ def get_global_settings(current_user: User = Depends(get_current_user)):
         )
 
 
-@router.post("/settings", response_model=AIConfigSaveResponse)
+@router.post("/settings", response_model=GlobalSettingsSaveResponse)
 async def save_global_settings(
     request: GlobalSettingsRequest, current_user: User = Depends(get_current_user)
 ):
@@ -231,15 +110,15 @@ async def save_global_settings(
         }
 
         if not settings:
-            return AIConfigSaveResponse(success=True, message="No settings to update")
+            return GlobalSettingsSaveResponse(success=True, message="No settings to update")
 
         if not get_config_service().save_global_settings(settings):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="SETTINGS_SAVE_FAILED",
             )
-        # 时区/自动备份变更时同步调度器（后台执行，不阻塞响应）
-        if "timezone" in settings or "auto_backup_enabled" in settings or "auto_backup_interval_hours" in settings:
+        # 时区变更时同步调度器（后台执行，不阻塞响应）
+        if "timezone" in settings:
             import asyncio
 
             from backend.scheduler import sync_jobs
@@ -250,7 +129,7 @@ async def save_global_settings(
                 except Exception as e:
                     logger.warning("设置变更调度同步失败: %s", e)
             asyncio.ensure_future(_safe_tz_sync())
-        return AIConfigSaveResponse(success=True, message="Global settings saved")
+        return GlobalSettingsSaveResponse(success=True, message="Global settings saved")
     except HTTPException:
         raise
     except ValueError as e:
@@ -337,29 +216,3 @@ async def test_bot_notification(
         return BotTestResponse(success=False, message=f"发送失败: {err}")
 
 
-class ImportPreviewRequest(BaseModel):
-    config_json: str
-
-
-class ImportPreviewResponse(BaseModel):
-    signs_count: int = 0
-    monitors_count: int = 0
-    settings_keys: list[str] = Field(default_factory=list)
-    conflicts: list[str] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
-
-
-@router.post("/import-preview", response_model=ImportPreviewResponse)
-def import_preview(
-    request: ImportPreviewRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """预览配置导入，不写盘。"""
-    try:
-        result = get_config_service().preview_import_all(request.config_json)
-        return ImportPreviewResponse(**result)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导入预览失败: {e}",
-        )

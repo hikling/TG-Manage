@@ -19,16 +19,9 @@ export type SettingsFormState = {
   botChatId: string
   botThreadId: string
   timezone: string
-  autoBackupEnabled: boolean
-  autoBackupInterval: number
-  autoBackupKeep: number
-  webdavUrl: string
-  webdavUsername: string
-  webdavPassword: string
-  webdavRemoteDir: string
 }
 
-export type SettingsSection = 'general' | 'bot' | 'advanced'
+export type SettingsSection = 'general' | 'bot'
 
 export function emptyToNull(v: string | number | '' | null | undefined): number | null {
   if (v === '' || v === null || v === undefined) return null
@@ -83,25 +76,6 @@ export function buildBotPayload(s: SettingsFormState) {
   }
 }
 
-/** 数据管理区块：自动备份 + WebDAV，由「保存备份设置」提交 */
-export function buildBackupPayload(s: SettingsFormState) {
-  return {
-    auto_backup_enabled: s.autoBackupEnabled,
-    auto_backup_interval_hours: clampNumber(s.autoBackupInterval, 1, 168) ?? 24,
-    auto_backup_keep: clampNumber(s.autoBackupKeep, 1, 30) ?? 3,
-    webdav_url: s.webdavUrl || null,
-    webdav_username: s.webdavUsername || null,
-    // 空密码表示不覆盖服务端已有值
-    ...(s.webdavPassword ? { webdav_password: s.webdavPassword } : {}),
-    webdav_remote_dir: s.webdavRemoteDir || 'tg-manage-backups',
-  }
-}
-
-/** 数据管理区与全量保存使用相同的备份/WebDAV 字段。 */
-export function buildAdvancedPayload(s: SettingsFormState) {
-  return buildBackupPayload(s)
-}
-
 /** 分段快照：仅比较该区块相关字段 */
 export function snapSection(
   section: SettingsSection,
@@ -129,17 +103,6 @@ export function snapSection(
         botChatId: s.botChatId,
         botThreadId: s.botThreadId,
       })
-    case 'advanced':
-      // 仅备份/WebDAV（数据管理区）
-      return JSON.stringify({
-        autoBackupEnabled: s.autoBackupEnabled,
-        autoBackupInterval: s.autoBackupInterval,
-        autoBackupKeep: s.autoBackupKeep,
-        webdavUrl: s.webdavUrl,
-        webdavUsername: s.webdavUsername,
-        webdavPassword: s.webdavPassword ? '***set***' : '',
-        webdavRemoteDir: s.webdavRemoteDir,
-      })
   }
 }
 
@@ -149,7 +112,6 @@ export function snapAllSections(
   return {
     general: snapSection('general', s),
     bot: snapSection('bot', s),
-    advanced: snapSection('advanced', s),
   }
 }
 
@@ -194,15 +156,8 @@ export function applyGlobalSettingsToForm(
     telegram_bot_chat_id?: string | null
     telegram_bot_message_thread_id?: number | null
     timezone?: string
-    auto_backup_enabled?: boolean
-    auto_backup_interval_hours?: number | null
-    auto_backup_keep?: number | null
-    webdav_url?: string | null
-    webdav_username?: string | null
-    webdav_password_set?: boolean
-    webdav_remote_dir?: string | null
   },
-): { botTokenSet: boolean; webdavPasswordSet: boolean } {
+): { botTokenSet: boolean } {
   s.logDays = res.log_retention_days || 7
   s.dataDir = res.data_dir || ''
   s.concurrency = res.tg_global_concurrency ?? ''
@@ -220,15 +175,7 @@ export function applyGlobalSettingsToForm(
     ? String(res.telegram_bot_message_thread_id)
     : ''
   s.timezone = res.timezone || 'Asia/Hong_Kong'
-  s.autoBackupEnabled = res.auto_backup_enabled || false
-  s.autoBackupInterval = res.auto_backup_interval_hours || 24
-  s.autoBackupKeep = res.auto_backup_keep || 3
-  s.webdavUrl = res.webdav_url || ''
-  s.webdavUsername = res.webdav_username || ''
-  s.webdavPassword = ''
-  s.webdavRemoteDir = res.webdav_remote_dir || 'tg-manage-backups'
   return {
     botTokenSet: !!res.telegram_bot_token_set,
-    webdavPasswordSet: !!res.webdav_password_set,
   }
 }

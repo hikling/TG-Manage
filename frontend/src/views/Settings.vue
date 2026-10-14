@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
-import DataManagementSettings from '../components/settings/DataManagementSettings.vue'
 import AboutSettings from '../components/settings/AboutSettings.vue'
 import PageRetry from '../components/PageRetry.vue'
 import { useSettingsPage } from '../composables/useSettingsPage'
@@ -11,12 +10,8 @@ const {
   settings,
   timezoneOptions,
   loading,
-  dataLoading,
-  backupLoading,
-  backupStatus,
   runtimeStatus,
   memoryStats,
-  advancedLoading,
   botTestLoading,
   pageLoading,
   loadFailed,
@@ -30,26 +25,13 @@ const {
   botLoading,
   keepaliveLoading,
   saveAllLoading,
-  webdavTestLoading,
-  webdavListLoading,
-  remoteWebdavFiles,
-  remoteWebdavMessage,
-  webdavPasswordSet,
   botTokenSet,
   botCodeStatus,
-  remoteDownloadName,
   saveSettings,
   runKeepaliveNow,
   saveBotSettings,
-  saveAdvancedSettings,
   saveAllSettings,
   testBot,
-  handleExport,
-  handleImportFile,
-  handleBackupExport,
-  handleWebdavTest,
-  handleListRemoteBackups,
-  handleDownloadRemoteBackup,
   handleCheckUpdate,
   toggleReveal,
   reload: reloadData,
@@ -73,14 +55,14 @@ const {
       <button
         type="button"
         class="ui-btn-primary !px-3 !py-1.5 !text-xs shrink-0"
-        :disabled="saveAllLoading || loading || botLoading || advancedLoading"
+        :disabled="saveAllLoading || loading || botLoading"
         @click="saveAllSettings"
       >
         {{ saveAllLoading ? t('common.saving') : t('settings.saveAll') }}
       </button>
     </div>
     <div v-if="pageLoading" class="grid grid-cols-1 lg:grid-cols-2 gap-6" aria-busy="true">
-      <div v-for="i in 4" :key="i" class="ui-card p-6 space-y-4">
+      <div v-for="i in 3" :key="i" class="ui-card p-6 space-y-4">
         <div class="ui-skeleton h-5 w-32" />
         <div class="ui-skeleton h-3 w-48" />
         <div class="ui-skeleton h-10 w-full" />
@@ -106,30 +88,6 @@ const {
             @run-keepalive="runKeepaliveNow"
           />
         </details>
-        <details class="settings-accordion">
-          <summary>{{ t('settings.dataManagement') }} <span>{{ t('settings.dataManagementSummary') }}</span></summary>
-          <DataManagementSettings
-            v-model="settings"
-            :webdav-password-set="webdavPasswordSet"
-            :backup-status="backupStatus"
-            :remote-files="remoteWebdavFiles"
-            :remote-message="remoteWebdavMessage"
-            :remote-download-name="remoteDownloadName"
-            :data-loading="dataLoading"
-            :backup-loading="backupLoading"
-            :webdav-test-loading="webdavTestLoading"
-            :webdav-list-loading="webdavListLoading"
-            :advanced-loading="advancedLoading"
-            @export-json="handleExport"
-            @import-json="handleImportFile"
-            @backup-export="handleBackupExport"
-            @webdav-test="handleWebdavTest"
-            @webdav-list="handleListRemoteBackups"
-            @webdav-download="handleDownloadRemoteBackup"
-            @save-advanced="saveAdvancedSettings"
-          />
-        </details>
-
         <details class="settings-accordion">
           <summary>{{ t('settings.botNotify') }} <span>{{ t('settings.botNotifySummary') }}</span></summary>
           <BotNotifySettings

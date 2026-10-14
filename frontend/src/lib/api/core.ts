@@ -25,10 +25,10 @@ export const toRecord = (headers?: HeadersInit): Record<string, string> => {
  */
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** 长任务（备份/大导出/配置导入导出）与服务端 WebDAV 读写上限对齐。 */
+/** 长任务（账户登录备份与大文件请求）的墙钟超时上限。 */
 export const LONG_TIMEOUT_MS = 600_000;
 
-/** 中等耗时接口（WebDAV 探测、设备保活、会话检测等）。 */
+/** 中等耗时接口（设备保活、会话检测等）。 */
 export const MEDIUM_TIMEOUT_MS = 120_000;
 
 /**

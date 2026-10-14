@@ -164,8 +164,8 @@ Vitest 的 jsdom 环境和 Node/Undici 可能分别提供 `Blob`、`File`、`Res
 | 常量 | 默认 | 用途 |
 | --- | --- | --- |
 | `DEFAULT_TIMEOUT_MS` | 30s | 普通 JSON API；覆盖发起到 body 读完 |
-| `MEDIUM_TIMEOUT_MS` | 120s | WebDAV 探测/列表、设备保活、会话检测、聊天列表等 |
-| `LONG_TIMEOUT_MS` | 600s | 完整备份、WebDAV 下载、配置导入导出、同步 run |
+| `MEDIUM_TIMEOUT_MS` | 120s | 设备保活、会话检测、聊天列表等 |
+| `LONG_TIMEOUT_MS` | 600s | 加密账户登录备份、同步 run 等长请求 |
 
 说明：
 

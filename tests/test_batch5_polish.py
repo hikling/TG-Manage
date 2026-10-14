@@ -4,24 +4,8 @@ from unittest.mock import MagicMock
 
 from backend.api.routes.auth import _resolve_request_ip
 from backend.services.avatar_cache import cleanup_avatar_cache
-from backend.services.backup_archive import (
-    auto_backup_interval_hours,
-    should_run_auto_backup,
-)
 from backend.utils.paths import is_safe_subpath
 from backend.utils.time_window import is_within_time_window
-
-
-def test_backup_settings_guards():
-    assert should_run_auto_backup(None) is False
-    assert should_run_auto_backup({}) is False
-    assert should_run_auto_backup({"auto_backup_enabled": True}) is True
-
-    assert auto_backup_interval_hours(None) == 24
-    assert auto_backup_interval_hours({}) == 24
-    assert auto_backup_interval_hours({"auto_backup_interval_hours": "48"}) == 48
-    assert auto_backup_interval_hours({"auto_backup_interval_hours": 9999}) == 168
-    assert auto_backup_interval_hours({"auto_backup_interval_hours": -10}) == 1
 
 
 def test_resolve_request_ip_length_guard():

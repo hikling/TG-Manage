@@ -10,7 +10,6 @@ from backend.services.push_notifications import (
     _html_escape,
     _safe_msg_truncate,
     build_html_notification,
-    send_auto_backup_failure_notification,
     send_keyword_push,
     send_login_notification,
     send_telegram_bot_message,
@@ -267,23 +266,6 @@ class TestNotificationTimeLabels:
         )
         await send_login_notification(
             self._settings(), username="admin", ip_address="127.0.0.1"
-        )
-
-        assert "<b>时间 (UTC)</b>" in sent["text"]
-
-    @pytest.mark.asyncio()
-    async def test_backup_failure_notification_marks_time_as_utc(self, monkeypatch):
-        sent = {}
-
-        async def _fake_send(**kwargs):
-            sent.update(kwargs)
-
-        monkeypatch.setattr(
-            "backend.services.push_notifications.send_telegram_bot_message",
-            _fake_send,
-        )
-        await send_auto_backup_failure_notification(
-            self._settings(), error="WebDAV 上传失败"
         )
 
         assert "<b>时间 (UTC)</b>" in sent["text"]

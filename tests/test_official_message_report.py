@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import html
+import re
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -44,7 +46,9 @@ def report_env(monkeypatch):
     )
     texts, uploads, paths = [], [], []
 
-    async def send_text(text):
+    async def send_text(text, **kwargs):
+        if kwargs:
+            assert kwargs == {"parse_mode": "HTML"}
         texts.append(text)
 
     async def send_media(path, *, kind, filename, caption):
@@ -80,7 +84,37 @@ async def run(service=None):
 
 
 def bodies(texts, label):
-    return [text.split("\n\n", 1)[1] for text in texts if f"\n{label} · 分段 " in text]
+    contents = []
+    for text in texts:
+        for match in re.finditer(
+            r"(?:<b>([^<]+)</b>\n)?<blockquote>(.*?)</blockquote>", text, re.DOTALL,
+        ):
+            marker = match.group(1) or "文字"
+            if marker == label or marker.startswith(f"{label} · 分段") or marker == f"{label}：":
+                contents.append(html.unescape(match.group(2)))
+    return contents
+
+
+@pytest.mark.asyncio
+async def test_two_notices_share_one_formatted_message_with_complete_quoted_bodies(report_env):
+    env = report_env
+    first = "Código de inicio <sesión> & 67673.\n\n❗️ No lo compartas."
+    second = "Código de inicio: 31543.\n\nIgnora este mensaje."
+    env.page.side_effect = [[message(12688, text=first), message(12687, text=second)], []]
+
+    outcome = await run()
+
+    assert outcome["messages"] == 2 and outcome["messages_sent"] == 1
+    assert outcome["failed"] == 0
+    assert len(env.texts) == 1
+    text = env.texts[0]
+    assert text.count("账户：alpha") == 1
+    assert text.count("<b>Telegram 官方消息 #") == 2
+    assert "<b>Telegram 官方消息 #12688</b>" in text
+    assert "<b>原消息时间：2026-10-12 23:59:59 +0800</b>" in text
+    assert "&lt;sesión&gt; &amp; 67673" in text
+    assert bodies(env.texts, "文字") == [first, second]
+    assert env.delivery.send_text.await_args.kwargs == {"parse_mode": "HTML"}
 
 
 @pytest.mark.asyncio
@@ -154,9 +188,10 @@ async def test_quiet_accounts_share_one_summary_and_other_notices_keep_attributi
         "🟢 账户：alpha", "🟢 账户：beta", "🟢 账户：gamma",
     ]
     assert bodies(env.texts, "文字") == ["official notice", "second notice", "before failure"]
-    assert all("账户：notice" in text for text in env.texts[:2])
-    assert "账户：partial" in env.texts[2] and "账户：partial" in env.texts[3]
-    assert outcome["messages_sent"] == len(env.texts) == 5
+    assert env.texts[0].count("账户：notice") == 1
+    assert env.texts[0].count("Telegram 官方消息 #") == 2
+    assert "账户：partial" in env.texts[1] and "账户：partial" in env.texts[2]
+    assert outcome["messages_sent"] == len(env.texts) == 4
     env.persist.assert_not_called()
 
 
@@ -404,10 +439,10 @@ async def test_bot_send_failure_never_normal_and_unrelated_accounts_continue(rep
     env.page.side_effect = [[message()], [], []]
     ordinary_send = env.delivery.send_text.side_effect
 
-    async def send(text):
-        if "文字 · 分段" in text:
+    async def send(text, **kwargs):
+        if kwargs.get("parse_mode") == "HTML":
             raise OfficialReportDeliveryError("safe rejected upload")
-        await ordinary_send(text)
+        await ordinary_send(text, **kwargs)
     env.delivery.send_text.side_effect = send
     outcome = await run()
     assert outcome["failed"] == 1 and outcome["empty"] == 1
@@ -421,10 +456,10 @@ async def test_grouped_no_message_delivery_failure_counts_each_affected_account_
     env.service.list_accounts.return_value = [{"name": "alpha"}, {"name": "beta"}]
     ordinary_send = env.delivery.send_text.side_effect
 
-    async def send(text):
+    async def send(text, **kwargs):
         if "账户正常" in text:
             raise OfficialReportDeliveryError("safe rejection")
-        await ordinary_send(text)
+        await ordinary_send(text, **kwargs)
     env.delivery.send_text.side_effect = send
     outcome = await run()
     assert outcome["accounts"] == outcome["failed"] == 2 and outcome["empty"] == 0
@@ -441,10 +476,10 @@ async def test_failed_normal_summary_chunk_keeps_later_chunks_and_sanitized_noti
     env.service.list_accounts.return_value = [{"name": name} for name in names]
     ordinary_send = env.delivery.send_text.side_effect
 
-    async def send(text):
+    async def send(text, **kwargs):
         if "账户正常" in text and names[1] in text:
             raise OfficialReportDeliveryError("secret TOKEN https://private.example")
-        await ordinary_send(text)
+        await ordinary_send(text, **kwargs)
 
     env.delivery.send_text.side_effect = send
     outcome = await run()
@@ -464,12 +499,12 @@ async def test_oversized_normal_name_retained_and_counted_only_when_complete(rep
     ordinary_send = env.delivery.send_text.side_effect
     normal_attempts = []
 
-    async def send(text):
+    async def send(text, **kwargs):
         if "账户正常" in text:
             normal_attempts.append(text)
             if fail and len(normal_attempts) in (1, 2):
                 raise OfficialReportDeliveryError("safe rejection")
-        await ordinary_send(text)
+        await ordinary_send(text, **kwargs)
 
     env.delivery.send_text.side_effect = send
     outcome = await run()
@@ -486,7 +521,7 @@ async def test_target_change_between_normal_summary_chunks_stops_pending_deliver
     names = [f"account-{index}-" + "🙂" * 1000 for index in range(3)]
     env.service.list_accounts.return_value = [{"name": name} for name in names]
 
-    async def send(text):
+    async def send(text, **kwargs):
         env.texts.append(text)
         env.target[0] = None
 
@@ -502,7 +537,7 @@ async def test_cancellation_during_normal_summary_releases_report_lock(report_en
     env = report_env
     started = asyncio.Event()
 
-    async def send(text):
+    async def send(text, **kwargs):
         started.set()
         await asyncio.Event().wait()
 
@@ -535,7 +570,7 @@ async def test_target_change_stops_remaining_reads_and_sends(report_env, phase):
     else:
         env.page.side_effect = [[item], []]
         if phase == "text":
-            async def send(text):
+            async def send(text, **kwargs):
                 env.texts.append(text)
                 env.target[0] = ("new-token", "999", None)
             env.delivery.send_text.side_effect = send
@@ -549,7 +584,7 @@ async def test_target_change_stops_remaining_reads_and_sends(report_env, phase):
             env.download.side_effect = download
     outcome = await run()
     assert outcome["stopped"] is True and outcome["accounts"] == 1
-    assert env.page.await_count == 1
+    assert env.page.await_count == (2 if phase == "text" else 1)
     env.delivery.send_media.assert_not_awaited()
     if phase != "text":
         env.delivery.send_text.assert_not_awaited()

@@ -38,7 +38,6 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   RATE_LIMITED: 'Too many requests, please try later',
   INVALID_USERNAME_OR_PASSWORD: 'Invalid username or password',
   TOTP_REQUIRED_OR_INVALID: '2FA code invalid or missing',
-  WEBDAV_NOT_CONFIGURED: 'WebDAV is not configured',
   BACKUP_EMPTY: 'Nothing to back up',
   CONFIG_JSON_EMPTY: 'Import configuration cannot be empty',
   AI_KEY_DECRYPT_FAILED: 'API Key decrypt failed; check APP_SECRET_KEY and re-save',

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import math
 from collections import Counter
@@ -95,6 +96,102 @@ def _message_header(account: str, message: OfficialMessage, timezone: tzinfo) ->
         f"账户：{account}\nTelegram 官方消息 #{message.id}\n"
         f"原消息时间：{original_time.strftime('%Y-%m-%d %H:%M:%S %z')}"
     )
+
+
+def _escaped_slices(content: str, budget: int) -> Iterator[str]:
+    """Split source characters before HTML escaping, retaining every character."""
+    if budget < 5:
+        raise OfficialReadError("Official report attribution exceeds text budget")
+    pieces: list[str] = []
+    used = 0
+    for character in content:
+        escaped = html.escape(character, quote=False)
+        size = _units(escaped)
+        if pieces and used + size > budget:
+            yield "".join(pieces)
+            pieces, used = [], 0
+        if size > budget:
+            raise OfficialReadError("Official report content cannot fit text budget")
+        pieces.append(escaped)
+        used += size
+    if pieces:
+        yield "".join(pieces)
+
+
+def _message_html_parts(
+    account: str, message: OfficialMessage, timezone: tzinfo,
+) -> Iterator[str]:
+    original_time = datetime.fromtimestamp(message.date_epoch, timezone)
+    heading = (
+        f"<b>Telegram 官方消息 #{message.id}</b>\n"
+        f"<b>原消息时间：{original_time.strftime('%Y-%m-%d %H:%M:%S %z')}</b>\n\n"
+    )
+    account_prefix = f"账户：{html.escape(account, quote=False)}\n\n"
+    budget = MAX_CONTENT_UNITS - _units(account_prefix)
+    fields = [
+        (label, content) for label, content in (
+            ("", message.text), ("原始说明", message.caption),
+            ("官方消息详情", message.content_details),
+        ) if content
+    ]
+    if not fields:
+        return
+    sections = [
+        (f"<b>{label}：</b>\n" if label else "")
+        + f"<blockquote>{html.escape(content, quote=False)}</blockquote>"
+        for label, content in fields
+    ]
+    whole = heading + "\n\n\n".join(sections)
+    if _units(whole) <= budget:
+        yield whole
+        return
+    for label, content in fields:
+        display_label = label or "文字"
+        # The maximum part index cannot have more digits than the source length.
+        digits = len(str(max(1, len(content))))
+        framing = (
+            f"{heading}<b>{display_label} · 分段 {'9' * digits}/{'9' * digits}</b>\n"
+            "<blockquote></blockquote>"
+        )
+        part_budget = budget - _units(framing)
+        count = sum(1 for _ in _escaped_slices(content, part_budget))
+        for index, part in enumerate(_escaped_slices(content, part_budget), 1):
+            yield (
+                f"{heading}<b>{display_label} · 分段 {index}/{count}</b>\n"
+                f"<blockquote>{part}</blockquote>"
+            )
+
+
+class _AccountTextBatch:
+    """Keep only one bounded Bot text in memory while grouping one account."""
+
+    def __init__(self, account: str, delivery: OfficialReportDelivery, result: dict[str, Any]) -> None:
+        self.prefix = f"账户：{html.escape(account, quote=False)}\n\n"
+        self.delivery = delivery
+        self.result = result
+        self.blocks: list[str] = []
+        self.used = _units(self.prefix)
+
+    async def add(self, block: str) -> None:
+        separator = "\n\n\n" if self.blocks else ""
+        size = _units(separator + block)
+        if self.blocks and self.used + size > MAX_CONTENT_UNITS:
+            await self.flush()
+            separator, size = "", _units(block)
+        if self.used + size > MAX_CONTENT_UNITS:
+            raise OfficialReadError("Official report text exceeds attribution budget")
+        self.blocks.append(separator + block)
+        self.used += size
+
+    async def flush(self) -> None:
+        if not self.blocks:
+            return
+        text = self.prefix + "".join(self.blocks)
+        self.blocks = []
+        self.used = _units(self.prefix)
+        _require_current(self.delivery)
+        await self.delivery.send_text(text, parse_mode="HTML")
+        self.result["messages_sent"] += 1
 
 
 def _upload_filename(name: str, message_id: int) -> str:
@@ -237,6 +334,7 @@ class OfficialMessageReportService:
         start: datetime, end: datetime, timezone: tzinfo, result: dict[str, Any],
     ) -> tuple[bool, int]:
         offset_id, count, failed = 0, 0, False
+        text_batch = _AccountTextBatch(account, delivery, result)
         start_epoch, end_epoch = start.timestamp(), end.timestamp()
         while True:
             try:
@@ -269,7 +367,8 @@ class OfficialMessageReportService:
                     header = _message_header(account, message, timezone)
                     try:
                         await self._message(
-                            service, delivery, account, message, header, start, end, result,
+                            service, delivery, account, message, header, start, end,
+                            timezone, text_batch, result,
                         )
                     except OfficialReportStopped:
                         raise
@@ -287,19 +386,23 @@ class OfficialMessageReportService:
                 logger.warning("官方消息历史读取失败（%s）", type(exc).__name__)
                 await self._failure(delivery, f"账户：{account}", "官方消息历史读取失败", result)
                 break
+        try:
+            await text_batch.flush()
+        except OfficialReportStopped:
+            raise
+        except Exception as exc:
+            failed = True
+            logger.warning("官方消息合并文字发送失败（%s）", type(exc).__name__)
+            await self._failure(delivery, f"账户：{account}", "合并文字发送失败", result)
         return failed, count
 
     async def _message(
         self, service: Any, delivery: OfficialReportDelivery, account: str,
         message: OfficialMessage, header: str, start: datetime, end: datetime,
-        result: dict[str, Any],
+        timezone: tzinfo, text_batch: _AccountTextBatch, result: dict[str, Any],
     ) -> None:
-        for label, content in (
-            ("文字", message.text), ("原始说明", message.caption),
-            ("官方消息详情", message.content_details),
-        ):
-            if content:
-                await self._send_content(delivery, header, content, label, result)
+        for block in _message_html_parts(account, message, timezone):
+            await text_batch.add(block)
         if message.media is not None:
             await self._media(service, delivery, account, message, header, start, end, result)
         if message.unsupported_kind is not None:

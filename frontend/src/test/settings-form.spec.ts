@@ -5,8 +5,6 @@ import {
   applyGlobalSettingsToForm,
   buildGeneralPayload,
   buildBotPayload,
-  buildAdvancedPayload,
-  buildBackupPayload,
   snapAllSections,
   isAnySectionDirty,
   dirtySectionLabels,
@@ -29,13 +27,6 @@ const baseSettings = (): SettingsFormState => ({
   botChatId: '',
   botThreadId: '',
   timezone: 'Asia/Hong_Kong',
-  autoBackupEnabled: false,
-  autoBackupInterval: 24,
-  autoBackupKeep: 3,
-  webdavUrl: '',
-  webdavUsername: '',
-  webdavPassword: '',
-  webdavRemoteDir: 'tg-signpulse-backups',
 })
 
 describe('settings-form', () => {
@@ -116,24 +107,6 @@ describe('settings-form', () => {
     expect(p2.telegram_bot_token).toBe('123:ABC')
   })
 
-  it('buildAdvancedPayload only contains data management fields', () => {
-    const p = buildAdvancedPayload(baseSettings())
-    expect(p.auto_backup_keep).toBe(3)
-    expect('ai_vision_timeout' in p).toBe(false)
-    expect('sign_task_execution_timeout' in p).toBe(false)
-  })
-
-  it('buildBackupPayload only includes backup/webdav fields', () => {
-    const s = baseSettings()
-    s.webdavUrl = 'https://dav.example'
-    s.webdavPassword = 'secret'
-    const p = buildBackupPayload(s) as Record<string, unknown>
-    expect(p.webdav_url).toBe('https://dav.example')
-    expect(p.webdav_password).toBe('secret')
-    expect('sign_task_execution_timeout' in p).toBe(false)
-    expect('ai_vision_timeout' in p).toBe(false)
-  })
-
   it('section dirty is independent', () => {
     const s = baseSettings()
     const baseline = snapAllSections(s)
@@ -148,18 +121,8 @@ describe('settings-form', () => {
     const labels = dirtySectionLabels(baseline, cur, {
       general: 'G',
       bot: 'B',
-      advanced: 'A',
     })
     expect(labels).toEqual(['B'])
-  })
-
-  it('backup fields dirty advanced section', () => {
-    const s = baseSettings()
-    const baseline = snapAllSections(s)
-
-    const sBackup = { ...s, autoBackupEnabled: true }
-    const curBackup = snapAllSections(sBackup)
-    expect(curBackup.advanced).not.toBe(baseline.advanced)
   })
 
   it('secret fields mask in snapshot (bot token)', () => {
@@ -184,16 +147,13 @@ describe('applyGlobalSettingsToForm', () => {
     const flags = applyGlobalSettingsToForm(s, {
       log_retention_days: 14,
       telegram_bot_token_set: true,
-      webdav_password_set: true,
       telegram_bot_message_thread_id: 9,
       timezone: 'UTC',
     })
     expect(s.logDays).toBe(14)
     expect(s.botToken).toBe('')
-    expect(s.webdavPassword).toBe('')
     expect(s.botThreadId).toBe('9')
     expect(s.timezone).toBe('UTC')
     expect(flags.botTokenSet).toBe(true)
-    expect(flags.webdavPasswordSet).toBe(true)
   })
 })

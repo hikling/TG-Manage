@@ -53,7 +53,7 @@ bash scripts/backup.sh
 docker compose start app
 ```
 
-备份默认存于 `backups/tg-manage-data-<时间>.tar.gz`，包含完整数据目录。`backup.sh` 不会清理旧归档；按磁盘容量自行决定保留策略。面板的 WebDAV 备份见 [WebDAV 备份与恢复](../guide/backup-webdav.md)。
+备份默认存于 `backups/tg-manage-data-<时间>.tar.gz`，包含完整数据目录。`backup.sh` 不会清理旧归档；按磁盘容量自行决定保留策略。跨服务器迁移账户登录态可用面板的[账户登录备份与恢复](../guide/account-login-backup.md)。
 
 ## 常见故障
 

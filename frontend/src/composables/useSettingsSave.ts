@@ -1,5 +1,5 @@
 /**
- * 设置页：通用配置、备份与通知的分块保存。
+ * 设置页：通用配置与通知的分块保存。
  */
 import { ref } from 'vue'
 import {
@@ -17,12 +17,8 @@ import { useToast } from './useToast'
 export function useSettingsSave(options: {
   buildGeneralPayload: () => Record<string, unknown>
   buildBotPayload: () => Record<string, unknown>
-  buildAdvancedPayload: () => Record<string, unknown>
-  buildBackupPayload: () => Record<string, unknown>
   markSectionClean: (section: SettingsSection) => void
   afterBotTokenSaved: () => void
-  afterWebdavSettingsSaved: () => void
-  loadBackupStatus: (token: string) => Promise<void>
 }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -31,7 +27,6 @@ export function useSettingsSave(options: {
 
   const loading = ref(false)
   const botLoading = ref(false)
-  const advancedLoading = ref(false)
   const saveAllLoading = ref(false)
   const botTestLoading = ref(false)
   const keepaliveLoading = ref(false)
@@ -90,27 +85,6 @@ export function useSettingsSave(options: {
     })
   }
 
-  const saveAdvancedSettings = async () => {
-    return withToken(async (token) => {
-      advancedLoading.value = true
-      try {
-        await saveGlobalSettings(token, options.buildBackupPayload())
-        options.afterWebdavSettingsSaved()
-        options.markSectionClean('advanced')
-        notifySuccess('settings.saveSuccess')
-        try {
-          await options.loadBackupStatus(token)
-        } catch {
-          /* ignore */
-        }
-      } catch (e: unknown) {
-        notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
-      } finally {
-        advancedLoading.value = false
-      }
-    })
-  }
-
   const saveAllSettings = async () => {
     return withToken(async (token) => {
       saveAllLoading.value = true
@@ -118,15 +92,12 @@ export function useSettingsSave(options: {
         await saveGlobalSettings(token, {
           ...options.buildGeneralPayload(),
           ...options.buildBotPayload(),
-          ...options.buildAdvancedPayload(),
         })
         // 保存成功后立即同步面板展示时区，Dashboard/Logs 等页时间格式跟随
         setPanelTimezone(String(options.buildGeneralPayload().timezone || ''))
-        options.afterWebdavSettingsSaved()
         options.afterBotTokenSaved()
         options.markSectionClean('general')
         options.markSectionClean('bot')
-        options.markSectionClean('advanced')
         notifySuccess('settings.saveAllSuccess')
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
@@ -154,14 +125,12 @@ export function useSettingsSave(options: {
   return {
     loading,
     botLoading,
-    advancedLoading,
     saveAllLoading,
     botTestLoading,
     keepaliveLoading,
     saveSettings,
     runKeepaliveNow,
     saveBotSettings,
-    saveAdvancedSettings,
     saveAllSettings,
     testBot,
   }

@@ -22,13 +22,6 @@ const settingsState = (): SettingsFormState => ({
   botChatId: '',
   botThreadId: '',
   timezone: 'Asia/Hong_Kong',
-  autoBackupEnabled: false,
-  autoBackupInterval: 24,
-  autoBackupKeep: 3,
-  webdavUrl: '',
-  webdavUsername: '',
-  webdavPassword: '',
-  webdavRemoteDir: 'tg-signpulse-backups',
 })
 
 describe('设置页拆分组件契约', () => {

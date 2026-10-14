@@ -70,16 +70,6 @@ export interface GlobalSettings {
   telegram_bot_chat_id?: string | null;
   telegram_bot_message_thread_id?: number | null;
   timezone?: string;
-  auto_backup_enabled?: boolean;
-  auto_backup_interval_hours?: number | null;
-  auto_backup_keep?: number | null;
-  webdav_url?: string | null;
-  webdav_username?: string | null;
-  /** GET 永不返回明文；写入时仅在非空时更新 */
-  webdav_password?: string | null;
-  /** 服务端是否已保存 WebDAV 密码 */
-  webdav_password_set?: boolean;
-  webdav_remote_dir?: string | null;
   appearance_accent_color?: string;
   hero_position_x?: number;
   hero_position_y?: number;

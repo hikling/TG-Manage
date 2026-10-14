@@ -1,5 +1,5 @@
 /**
- * 系统设置页业务逻辑：加载/保存/脏检查/备份/版本检查。
+ * 系统设置页业务逻辑：加载/保存/脏检查/版本检查。
  * Settings.vue 仅负责布局与子组件接线。
  */
 import { ref, onMounted, onUnmounted, computed } from 'vue'
@@ -19,8 +19,6 @@ import { setPanelTimezone } from '../lib/datetime'
 import { devLog } from '../lib/devLog'
 import {
   applyGlobalSettingsToForm,
-  buildAdvancedPayload as buildAdvancedPayloadOf,
-  buildBackupPayload as buildBackupPayloadOf,
   buildBotPayload as buildBotPayloadOf,
   buildGeneralPayload as buildGeneralPayloadOf,
   dirtySectionLabels,
@@ -30,7 +28,6 @@ import {
   type SettingsFormState,
 } from '../lib/settings-form'
 import { useSettingsVersionCheck } from './useSettingsVersionCheck'
-import { useSettingsBackup } from './useSettingsBackup'
 import { useSettingsSave } from './useSettingsSave'
 
 export function useSettingsPage() {
@@ -54,13 +51,6 @@ export function useSettingsPage() {
     botChatId: '',
     botThreadId: '',
     timezone: 'Asia/Hong_Kong',
-    autoBackupEnabled: false,
-    autoBackupInterval: 24,
-    autoBackupKeep: 3,
-    webdavUrl: '',
-    webdavUsername: '',
-    webdavPassword: '',
-    webdavRemoteDir: 'tg-manage-backups',
   })
 
   // 时区选项列表
@@ -142,8 +132,6 @@ export function useSettingsPage() {
     dirtySectionLabels(sectionBaseline.value, currentSectionSnaps(), {
       general: t('settings.general'),
       bot: t('settings.botNotify'),
-      // advanced 段仅含备份/WebDAV（数据管理）
-      advanced: t('settings.dataManagement'),
     }),
   )
 
@@ -175,55 +163,22 @@ export function useSettingsPage() {
 
   const buildGeneralPayload = () => buildGeneralPayloadOf(settings.value)
   const buildBotPayload = () => buildBotPayloadOf(settings.value)
-  const buildAdvancedPayload = () => buildAdvancedPayloadOf(settings.value)
-  const buildBackupPayload = () => buildBackupPayloadOf(settings.value)
-
-  const {
-    dataLoading,
-    backupLoading,
-    backupStatus,
-    webdavTestLoading,
-    webdavListLoading,
-    remoteWebdavFiles,
-    remoteWebdavMessage,
-    webdavPasswordSet,
-    remoteDownloadName,
-    afterWebdavSettingsSaved,
-    handleExport,
-    handleListRemoteBackups,
-    handleDownloadRemoteBackup,
-    handleBackupExport,
-    handleWebdavTest,
-    handleImportFile,
-    loadBackupStatus,
-  } = useSettingsBackup({
-    settings,
-    buildBackupPayload,
-    markSectionClean: (section) => markSectionClean(section),
-  })
-
   const {
     loading,
     botLoading,
-    advancedLoading,
     saveAllLoading,
     botTestLoading,
     keepaliveLoading,
     saveSettings,
     runKeepaliveNow,
     saveBotSettings,
-    saveAdvancedSettings,
     saveAllSettings,
     testBot,
   } = useSettingsSave({
     buildGeneralPayload,
     buildBotPayload,
-    buildAdvancedPayload,
-    buildBackupPayload,
     markSectionClean,
     afterBotTokenSaved,
-    afterWebdavSettingsSaved,
-    loadBackupStatus,
   })
 
   const loadAllSettings = async () => {
@@ -238,22 +193,17 @@ export function useSettingsPage() {
       const flags = applyGlobalSettingsToForm(settings.value, res)
       botTokenSet.value = flags.botTokenSet
       botCodeStatus.value = res.telegram_bot_code_status || ''
-      webdavPasswordSet.value = flags.webdavPasswordSet
       // 同步面板展示时区：Settings 加载后，Dashboard/Logs 等页的时间格式跟随
       setPanelTimezone(res.timezone)
 
 
       // 运行信息互不依赖，并行请求可以减少设置页首屏等待；单项失败仍然降级。
-      const [backupResult, runtimeResult, memoryResult, versionResult] =
+      const [runtimeResult, memoryResult, versionResult] =
         await Promise.allSettled([
-          loadBackupStatus(token),
           getRuntimeStatus(token),
           getMemoryStats(token),
           loadVersion(token),
         ])
-      if (backupResult.status === 'rejected') {
-        devLog.error('Failed to load backup status', backupResult.reason)
-      }
       if (runtimeResult.status === 'fulfilled') {
         runtimeStatus.value = runtimeResult.value
       } else {
@@ -314,12 +264,8 @@ export function useSettingsPage() {
     settings,
     timezoneOptions,
     loading,
-    dataLoading,
-    backupLoading,
-    backupStatus,
     runtimeStatus,
     memoryStats,
-    advancedLoading,
     botTestLoading,
     pageLoading,
     loadFailed,
@@ -335,26 +281,13 @@ export function useSettingsPage() {
     botLoading,
     keepaliveLoading,
     saveAllLoading,
-    webdavTestLoading,
-    webdavListLoading,
-    remoteWebdavFiles,
-    remoteWebdavMessage,
-    webdavPasswordSet,
     botTokenSet,
     botCodeStatus,
-    remoteDownloadName,
     saveSettings,
     runKeepaliveNow,
     saveBotSettings,
-    saveAdvancedSettings,
     saveAllSettings,
     testBot,
-    handleExport,
-    handleImportFile,
-    handleBackupExport,
-    handleWebdavTest,
-    handleListRemoteBackups,
-    handleDownloadRemoteBackup,
     handleCheckUpdate,
     toggleReveal,
   }

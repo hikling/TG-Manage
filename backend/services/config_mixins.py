@@ -1,11 +1,10 @@
 """ConfigService 领域 Mixin（从 config.py 拆分）。
 
-按配置领域划分：签到任务/导出导入和全局设置。
+管理全局设置。
 共享的 JSON 读写、路径解析与单例组装仍留在 config.py。
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
 from pathlib import Path
@@ -29,14 +28,14 @@ GLOBAL_SETTINGS_CACHE_TTL = 2.0
 def _is_retired_setting(key: str) -> bool:
     """Ignore removed controls, including the legacy account proxy fallback."""
     return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_")) or key in {
-        "sign_interval", "global_proxy",
+        "sign_interval", "global_proxy", "auto_backup_enabled",
+        "auto_backup_interval_hours", "auto_backup_keep", "webdav_url",
+        "webdav_username", "webdav_password", "webdav_remote_dir",
     }
 
 # 全局设置数值钳制表：字段名 -> (下限, 上限)；值为 None 的字段保持 None
 _GLOBAL_SETTING_INT_CLAMPS = {
     "device_keepalive_interval_days": (1, 170),
-    "auto_backup_interval_hours": (1, 168),
-    "auto_backup_keep": (1, 30),
 }
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-f]{6}$", re.IGNORECASE)
 _GLOBAL_SETTING_POSITION_FIELDS = ("hero_position_x", "hero_position_y")
@@ -46,8 +45,7 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """钳制/归一化全局设置字段（路由层 fields_set 过滤后透传，服务层统一钳制）。
 
     - 数值字段按既定范围钳制，None 允许的字段保持 None
-    - telegram_bot_token/webdav_password 空串表示不修改（移除键保留旧值）
-    - webdav_url/webdav_username/webdav_remote_dir 去首尾空白并兜底默认值
+    - telegram_bot_token 空串表示不修改（移除键保留旧值）
     """
     normalized = dict(settings)
     for key in list(normalized):
@@ -96,99 +94,11 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     if "telegram_bot_chat_id" in normalized and normalized["telegram_bot_chat_id"] is not None:
         normalized["telegram_bot_chat_id"] = str(normalized["telegram_bot_chat_id"]).strip() or None
 
-    # WebDAV 密码：空串不修改；保留原值（不去空白，避免改动密码本身）
-    if "webdav_password" in normalized:
-        pwd = normalized["webdav_password"]
-        if pwd is None or str(pwd).strip() == "":
-            normalized.pop("webdav_password")
-        else:
-            normalized["webdav_password"] = str(pwd)
-
-    # WebDAV 地址/用户名：去空白，空值归一为 None
-    for key in ("webdav_url", "webdav_username"):
-        if key in normalized:
-            stripped = (normalized[key] or "").strip()
-            normalized[key] = stripped or None
-
-    # WebDAV 目录：去空白，空值回落默认目录
-    if "webdav_remote_dir" in normalized:
-        stripped = (normalized["webdav_remote_dir"] or "").strip()
-        normalized["webdav_remote_dir"] = stripped or "tg-manage-backups"
-
     return normalized
 
 
-class ConfigExportMixin:
-    """Portable settings export/import. Legacy task definitions are never activated."""
-
-    SECRET_MASKS = frozenset({"***MASKED***", "***", "MASKED", "REDACTED"})
-
-    def export_all_configs(self) -> str:
-        settings = dict(self.get_global_settings())
-        settings = {key: value for key, value in settings.items()
-                    if not _is_retired_setting(key)}
-        masked = {key: bool(settings.get(key)) for key in ("webdav_password", "telegram_bot_token")}
-        for key in ("webdav_password", "telegram_bot_token"):
-            if settings.get(key):
-                settings[key] = "***MASKED***"
-        return json.dumps({
-            "_meta": {"format": "tg-manage-config-export", "version": 2,
-                      "includes": ["settings"],
-                      "webdav_password_masked": masked["webdav_password"],
-                      "telegram_bot_token_masked": masked["telegram_bot_token"],
-                      "excludes": ["sessions", "db.sqlite", "history", "account_login_state", "telebox-tasks.json"]},
-            "settings": {"global": settings},
-        }, ensure_ascii=False, indent=2)
-
-    def import_all_configs(self, json_str: str, overwrite: bool = False) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
-            "signs_imported": 0, "signs_skipped": 0, "monitors_imported": 0,
-            "monitors_skipped": 0, "settings_imported": 0, "settings_skipped": 0,
-            "errors": [], "warnings": [],
-        }
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as exc:
-            result["errors"].append(f"Invalid JSON format: {exc}")
-            return result
-        if not isinstance(data, dict):
-            result["errors"].append("配置根节点必须是对象")
-            return result
-        for key, counter in (("signs", "signs_skipped"), ("monitors", "monitors_skipped")):
-            value = data.get(key)
-            if value is not None and not isinstance(value, dict):
-                result["errors"].append(f"{key} 字段格式无效")
-            elif value:
-                result[counter] = len(value)
-                result["warnings"].append(f"Retired {key} skipped")
-        settings = data.get("settings") or {}
-        if not isinstance(settings, dict):
-            result["errors"].append("settings 字段格式无效")
-            return result
-        global_settings = settings.get("global")
-        if global_settings is not None:
-            if not isinstance(global_settings, dict):
-                result["errors"].append("global settings 字段格式无效")
-            else:
-                values = dict(global_settings)
-                for key in ("webdav_password", "telegram_bot_token"):
-                    if str(values.get(key) or "").strip() in self.SECRET_MASKS | {""}:
-                        values.pop(key, None)
-                # Removed task parameters in historical portable exports cannot return.
-                values = {key: value for key, value in values.items()
-                          if not _is_retired_setting(key)}
-                if self.save_global_settings(values):
-                    result["settings_imported"] = 1
-                else:
-                    result["errors"].append("Failed to import global settings")
-        for retired in ("ai", "telegram"):
-            if retired in settings:
-                result["settings_skipped"] += 1
-                result["warnings"].append(f"Retired {retired} settings skipped")
-        return result
-
 class GlobalSettingsMixin:
-    """全局设置读写与导入预览。"""
+    """全局设置读写。"""
 
     def _global_settings_cache(self) -> TTLCache:
         """全局设置 TTL 缓存（惰性初始化，避免 Mixin 无 __init__ 时失效）。"""
@@ -232,13 +142,6 @@ class GlobalSettingsMixin:
             "telegram_bot_token": None,
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
-            "auto_backup_enabled": False,
-            "auto_backup_interval_hours": 24,
-            "auto_backup_keep": 3,
-            "webdav_url": None,
-            "webdav_username": None,
-            "webdav_password": None,
-            "webdav_remote_dir": "tg-manage-backups",
             "appearance_accent_color": "#3d6fa8",
             "hero_position_x": 50.0,
             "hero_position_y": 50.0,
@@ -288,7 +191,7 @@ class GlobalSettingsMixin:
             if _is_retired_setting(key):
                 merged.pop(key)
 
-        # 校验时区格式（防止导入配置等绕过路由层校验）
+        # 服务层统一校验时区格式。
         tz_value = merged.get("timezone")
         if tz_value:
             try:
@@ -343,28 +246,3 @@ class GlobalSettingsMixin:
         return True
 
 
-    def preview_import_all(self, json_str: str) -> Dict[str, Any]:
-        """Preview settings import; report retired task definitions without reviving them."""
-        try:
-            data = json.loads(json_str)
-        except json.JSONDecodeError as exc:
-            return {"signs_count": 0, "monitors_count": 0, "settings_keys": [],
-                    "conflicts": [], "errors": [str(exc)]}
-        if not isinstance(data, dict):
-            return {"signs_count": 0, "monitors_count": 0, "settings_keys": [],
-                    "conflicts": [], "errors": ["配置根节点必须是对象"]}
-        errors = []
-        counts = {}
-        for key in ("signs", "monitors"):
-            value = data.get(key) or {}
-            if not isinstance(value, dict):
-                errors.append(f"{key} 字段格式无效")
-                value = {}
-            counts[key] = len(value)
-        settings = data.get("settings") or {}
-        if not isinstance(settings, dict):
-            errors.append("settings 字段格式无效")
-            settings = {}
-        return {"signs_count": counts["signs"], "monitors_count": counts["monitors"],
-                "settings_keys": [key for key in ("global", "ai", "telegram") if settings.get(key)],
-                "conflicts": [], "errors": errors}

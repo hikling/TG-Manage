@@ -18,10 +18,6 @@ describe('api barrel 完整性', () => {
     expect(typeof api.listTeleBoxAccounts).toBe('function')
     expect(typeof api.logoutTeleBox).toBe('function')
   })
-  it('config API 导出', () => {
-    expect(typeof api.exportAllConfigs).toBe('function')
-    expect(typeof api.importConfigPreview).toBe('function')
-  })
   it('settings API 导出', () => {
     expect(typeof api.changePassword).toBe('function')
     expect(typeof api.getGlobalSettings).toBe('function')
