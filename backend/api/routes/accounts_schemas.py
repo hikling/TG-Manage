@@ -28,7 +28,24 @@ class LoginStartResponse(BaseModel):
     phone_code_hash: str
     phone_number: str
     account_name: str
-    message: str = "验证码已发送到您的手机"
+    delivery_type: Optional[str] = None
+    next_type: Optional[str] = None
+    retry_after: Optional[int] = None
+    message: str = "Telegram 已接受验证码请求；请查看指定的送达方式"
+
+
+class LoginCancelRequest(BaseModel):
+    account_name: str
+    phone_number: str
+    phone_code_hash: str
+
+
+class LoginCancelResponse(BaseModel):
+    canceled: bool
+
+
+class LoginResendRequest(LoginCancelRequest):
+    pass
 
 
 class LoginVerifyRequest(BaseModel):

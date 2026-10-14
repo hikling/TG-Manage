@@ -1,9 +1,12 @@
 """登录会话临时存储与清理。"""
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from typing import Any
+
+from backend.services.telegram.pending_session import cleanup_pending_session
 
 logger = logging.getLogger("backend.telegram.sessions")
 
@@ -24,13 +27,18 @@ async def _release_login_session(value: Any) -> None:
     client = value.get("client")
     if client:
         try:
-            if getattr(client, "is_connected", False):
-                await client.disconnect()
+            if getattr(client, "is_initialized", False):
+                await asyncio.wait_for(client.stop(), timeout=5)
+            elif getattr(client, "is_connected", False):
+                await asyncio.wait_for(client.disconnect(), timeout=5)
         except Exception:
             pass
-    lock = value.get("lock")
-    if lock and lock.locked():
-        lock.release()
+    try:
+        cleanup_pending_session(value.get("pending_path"))
+    finally:
+        lock = value.get("lock")
+        if lock and lock.locked():
+            lock.release()
 
 
 async def _cleanup_expired_login_sessions() -> None:

@@ -2,7 +2,7 @@
 import { ref, watch, onUnmounted } from 'vue'
 import { Phone, QrCode } from 'lucide-vue-next'
 import Modal from '../Modal.vue'
-import { startAccountLogin, verifyAccountLogin, updateAccount, startQrLogin, getQrLoginStatus, submitQrPassword, cancelQrLogin } from '../../lib/api'
+import { startAccountLogin, resendAccountLogin, cancelAccountLogin, verifyAccountLogin, updateAccount, startQrLogin, getQrLoginStatus, submitQrPassword, cancelQrLogin } from '../../lib/api'
 import { getAuthToken } from '../../lib/api/core'
 import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
@@ -33,7 +33,6 @@ const form = ref({
 
 const loading = ref(false)
 const error = ref('')
-watch(locale, () => { error.value = '' })
 
 // 验证码重发倒计时：防止重复点击触发 Telegram 限流
 const codeCountdown = ref(0)
@@ -46,9 +45,9 @@ const stopCodeCountdown = () => {
   }
 }
 
-const startCodeCountdown = () => {
+const startCodeCountdown = (seconds = 60) => {
   stopCodeCountdown()
-  codeCountdown.value = 60
+  codeCountdown.value = Math.max(60, Math.min(600, seconds))
   codeTimer = window.setInterval(() => {
     codeCountdown.value -= 1
     if (codeCountdown.value <= 0) stopCodeCountdown()
@@ -58,6 +57,32 @@ const startCodeCountdown = () => {
 // Code login specific
 const phoneCodeHash = ref('')
 const codeSent = ref(false)
+const codeDeliveryNotice = ref('')
+const codeDeliveryType = ref<string | null>(null)
+const codeNextType = ref<string | null>(null)
+
+const deliveryNoticeFor = (deliveryType?: string | null, nextType?: string | null): string => {
+  let notice: string
+  switch (deliveryType) {
+    case 'app': notice = t('addAccount.codeDeliveryApp'); break
+    case 'sms':
+    case 'firebase_sms':
+    case 'sms_phrase':
+    case 'sms_word':
+    case 'fragment_sms': notice = t('addAccount.codeDeliverySms'); break
+    case 'call':
+    case 'missed_call':
+    case 'flash_call': notice = t('addAccount.codeDeliveryCall'); break
+    case 'email_code': notice = t('addAccount.codeDeliveryEmail'); break
+    case 'setup_email_required': notice = t('addAccount.codeDeliveryEmailSetup'); break
+    default: notice = t('addAccount.codeDeliveryUnknown')
+  }
+  return `${notice} ${t(nextType ? 'addAccount.codeResendAvailable' : 'addAccount.codeResendUnavailable')}`
+}
+watch(locale, () => {
+  error.value = ''
+  if (codeSent.value) codeDeliveryNotice.value = deliveryNoticeFor(codeDeliveryType.value, codeNextType.value)
+})
 
 // QR login specific
 const qrImage = ref('')
@@ -74,6 +99,18 @@ const handleQrImageError = () => {
 const reset = async () => {
   pollHandle?.stop()
   pollHandle = null
+  if (phoneCodeHash.value) {
+    try {
+      const token = getAuthToken()
+      if (token) await cancelAccountLogin(token, {
+        account_name: form.value.account_name,
+        phone_number: form.value.phone_number,
+        phone_code_hash: phoneCodeHash.value,
+      })
+    } catch (e: unknown) {
+      devLog.warn('cancelAccountLogin failed:', getLocalizedErrorMessage(e, t))
+    }
+  }
   if (loginId.value) {
     try {
       const token = getAuthToken()
@@ -87,6 +124,9 @@ const reset = async () => {
   phoneCodeHash.value = ''
   error.value = ''
   codeSent.value = false
+  codeDeliveryNotice.value = ''
+  codeDeliveryType.value = null
+  codeNextType.value = null
   stopCodeCountdown()
   codeCountdown.value = 0
   qrImage.value = ''
@@ -266,17 +306,26 @@ const handleSendCode = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await startAccountLogin(token, {
-      account_name: form.value.account_name,
-      api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
-      api_hash: form.value.api_hash.trim() || undefined,
-      phone_number: form.value.phone_number,
-      proxy: form.value.proxy || undefined
-    })
+    const res = codeSent.value
+      ? await resendAccountLogin(token, {
+        account_name: form.value.account_name,
+        phone_number: form.value.phone_number,
+        phone_code_hash: phoneCodeHash.value,
+      })
+      : await startAccountLogin(token, {
+        account_name: form.value.account_name,
+        api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
+        api_hash: form.value.api_hash.trim() || undefined,
+        phone_number: form.value.phone_number,
+        proxy: form.value.proxy || undefined
+      })
     phoneCodeHash.value = res.phone_code_hash
     codeSent.value = true
-    toast.info(t('addAccount.codeSent'))
-    startCodeCountdown()
+    codeDeliveryType.value = res.delivery_type ?? null
+    codeNextType.value = res.next_type ?? null
+    codeDeliveryNotice.value = deliveryNoticeFor(codeDeliveryType.value, codeNextType.value)
+    toast.info(codeDeliveryNotice.value)
+    startCodeCountdown(res.retry_after ?? 60)
   } catch (e: unknown) {
     error.value = getLocalizedErrorMessage(e, t, t('addAccount.sendCodeFailed'))
   } finally {
@@ -353,8 +402,7 @@ const handleSave = async () => {
 }
 
 onUnmounted(() => {
-  pollHandle?.stop(); pollHandle = null
-  stopCodeCountdown()
+  void reset()
 })
 </script>
 
@@ -412,6 +460,7 @@ onUnmounted(() => {
           v-model="form.account_name"
           type="text" 
           autocomplete="off"
+          :disabled="codeSent"
           :placeholder="t('addAccount.accountNamePlaceholder')"
           class="ui-input"
         >
@@ -437,6 +486,7 @@ onUnmounted(() => {
             v-model="form.phone_number"
             type="tel" 
             autocomplete="tel"
+            :disabled="codeSent"
             :placeholder="t('addAccount.phonePlaceholder')"
             class="ui-input"
           >
@@ -455,12 +505,13 @@ onUnmounted(() => {
             >
             <button 
               @click="handleSendCode"
-              :disabled="loading || !form.account_name || !form.phone_number || codeCountdown > 0"
+              :disabled="loading || !form.account_name || !form.phone_number || codeCountdown > 0 || (codeSent && !codeNextType)"
               class="ui-btn-secondary !px-4 !py-2 whitespace-nowrap"
             >
               {{ codeCountdown > 0 ? t('addAccount.resendIn', { s: codeCountdown }) : codeSent ? t('addAccount.resendCode') : t('addAccount.getCode') }}
             </button>
           </div>
+          <p v-if="codeSent" class="text-xs text-sky-700 dark:text-sky-300" role="status">{{ codeDeliveryNotice }}</p>
         </div>
       </template>
 

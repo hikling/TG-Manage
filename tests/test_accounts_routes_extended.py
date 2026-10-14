@@ -23,6 +23,12 @@ def _svc() -> MagicMock:
             "account_name": "acc",
         }
     )
+    svc.cancel_login = AsyncMock(return_value=True)
+    svc.resend_login = AsyncMock(return_value={
+        "phone_code_hash": "hash-2", "phone_number": "+8613800000000",
+        "account_name": "acc", "delivery_type": "sms", "next_type": None,
+        "retry_after": 60,
+    })
     svc.verify_login = AsyncMock(
         return_value={"user_id": 7, "first_name": "F", "username": "u"}
     )
@@ -95,6 +101,41 @@ class TestLoginFlow:
         assert resp.status_code == 200
         assert resp.json()["phone_code_hash"] == "hash-1"
         svc.start_login.assert_awaited_once()
+
+    def test_start_reports_delivery_and_limits_repeat_after_success(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        svc.start_login.return_value.update({"delivery_type": "app", "next_type": "sms", "retry_after": 75})
+        payload = {"api_id": 12345, "api_hash": "0" * 32, "account_name": "delivery_cooldown", "phone_number": "+8613800000099"}
+        with _patch_svc(svc):
+            first = api_client.post("/api/accounts/login/start", json=payload, headers=_auth(token))
+            second = api_client.post("/api/accounts/login/start", json=payload, headers=_auth(token))
+        assert first.status_code == 200
+        assert first.json()["delivery_type"] == "app"
+        assert first.json()["retry_after"] == 75
+        assert second.status_code == 429
+        assert int(second.headers["Retry-After"]) > 0
+        svc.start_login.assert_awaited_once()
+
+    def test_cancel_pending_code_login(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        payload = {"account_name": "acc", "phone_number": "+8613800000000", "phone_code_hash": "hash-1"}
+        with _patch_svc(svc):
+            response = api_client.post("/api/accounts/login/cancel", json=payload, headers=_auth(token))
+        assert response.status_code == 200
+        assert response.json() == {"canceled": True}
+        svc.cancel_login.assert_awaited_once_with("acc", "+8613800000000", "hash-1")
+
+    def test_resend_code_uses_existing_hash(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        svc = _svc()
+        payload = {"account_name": "resend_account", "phone_number": "+8613800000000", "phone_code_hash": "hash-1"}
+        with _patch_svc(svc):
+            response = api_client.post("/api/accounts/login/resend", json=payload, headers=_auth(token))
+        assert response.status_code == 200
+        assert response.json()["delivery_type"] == "sms"
+        svc.resend_login.assert_awaited_once_with("resend_account", "+8613800000000", "hash-1")
 
     def test_start_value_error_400(self, api_client, db):  # noqa: F811
         token = _login(api_client)
