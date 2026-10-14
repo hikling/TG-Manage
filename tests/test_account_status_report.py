@@ -51,11 +51,33 @@ async def test_daily_proxy_health_is_reported_independently_for_every_account(re
         call(name, timeout_seconds=8.0) for name in ["direct", "good", "bad", "changed"]
     ]
     rows = send.await_args.kwargs["text"].splitlines()
-    assert "🟢 direct — 正常" in rows
-    assert "🟢 good — 正常 · SOCKS5 🟢 正常" in rows
-    assert "🟢 bad — 正常 · SOCKS5 🔴 异常" in rows
-    assert "🟢 changed — 正常 · SOCKS5 ⚪ 待检测" in rows
+    assert "🟢 direct — 账户正常" in rows
+    assert "🟢 good — 账户正常 · SOCKS5 正常" in rows
+    assert "🔴 bad — 账户正常 · SOCKS5 异常" in rows
+    assert "🔴 changed — 账户正常 · SOCKS5 待检测" in rows
     persist.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_combined_midnight_report_uses_one_icon_for_three_health_dimensions(report_env):
+    _, _, send, _ = report_env
+    rows = [
+        {"account_name": "quiet", "ok": True, "proxy_status": "healthy"},
+        {"account_name": "notice", "ok": True, "proxy_status": "healthy"},
+        {"account_name": "proxy-bad", "ok": True, "proxy_status": "error"},
+        {"account_name": "read-bad", "ok": True, "proxy_status": "unconfigured"},
+    ]
+    sent = await report._send_report(rows, {
+        "quiet": "empty", "notice": "messages", "proxy-bad": "empty", "read-bad": "failed",
+    })
+    assert sent == 1
+    text = send.await_args.kwargs["text"]
+    assert "总计 4 · 正常 1 · 异常 3" in text
+    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in text
+    assert "🔴 notice — 账户正常 · SOCKS5 正常 · 有官方消息，详见单独推送" in text
+    assert "🔴 proxy-bad — 账户正常 · SOCKS5 异常 · 官方消息无新消息" in text
+    assert "🔴 read-bad — 账户正常 · 官方消息检测异常" in text
+    assert text.count("🟢") == 1 and text.count("🔴") == 3
 
 
 @pytest.mark.asyncio
@@ -96,11 +118,11 @@ async def test_mixed_fresh_results_icons_and_persisted_failures(report_env, capl
     assert message["message_thread_id"] == 7
     assert "parse_mode" not in message
     assert "总计 5 · 正常 2 · 异常 3" in message["text"]
-    assert "🟢 @telegram_alpha — 正常" in message["text"]
-    assert "🟢 omega — 正常" in message["text"]
-    assert "🔴 expired — 异常（会话失效，请重新登录）" in message["text"]
-    assert "🔴 slow — 异常（检测超时）" in message["text"]
-    assert "🔴 broken — 异常（检测失败）" in message["text"]
+    assert "🟢 @telegram_alpha — 账户正常" in message["text"]
+    assert "🟢 omega — 账户正常" in message["text"]
+    assert "🔴 expired — 账户异常（会话失效，请重新登录）" in message["text"]
+    assert "🔴 slow — 账户异常（检测超时）" in message["text"]
+    assert "🔴 broken — 账户异常（检测失败）" in message["text"]
     assert "SECRET" not in caplog.text + message["text"]
     # Healthy and invalid sessions are persisted by the shared probe itself.
     assert [(c.args[0], c.kwargs["status"]) for c in persist.call_args_list] == [
@@ -128,7 +150,7 @@ async def test_all_225_accounts_checked_once_and_chunked_without_loss(report_env
     assert "总计 225 · 正常 225 · 异常 0" in rows
     assert rows.count("🟢") == 225
     for name in names:
-        assert rows.count(f"🟢 {name} — 正常") == 1
+        assert rows.count(f"🟢 {name} — 账户正常") == 1
     assert not account_check_gate._in_flight
 
 
@@ -334,8 +356,8 @@ async def test_whole_probe_timeout_is_persisted_and_continues(report_env, monkey
     assert result["checked"] == 2 and result["fail"] == 1
     assert cancelled.is_set()
     assert persist.call_args.kwargs["code"] == "TIMEOUT"
-    assert "🔴 slow — 异常（检测超时）" in send.await_args.kwargs["text"]
-    assert "🟢 ready — 正常" in send.await_args.kwargs["text"]
+    assert "🔴 slow — 账户异常（检测超时）" in send.await_args.kwargs["text"]
+    assert "🟢 ready — 账户正常" in send.await_args.kwargs["text"]
     assert not account_check_gate._in_flight
 
 
@@ -382,7 +404,7 @@ async def test_empty_inventory_and_duplicate_names(report_env):
 
 
 def test_oversized_unicode_row_is_split_without_losing_characters():
-    lines = ["header", "🟢 @" + "🙂" * 5000 + " — 正常", "🔴 last — 异常"]
+    lines = ["header", "🟢 @" + "🙂" * 5000 + " — 正常", "🔴 last — 账户异常"]
     chunks = report._message_chunks(lines)
     assert all(len(text.encode("utf-16-le")) // 2 <= 3500 for text in chunks)
     # Row-separator newlines may be consumed at message boundaries.

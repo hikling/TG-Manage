@@ -154,11 +154,11 @@ export interface LoginBackupImportResult {
 }
 
 /** Only authorized account sessions and the API credentials needed to reuse them. */
-export const exportAccountLoginBackup = (token: string, password: string) =>
+export const exportAccountLoginBackup = (token: string, password: string, allowForceStopContainer: boolean, allowRestoreServer: boolean) =>
   requestBlob("/accounts/login-backup/export", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({ password, allow_force_stop_container: allowForceStopContainer, allow_restore_server: allowRestoreServer }),
   }, token, LONG_TIMEOUT_MS);
 
 /** Let the browser set multipart/form-data's boundary. */

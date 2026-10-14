@@ -68,13 +68,22 @@ def _enabled_target() -> tuple[str, str, int | None] | None:
     return (token, chat_id, thread_id) if token and chat_id else None
 
 
-async def _send_report(results: list[dict[str, Any]]) -> int:
+async def _send_report(
+    results: list[dict[str, Any]], official_status: dict[str, str] | None = None,
+) -> int:
     target = _enabled_target()
     if target is None:
         return 0
-    ok_count = sum(bool(result.get("ok")) for result in results)
+    def healthy(result: dict[str, Any]) -> bool:
+        return (
+            bool(result.get("ok"))
+            and result.get("proxy_status", "unconfigured") in {"healthy", "unconfigured"}
+            and (official_status is None or official_status.get(result["account_name"]) == "empty")
+        )
+
+    ok_count = sum(healthy(result) for result in results)
     lines = [
-        "账户状态日报（零点检测）",
+        "零点账户状态与官方消息日报" if official_status is not None else "账户状态日报（零点检测）",
         f"总计 {len(results)} · 正常 {ok_count} · 异常 {len(results) - ok_count}",
         "",
     ]
@@ -82,16 +91,22 @@ async def _send_report(results: list[dict[str, Any]]) -> int:
         username = " ".join(str(result.get("username") or "").split())
         name = f"@{username.lstrip('@')}" if username else result["account_name"]
         name = " ".join(str(name).split())
-        if result.get("ok"):
-            row = f"🟢 {name} — 正常"
+        notes = []
+        if not result.get("ok"):
+            notes.append(f"账户异常（{_failure_reason(result)}）")
         else:
-            row = f"🔴 {name} — 异常（{_failure_reason(result)}）"
+            notes.append("账户正常")
         proxy_status = result.get("proxy_status", "unconfigured")
         if proxy_status != "unconfigured":
             proxy_label = {
-                "healthy": "🟢 正常", "error": "🔴 异常", "pending": "⚪ 待检测",
-            }.get(proxy_status, "⚪ 待检测")
-            row += f" · SOCKS5 {proxy_label}"
+                "healthy": "正常", "error": "异常", "pending": "待检测",
+            }.get(proxy_status, "待检测")
+            notes.append(f"SOCKS5 {proxy_label}")
+        if official_status is not None:
+            official = official_status.get(result["account_name"])
+            notes.append({"empty": "官方消息无新消息", "messages": "有官方消息，详见单独推送"}.get(
+                official, "官方消息检测异常"))
+        row = f"{'🟢' if healthy(result) else '🔴'} {name} — {' · '.join(notes)}"
         lines.append(row)
     if not results:
         lines.append("暂无账户")
@@ -120,14 +135,14 @@ class AccountStatusReportService:
     def __init__(self) -> None:
         self._running_lock = asyncio.Lock()
 
-    async def run(self) -> dict[str, Any]:
+    async def run(self, *, send_report: bool = True) -> dict[str, Any]:
         """Check the fresh inventory sequentially, without the interactive cap."""
         if self._running_lock.locked():
             return {"skipped": True, "checked": 0, "messages_sent": 0}
         async with self._running_lock:
-            return await self._run()
+            return await self._run(send_report=send_report)
 
-    async def _run(self) -> dict[str, Any]:
+    async def _run(self, *, send_report: bool = True) -> dict[str, Any]:
         service = get_telegram_service()
         names = dict.fromkeys(
             str(account.get("name") or "").strip()
@@ -197,14 +212,17 @@ class AccountStatusReportService:
                 await asyncio.sleep(max(0.0, min(ready for _, ready in pending) - time.monotonic()))
 
         ordered = [results[name] for name in names]
-        sent = await _send_report(ordered)
+        sent = await _send_report(ordered) if send_report else 0
         ok_count = sum(bool(result.get("ok")) for result in ordered)
-        return {
+        summary = {
             "checked": len(ordered),
             "ok": ok_count,
             "fail": len(ordered) - ok_count,
             "messages_sent": sent,
         }
+        if not send_report:
+            summary["rows"] = ordered
+        return summary
 
 
 _service: AccountStatusReportService | None = None
