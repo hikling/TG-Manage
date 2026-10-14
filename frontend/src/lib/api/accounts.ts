@@ -16,6 +16,9 @@ export interface LoginStartResponse {
   phone_number: string;
   account_name: string;
   message: string;
+  delivery_type?: string | null;
+  next_type?: string | null;
+  retry_after?: number | null;
 }
 
 export interface LoginVerifyRequest {
@@ -184,6 +187,16 @@ export const startAccountLogin = (token: string, data: LoginStartRequest) =>
   request<LoginStartResponse>("/accounts/login/start", {
     method: "POST",
     body: JSON.stringify(data),
+  }, token, 65_000);
+
+export const resendAccountLogin = (token: string, data: Pick<LoginVerifyRequest, 'account_name' | 'phone_number' | 'phone_code_hash'>) =>
+  request<LoginStartResponse>("/accounts/login/resend", {
+    method: "POST", body: JSON.stringify(data),
+  }, token, 35_000);
+
+export const cancelAccountLogin = (token: string, data: Pick<LoginVerifyRequest, 'account_name' | 'phone_number' | 'phone_code_hash'>) =>
+  request<{ canceled: boolean }>("/accounts/login/cancel", {
+    method: "POST", body: JSON.stringify(data),
   }, token);
 
 export const verifyAccountLogin = (token: string, data: LoginVerifyRequest) =>
@@ -294,7 +307,7 @@ export const startQrLogin = (token: string, data: QrLoginStartRequest) =>
   request<QrLoginStartResponse>("/accounts/qr/start", {
     method: "POST",
     body: JSON.stringify(data),
-  }, token);
+  }, token, 65_000);
 
 export const getQrLoginStatus = (token: string, loginId: string) =>
   request<QrLoginStatusResponse>(`/accounts/qr/status?login_id=${encodeURIComponent(loginId)}`, {}, token);

@@ -9,8 +9,15 @@ import secrets
 import time
 from typing import Any, Dict, Optional
 
+from backend.services.telegram.login_phone import _discard_login_client
+from backend.services.telegram.pending_session import (
+    cleanup_pending_session,
+    new_pending_session_path,
+    promote_pending_session,
+)
 from backend.services.telegram.sessions import (
     _cleanup_expired_login_sessions,
+    _login_sessions,
     _qr_login_sessions,
 )
 from backend.utils.account_locks import get_account_lock
@@ -26,6 +33,26 @@ logger = logging.getLogger("backend.telegram.login_qr")
 
 # _export_login_token 兜底返回的特殊标记：轮询已确认进入 2FA 状态（会话状态已置位）
 _PASSWORD_REQUIRED = object()
+
+
+async def _close_qr_client(client) -> None:
+    try:
+        if getattr(client, "is_initialized", False):
+            await asyncio.wait_for(client.stop(), timeout=5)
+        elif getattr(client, "is_connected", False):
+            await asyncio.wait_for(client.disconnect(), timeout=5)
+    except Exception:
+        try:
+            if getattr(client, "is_connected", False):
+                await asyncio.wait_for(client.disconnect(), timeout=5)
+        except Exception:
+            pass
+    storage = getattr(client, "storage", None)
+    if not getattr(client, "is_connected", False) and getattr(storage, "conn", None):
+        try:
+            await asyncio.wait_for(storage.close(), timeout=5)
+        except Exception:
+            pass
 
 
 class TelegramQrLoginMixin:
@@ -73,53 +100,36 @@ class TelegramQrLoginMixin:
         data = _qr_login_sessions.pop(login_id, None)
         if not data:
             return
-        expire_task = data.get("expire_task")
-        current_task = asyncio.current_task()
-        if (
-            expire_task is not None
-            and expire_task is not current_task
-            and not expire_task.done()
-        ):
-            expire_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await expire_task
-        client = data.get("client")
-        handler = data.get("handler")
-        if client and handler:
-            try:
-                client.remove_handler(*handler)
-            except Exception as exc:
-                logger.warning("QR 登录清理 remove_handler 失败 (login_id=%s): %s", login_id, exc)
-        if client:
-            try:
-                if getattr(client, "is_initialized", False):
-                    await client.stop()
-                elif getattr(client, "is_connected", False):
-                    await client.disconnect()
-            except Exception:
+        pending_path = data.get("pending_path")
+        try:
+            expire_task = data.get("expire_task")
+            current_task = asyncio.current_task()
+            if (
+                expire_task is not None
+                and expire_task is not current_task
+                and not expire_task.done()
+            ):
+                expire_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await expire_task
+            client = data.get("client")
+            handler = data.get("handler")
+            if client and handler:
                 try:
-                    if getattr(client, "is_connected", False):
-                        await client.disconnect()
-                except Exception:
-                    pass
-        if not preserve_session:
-            session_mode = get_session_mode()
-            if session_mode == "file":
-                account_name = data.get("account_name")
-                if account_name:
-                    session_file = self.session_dir / f"{account_name}.session"
-                    if session_file.exists():
-                        try:
-                            session_file.unlink()
-                            for ext in [".session-journal", ".session-wal", ".session-shm"]:
-                                aux_file = self.session_dir / f"{account_name}{ext}"
-                                if aux_file.exists():
-                                    aux_file.unlink()
-                        except Exception:
-                            pass
-        lock = data.get("lock")
-        if lock and lock.locked():
-            lock.release()
+                    client.remove_handler(*handler)
+                except Exception as exc:
+                    logger.warning("QR 登录清理 remove_handler 失败 (login_id=%s): %s", login_id, exc)
+            if client:
+                await _close_qr_client(client)
+            if preserve_session:
+                promote_pending_session(pending_path, self.session_dir, data.get("account_name"))
+        finally:
+            try:
+                cleanup_pending_session(pending_path)
+            finally:
+                lock = data.get("lock")
+                if lock and lock.locked():
+                    lock.release()
 
 
     def _extend_qr_expires(self, data: Dict[str, Any], min_seconds: int = 300) -> None:
@@ -488,6 +498,19 @@ class TelegramQrLoginMixin:
 
         await _cleanup_expired_login_sessions()
 
+        # Switching from a code login must release its pending account lock.
+        for key, data in list(_login_sessions.items()):
+            if data.get("account_name") == account_name:
+                lock = data.get("lock")
+
+                def release_lock(lock=lock):
+                    if lock and lock.locked():
+                        lock.release()
+
+                await _discard_login_client(
+                    data["client"], key, release_lock, data.get("pending_path"),
+                )
+
         account_lock = get_account_lock(account_name)
         session_mode = get_session_mode()
         global_semaphore = get_global_semaphore()
@@ -505,9 +528,18 @@ class TelegramQrLoginMixin:
 
         # 清理后台客户端
         try:
-            await close_client_by_name(account_name, workdir=self.session_dir)
+            await asyncio.wait_for(
+                close_client_by_name(account_name, workdir=self.session_dir), timeout=8,
+            )
+        except asyncio.CancelledError:
+            _release_account_lock()
+            raise
+        except asyncio.TimeoutError:
+            _release_account_lock()
+            raise ValueError("现有账户连接未及时释放，请稍后再试") from None
         except Exception:
-            pass
+            _release_account_lock()
+            raise ValueError("现有账户连接清理失败，请稍后再试") from None
 
         # API credentials
         from backend.services.telegram.credentials import (
@@ -520,34 +552,23 @@ class TelegramQrLoginMixin:
             raise ValueError("Telegram API ID / API Hash 未配置或无效") from None
 
 
-        # 清理旧 session 文件（与手机号登录保持一致）
-        if session_mode == "file":
-            session_file = self.session_dir / f"{account_name}.session"
-            if session_file.exists():
-                try:
-                    session_file.unlink()
-                    for ext in [".session-journal", ".session-wal", ".session-shm"]:
-                        aux_file = self.session_dir / f"{account_name}{ext}"
-                        if aux_file.exists():
-                            aux_file.unlink()
-                except OSError:
-                    pass
-
-        session_path = str(self.session_dir / account_name)
-        client_kwargs = {
-            "name": session_path,
-            "api_id": api_id,
-            "api_hash": api_hash,
-            "proxy": proxy_dict,
-            "in_memory": session_mode == "string",
-        }
-        # QR 登录依赖 UpdateLoginToken，必须启用 updates（无论 session 模式）
-        client_kwargs["no_updates"] = False
-        client = Client(**client_kwargs)
+        pending_path = None
+        try:
+            pending_path = new_pending_session_path(self.session_dir, account_name) if session_mode == "file" else None
+            # QR 登录依赖 UpdateLoginToken，必须启用 updates。
+            client = Client(
+                name=str(pending_path or self.session_dir / account_name),
+                api_id=api_id, api_hash=api_hash, proxy=proxy_dict,
+                in_memory=session_mode == "string", no_updates=False,
+            )
+        except Exception:
+            cleanup_pending_session(pending_path)
+            _release_account_lock()
+            raise ValueError("二维码登录会话初始化失败，请检查数据目录") from None
 
         try:
             async with global_semaphore:
-                await client.connect()
+                await asyncio.wait_for(client.connect(), timeout=20)
 
                 if hasattr(client, "storage") and getattr(client.storage, "conn", None):
                     try:
@@ -556,11 +577,13 @@ class TelegramQrLoginMixin:
                     except Exception:
                         pass
 
-                result = await client.invoke(
+                # Start update handling before issuing a short-lived QR token.
+                await asyncio.wait_for(client.initialize(), timeout=10)
+                result = await asyncio.wait_for(client.invoke(
                     raw.functions.auth.ExportLoginToken(
                         api_id=api_id, api_hash=api_hash, except_ids=[]
                     )
-                )
+                ), timeout=15)
 
             token_bytes = getattr(result, "token", None)
             if not token_bytes:
@@ -568,6 +591,8 @@ class TelegramQrLoginMixin:
 
             token_expires = getattr(result, "expires", None)
             expires_ts = self._normalize_login_token_expires(token_expires)
+            if expires_ts <= int(time.time()) + 15:
+                raise ValueError("二维码已过期，请稍后重新获取")
             expires_at = utc_from_timestamp_iso_z(expires_ts)
             qr_uri = "tg://login?token=" + base64.urlsafe_b64encode(
                 token_bytes
@@ -588,6 +613,7 @@ class TelegramQrLoginMixin:
                 "migrate_dc_id": getattr(result, "dc_id", None),
                 "api_id": api_id,
                 "api_hash": api_hash,
+                "pending_path": pending_path,
                 "handler": None,
                 "_created_at": time.monotonic(),
             }
@@ -597,15 +623,7 @@ class TelegramQrLoginMixin:
             # 监听扫码更新
             try:
                 # 初始化 updates/dispatcher，确保后续 stop 能完整关闭
-                try:
-                    if not getattr(client, "is_initialized", False):
-                        await client.initialize()
-                except Exception:
-                    try:
-                        await client.dispatcher.start()
-                    except Exception as exc:
-                        # 初始化失败不致命：后续 stop 仍会尝试完整关闭
-                        logger.debug("QR 登录客户端初始化失败 (%s)", type(exc).__name__)
+                # initialize completed before the token was exported.
 
                 async def _raw_handler(_, update, __, ___):
                     if not isinstance(update, raw.types.UpdateLoginToken):
@@ -633,9 +651,7 @@ class TelegramQrLoginMixin:
                 # 注册失败会导致扫码更新永远收不到，登录卡死在 waiting_scan；
                 # 必须记录错误并标记状态，避免静默失败
                 logger.error("QR 登录注册扫码监听失败 (%s)", type(exc).__name__)
-                session_data["status"] = "error"
-                session_data["error"] = "qr_handler_register_failed"
-                self._log_qr_state(login_id, "error", session_data)
+                raise ValueError("二维码监听初始化失败，请稍后重试") from exc
 
             session_data["expire_task"] = create_logged_task(
                 self._expire_qr_login(login_id, expires_ts),
@@ -650,17 +666,32 @@ class TelegramQrLoginMixin:
             }
 
         except FloodWait as e:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
+            await _close_qr_client(client)
+            cleanup_pending_session(pending_path)
             _release_account_lock()
             raise ValueError(f"请求过于频繁，请等待 {e.value} 秒后重试")
+        except asyncio.TimeoutError:
+            if 'login_id' in locals() and login_id in _qr_login_sessions:
+                await self._cleanup_qr_login(login_id)
+            else:
+                await _close_qr_client(client)
+            cleanup_pending_session(pending_path)
+            _release_account_lock()
+            raise ValueError("连接 Telegram 超时，请检查当前账户代理或网络，稍后再试") from None
+        except asyncio.CancelledError:
+            if 'login_id' in locals() and login_id in _qr_login_sessions:
+                await self._cleanup_qr_login(login_id)
+            else:
+                await _close_qr_client(client)
+            cleanup_pending_session(pending_path)
+            _release_account_lock()
+            raise
         except Exception:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
+            if 'login_id' in locals() and login_id in _qr_login_sessions:
+                await self._cleanup_qr_login(login_id)
+            else:
+                await _close_qr_client(client)
+            cleanup_pending_session(pending_path)
             _release_account_lock()
             raise ValueError("获取二维码失败，请检查账号代理或网络后重试") from None
 

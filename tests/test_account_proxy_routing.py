@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import asyncio
+import time
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from pyrogram.enums import SentCodeType
 
 from backend.services.telegram import accounts as accounts_mod
 from backend.services.telegram import devices as devices_mod
@@ -209,6 +212,7 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
     class LoginClient:
         def __init__(self, **kwargs):
             self.proxy = kwargs["proxy"]
+            self.session_path = Path(kwargs["name"] + ".session")
             self.is_connected = False
             self.is_initialized = False
             self.storage = None
@@ -217,13 +221,17 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
             captured.append(self.proxy)
             if failure:
                 raise RuntimeError("socks5://user:SECRET@host:1080")
+            self.session_path.touch()
             self.is_connected = True
 
         async def disconnect(self):
             self.is_connected = False
 
         async def send_code(self, _phone):
-            return SimpleNamespace(phone_code_hash="code-hash")
+            return SimpleNamespace(
+                phone_code_hash="code-hash", type=SentCodeType.APP,
+                next_type=SentCodeType.SMS, timeout=75,
+            )
 
         async def sign_in(self, *_args):
             pass
@@ -235,7 +243,7 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
             return None
 
         async def invoke(self, _query):
-            return SimpleNamespace(token=b"qr-token", expires=1234567890)
+            return SimpleNamespace(token=b"qr-token", expires=int(time.time()) + 30)
 
         async def initialize(self):
             self.is_initialized = True
@@ -248,6 +256,8 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
 
     service = Service()
     service.session_dir = store
+    previous_session = store / "one.session"
+    previous_session.write_text("existing authorized session")
     monkeypatch.setenv("TG_PROXY", "socks5://global:1080")
     monkeypatch.setattr("pyrogram.Client", LoginClient)
     monkeypatch.setattr("tg_manage.core.close_client_by_name", AsyncMock())
@@ -266,20 +276,190 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
             await getattr(service, method)(**kwargs)
         assert "SECRET" not in str(raised.value) + caplog.text
         assert not lock.locked()
+        assert previous_session.read_text() == "existing authorized session"
         return
-    await getattr(service, method)(**kwargs)
+    result = await getattr(service, method)(**kwargs)
+    assert previous_session.read_text() == "existing authorized session"
     assert captured == [build_proxy_dict(proxy) if proxy else None]
     session_store = login_phone._login_sessions if method == "start_login" else login_qr._qr_login_sessions
     assert next(iter(session_store.values()))["proxy"] == proxy
     if method == "start_login":
+        assert result["delivery_type"] == "app"
+        assert result["next_type"] == "sms"
+        assert result["retry_after"] == 75
         await service.verify_login("one", "+12345678900", "12345", "code-hash")
         assert tg_session.get_account_proxy("one") == proxy
     else:
-        for session in session_store.values():
-            session["expire_task"].cancel()
+        await service._cleanup_qr_login(result["login_id"])
+        assert previous_session.read_text() == "existing authorized session"
     session_store.clear()
     if lock.locked():
         lock.release()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["start_login", "start_qr_login"])
+async def test_cancelled_login_keeps_previous_session_and_releases_lock(store, monkeypatch, method):
+    started = asyncio.Event()
+    lock = asyncio.Lock()
+    previous_session = store / "one.session"
+    previous_session.write_text("existing authorized session")
+
+    class SlowClient:
+        def __init__(self, **_kwargs):
+            self.is_connected = False
+            self.is_initialized = False
+
+        async def connect(self):
+            started.set()
+            await asyncio.Event().wait()
+
+        async def disconnect(self):
+            self.is_connected = False
+
+    class Service(login_phone.TelegramPhoneLoginMixin, login_qr.TelegramQrLoginMixin):
+        _normalize_account_name = staticmethod(lambda name: name)
+
+    service = Service()
+    service.session_dir = store
+    module = login_phone if method == "start_login" else login_qr
+    monkeypatch.setattr("pyrogram.Client", SlowClient)
+    monkeypatch.setattr("tg_manage.core.close_client_by_name", AsyncMock())
+    monkeypatch.setattr(module, "get_account_lock", lambda _name: lock)
+    monkeypatch.setattr(module, "get_session_mode", lambda: "file")
+    monkeypatch.setattr(module, "get_global_semaphore", lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(module, "_cleanup_expired_login_sessions", AsyncMock())
+
+    kwargs = {"account_name": "one", "api_id": 12345, "api_hash": "a" * 32}
+    if method == "start_login":
+        kwargs["phone_number"] = "+12345678900"
+    task = asyncio.create_task(getattr(service, method)(**kwargs))
+    await asyncio.wait_for(started.wait(), timeout=2)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not lock.locked()
+    assert previous_session.read_text() == "existing authorized session"
+    assert not list((store / ".pending-logins").glob("*.session"))
+
+
+@pytest.mark.asyncio
+async def test_qr_completion_promotes_only_authorized_pending_session(store):
+    service = login_qr.TelegramQrLoginMixin()
+    service.session_dir = store
+    old_session = store / "one.session"
+    old_session.write_text("old")
+    old_wal = store / "one.session-wal"
+    old_wal.write_text("stale")
+    pending = login_qr.new_pending_session_path(store, "one")
+    (pending.parent / f"{pending.name}.session").write_text("authorized")
+    lock = asyncio.Lock()
+    await lock.acquire()
+
+    class Client:
+        is_initialized = False
+        is_connected = True
+        storage = None
+
+        async def disconnect(self):
+            self.is_connected = False
+
+    login_id = "qr-promote-test"
+    login_qr._qr_login_sessions[login_id] = {
+        "account_name": "one", "client": Client(), "lock": lock,
+        "pending_path": pending,
+    }
+    await service._cleanup_qr_login(login_id, preserve_session=True)
+    assert old_session.read_text() == "authorized"
+    assert not old_wal.exists()
+    assert not lock.locked()
+    assert not (pending.parent / f"{pending.name}.session").exists()
+
+
+@pytest.mark.asyncio
+async def test_switching_from_code_to_qr_releases_pending_lock(store, monkeypatch):
+    lock = asyncio.Lock()
+    resend_calls = []
+    previous_session = store / "one.session"
+    previous_session.write_text("existing")
+
+    class LoginClient:
+        def __init__(self, **_kwargs):
+            self.is_connected = False
+            self.is_initialized = False
+
+        async def connect(self):
+            self.is_connected = True
+
+        async def disconnect(self):
+            self.is_connected = False
+
+        async def stop(self):
+            self.is_connected = False
+            self.is_initialized = False
+
+        async def send_code(self, _phone):
+            return SimpleNamespace(phone_code_hash="hash", type=SentCodeType.APP, next_type=SentCodeType.SMS, timeout=60)
+
+        async def resend_code(self, _phone, _hash):
+            resend_calls.append((_phone, _hash))
+            return SimpleNamespace(phone_code_hash="hash-2", type=SentCodeType.SMS, next_type=None, timeout=60)
+
+        async def sign_in(self, *_args):
+            from pyrogram.errors import PhoneCodeInvalid
+            raise PhoneCodeInvalid()
+
+        async def initialize(self):
+            self.is_initialized = True
+
+        async def invoke(self, _query):
+            return SimpleNamespace(token=b"new-qr", expires=int(time.time()) + 30)
+
+        def add_handler(self, _handler):
+            return None
+
+    class Service(login_phone.TelegramPhoneLoginMixin, login_qr.TelegramQrLoginMixin):
+        _normalize_account_name = staticmethod(lambda name: name)
+
+    service = Service()
+    service.session_dir = store
+    monkeypatch.setattr("pyrogram.Client", LoginClient)
+    monkeypatch.setattr("tg_manage.core.close_client_by_name", AsyncMock())
+    for module in (login_phone, login_qr):
+        monkeypatch.setattr(module, "get_account_lock", lambda _name: lock)
+        monkeypatch.setattr(module, "get_session_mode", lambda: "string")
+        monkeypatch.setattr(module, "get_global_semaphore", lambda: asyncio.Semaphore(1))
+        monkeypatch.setattr(module, "_cleanup_expired_login_sessions", AsyncMock())
+
+    await service.start_login("one", "+12345678900", api_id=12345, api_hash="a" * 32)
+    assert lock.locked()
+    with pytest.raises(ValueError, match="请等待"):
+        await service.resend_login("one", "+12345678900", "hash")
+    assert not resend_calls
+    login_phone._login_sessions["one_+12345678900"]["sent_at"] -= 61
+    resent = await service.resend_login("one", "+12345678900", "hash")
+    assert resend_calls == [("+12345678900", "hash")]
+    assert resent["delivery_type"] == "sms"
+    assert resent["phone_code_hash"] == "hash-2"
+    with pytest.raises(ValueError, match="未提供其他验证码送达方式"):
+        await service.resend_login("one", "+12345678900", "hash-2")
+    with pytest.raises(ValueError, match="验证码错误"):
+        await service.verify_login("one", "+12345678900", "wrong", "hash-2")
+    assert lock.locked() and login_phone._login_sessions
+    qr = await asyncio.wait_for(
+        service.start_qr_login("one", api_id=12345, api_hash="a" * 32), timeout=2,
+    )
+    assert not login_phone._login_sessions
+    assert lock.locked()
+    assert previous_session.read_text() == "existing"
+    await asyncio.wait_for(
+        service.start_login("one", "+12345678900", api_id=12345, api_hash="a" * 32),
+        timeout=2,
+    )
+    assert qr["login_id"] not in login_qr._qr_login_sessions
+    assert lock.locked()
+    assert await service.cancel_login("one", "+12345678900", "hash")
+    assert not lock.locked()
 
 
 @pytest.mark.asyncio

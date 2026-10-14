@@ -42,6 +42,9 @@ from backend.api.routes.accounts_schemas import (
     AccountUpdateResponse,
     DeleteAccountResponse,
     LoginBackupExportRequest,
+    LoginCancelRequest,
+    LoginCancelResponse,
+    LoginResendRequest,
     LoginStartRequest,
     LoginStartResponse,
     LoginVerifyRequest,
@@ -163,28 +166,35 @@ async def start_account_login(
     3. 返回 phone_code_hash 用于后续验证
     """
     try:
-        limit_key = _apply_rate_limit(
+        _apply_rate_limit(
             "accounts.login.start",
             http_request,
             "Too many account login code requests. Please try again later.",
             request.account_name,
-            request.phone_number,
             max_attempts=6,
             window_seconds=600,
             block_seconds=900,
         )
+        _apply_rate_limit(
+            "accounts.login.start.cooldown", http_request,
+            "Please wait before requesting another Telegram code.",
+            request.account_name,
+            max_attempts=1, window_seconds=60, block_seconds=60,
+        )
         api_id, api_hash = _login_api_credentials(request.api_id, request.api_hash)
-        result = await get_telegram_service().start_login(
+        result = await asyncio.wait_for(get_telegram_service().start_login(
             account_name=request.account_name,
             phone_number=request.phone_number,
             proxy=request.proxy,
             api_id=api_id,
             api_hash=api_hash,
-        )
-        rate_limiter.reset("accounts.login.start", limit_key)
-
+        ), timeout=45)
         return LoginStartResponse(**result)
 
+    except HTTPException:
+        raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Telegram 登录请求超时，请稍后重试") from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -193,6 +203,46 @@ async def start_account_login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="发送验证码失败，请稍后重试",
         )
+
+
+@router.post("/login/resend", response_model=LoginStartResponse)
+async def resend_account_login(
+    request: LoginResendRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Resend through Telegram's next_type after its timeout."""
+    _apply_rate_limit(
+        "accounts.login.start", http_request,
+        "Too many account login code requests. Please try again later.",
+        request.account_name,
+        max_attempts=6, window_seconds=600, block_seconds=900,
+    )
+    _apply_rate_limit(
+        "accounts.login.start.cooldown", http_request,
+        "Please wait before requesting another Telegram code.",
+        request.account_name,
+        max_attempts=1, window_seconds=60, block_seconds=60,
+    )
+    try:
+        result = await asyncio.wait_for(get_telegram_service().resend_login(
+            request.account_name, request.phone_number, request.phone_code_hash,
+        ), timeout=25)
+        return LoginStartResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.post("/login/cancel", response_model=LoginCancelResponse)
+async def cancel_account_login(
+    request: LoginCancelRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Release a pending code-login client without changing an authorized account."""
+    canceled = await get_telegram_service().cancel_login(
+        request.account_name, request.phone_number, request.phone_code_hash,
+    )
+    return LoginCancelResponse(canceled=canceled)
 
 
 @router.post("/login/verify", response_model=LoginVerifyResponse)
@@ -270,7 +320,7 @@ async def start_qr_login(
 ):
     """开始扫码登录流程"""
     try:
-        limit_key = _apply_rate_limit(
+        _apply_rate_limit(
             "accounts.qr.start",
             http_request,
             "Too many QR login requests. Please try again later.",
@@ -279,19 +329,27 @@ async def start_qr_login(
             window_seconds=600,
             block_seconds=900,
         )
+        _apply_rate_limit(
+            "accounts.qr.start.cooldown", http_request,
+            "Please wait before requesting another Telegram QR code.",
+            request.account_name,
+            max_attempts=1, window_seconds=30, block_seconds=30,
+        )
         api_id, api_hash = _login_api_credentials(request.api_id, request.api_hash)
-        result = await get_telegram_service().start_qr_login(
+        result = await asyncio.wait_for(get_telegram_service().start_qr_login(
             account_name=request.account_name, proxy=request.proxy,
             api_id=api_id, api_hash=api_hash,
-        )
-        rate_limiter.reset("accounts.qr.start", limit_key)
-
+        ), timeout=45)
         return QrLoginStartResponse(
             login_id=result["login_id"],
             qr_uri=result["qr_uri"],
             qr_image=qr_uri_to_data_url(result.get("qr_uri") or ""),
             expires_at=result["expires_at"],
         )
+    except HTTPException:
+        raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Telegram 二维码请求超时，请检查账户代理或网络") from None
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
