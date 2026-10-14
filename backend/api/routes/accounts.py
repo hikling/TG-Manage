@@ -116,7 +116,9 @@ async def import_account_login_backup(
     )
     try:
         blob = await file.read(MAX_BACKUP_BYTES + 1)
-        return import_login_backup(blob, password, service=get_telegram_service())
+        return await asyncio.to_thread(
+            import_login_backup, blob, password, service=get_telegram_service()
+        )
     except LoginBackupError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     finally:

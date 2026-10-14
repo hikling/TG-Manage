@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import struct
 from pathlib import Path
 
 import pytest
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from backend.core.config import Settings
 from backend.services.account_login_backup import (
+    MAGIC,
     LoginBackupError,
+    _key,
     _new_session_file,
     export_login_backup,
     import_login_backup,
@@ -107,3 +111,24 @@ def test_corrupt_encrypted_backup_does_not_create_accounts(tmp_path: Path, monke
     with pytest.raises(LoginBackupError):
         import_login_backup(b"TGLOGIN1" + b"x" * 80, "correct horse battery", service=service)
     assert not list(tmp_path.glob("*.session"))
+
+
+def test_import_validates_every_account_before_restoring_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("TG_SESSION_MODE", "file")
+    settings = Settings(data_dir=tmp_path, session_dir=tmp_path, secret_key="test-secret")
+    monkeypatch.setattr(tg_session, "get_settings", lambda: settings)
+    session, _ = _session()
+    document = {"version": 1, "accounts": [
+        {"name": "valid", "api_id": API_ID, "api_hash": API_HASH, "session": session},
+        {"name": "../escape", "api_id": API_ID, "api_hash": API_HASH, "session": session},
+    ]}
+    salt, nonce = bytes(range(16)), bytes(range(12))
+    ciphertext = AESGCM(_key(b"correct horse battery", salt)).encrypt(
+        nonce, json.dumps(document).encode("utf-8"), MAGIC,
+    )
+    with pytest.raises(LoginBackupError):
+        import_login_backup(MAGIC + salt + nonce + ciphertext, "correct horse battery", service=FakeService(tmp_path))
+    assert not list(tmp_path.glob("*.session"))
+    assert not (tmp_path / "accounts.json").exists()
