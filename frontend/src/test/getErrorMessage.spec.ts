@@ -124,7 +124,6 @@ describe('getErrorMessage', () => {
   })
 
   it('映射新增 WEBDAV / BACKUP / AI 解密错误码', () => {
-    expect(getErrorMessage(new Error('WEBDAV_NOT_CONFIGURED'))).toBe('WebDAV is not configured')
     expect(getErrorMessage(new Error('BACKUP_EMPTY'))).toBe('Nothing to back up')
     expect(getErrorMessage(new Error('AI_KEY_DECRYPT_FAILED'))).toContain('APP_SECRET_KEY')
   })

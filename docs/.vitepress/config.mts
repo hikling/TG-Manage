@@ -153,7 +153,7 @@ export default defineConfig({
           { text: "历史任务数据", link: "/guide/tasks" },
           { text: "旧 AI 任务迁移", link: "/guide/ai" },
           { text: "旧关键词监听迁移", link: "/guide/keyword-monitor" },
-          { text: "WebDAV 备份与恢复", link: "/guide/backup-webdav" },
+          { text: "账户登录备份与恢复", link: "/guide/account-login-backup" },
         ],
       },
       {

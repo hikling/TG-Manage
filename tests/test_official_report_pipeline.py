@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -139,7 +141,7 @@ async def test_complete_pipeline_preserves_source_bytes_and_rejects_partial_medi
         report, "TemporaryDirectory",
         lambda **kwargs: temporary_directory(dir=tmp_path, **kwargs),
     )
-    texts, uploads, responses = [], [], []
+    texts, text_payloads, uploads, responses = [], [], [], []
 
     async def receive(request):
         # The actual HTTPX multipart sender must run after Telegram ownership exits.
@@ -151,6 +153,7 @@ async def test_complete_pipeline_preserves_source_bytes_and_rejects_partial_medi
             content = json.loads(body)
             assert content["chat_id"] == "42" and content["message_thread_id"] == 7
             texts.append(content["text"])
+            text_payloads.append(content)
         else:
             message = BytesParser(policy=policy.default).parsebytes(
                 b"Content-Type: " + request.headers["content-type"].encode()
@@ -188,8 +191,19 @@ async def test_complete_pipeline_preserves_source_bytes_and_rejects_partial_medi
     assert not any(value in rendered for value in ("OLD-NOTICE", "OUTGOING-NOTICE", "NEXT-WINDOW-NOTICE"))
     assert "账户：quiet" in next(text for text in texts if "账户正常" in text)
     assert not any("账户：alpha" in text and "账户正常" in text for text in texts)
+    assert all(
+        item.get("parse_mode") == "HTML"
+        for item in text_payloads if "<blockquote>" in item["text"]
+    )
     for label, original in (("文字", full_text), ("原始说明", full_caption)):
-        chunks = [text.split("\n\n", 1)[1] for text in texts if "#103\n" in text and f"{label} · 分段" in text]
+        chunks = []
+        for text in texts:
+            if "#103</b>" not in text:
+                continue
+            chunks.extend(html.unescape(part) for part in re.findall(
+                rf"<b>{label} · 分段 \d+/\d+</b>\n<blockquote>(.*?)</blockquote>",
+                text, re.DOTALL,
+            ))
         assert "".join(chunks) == original
     assert uploads[0][0] == "sendPhoto" and uploads[0][2] == payloads["photo"]
     assert uploads[1][0] == "sendVideo" and uploads[1][2] == payloads["video"]

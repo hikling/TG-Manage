@@ -23,18 +23,10 @@ const api = vi.hoisted(() => ({
   getGlobalSettings: vi.fn(),
   getRuntimeStatus: vi.fn(),
   getMemoryStats: vi.fn(),
-  // save/backup/version deps used via nested composables
+  // save/version dependencies used via nested composables
   saveGlobalSettings: vi.fn(),
   runDeviceKeepalive: vi.fn(),
   testBotNotification: vi.fn(),
-  getBackupStatus: vi.fn(),
-  exportAllConfigs: vi.fn(),
-  importAllConfigs: vi.fn(),
-  importConfigPreview: vi.fn(),
-  exportBackupArchive: vi.fn(),
-  testWebdavBackup: vi.fn(),
-  listWebdavBackupFiles: vi.fn(),
-  downloadWebdavBackup: vi.fn(),
   getAppVersion: vi.fn(),
   checkAppVersion: vi.fn(),
 }))
@@ -78,13 +70,9 @@ describe('useSettingsPage (mount + dirty)', () => {
     api.getGlobalSettings.mockResolvedValue({
       log_retention_days: 14,
       telegram_bot_token_set: true,
-      webdav_password_set: true,
-      webdav_url: 'https://dav.example.com',
-      webdav_username: 'u',
       timezone: 'UTC',
       telegram_bot_message_thread_id: 9,
     })
-    api.getBackupStatus.mockResolvedValue({ last: 'ok' })
     api.getRuntimeStatus.mockResolvedValue({ uptime: 1 })
     api.getMemoryStats.mockResolvedValue({ rss: 1 })
     api.getAppVersion.mockResolvedValue({
@@ -105,10 +93,8 @@ describe('useSettingsPage (mount + dirty)', () => {
     expect(result.settings.value.timezone).toBe('UTC')
     expect(result.settings.value.botThreadId).toBe('9')
     expect(result.botTokenSet.value).toBe(true)
-    expect(result.webdavPasswordSet.value).toBe(true)
     expect(result.runtimeStatus.value).toEqual({ uptime: 1 })
     expect(result.memoryStats.value).toEqual({ rss: 1 })
-    expect(result.backupStatus.value).toEqual({ last: 'ok' })
     expect(result.isDirty.value).toBe(false)
     expect(result.appVersion.value?.version).toBe('1.0.0')
     unmount()
@@ -123,27 +109,15 @@ describe('useSettingsPage (mount + dirty)', () => {
     unmount()
   })
 
-  it('starts independent runtime metadata loads without waiting for backup status', async () => {
-    let releaseBackup!: (value: unknown) => void
-    api.getBackupStatus.mockImplementationOnce(
-      () => new Promise((resolve) => {
-        releaseBackup = resolve
-      }),
-    )
-
+  it('loads runtime metadata independently', async () => {
     const { result, unmount } = mountComposable(() => useSettingsPage())
-    try {
-      await flushPromises(10)
-      expect(api.getRuntimeStatus).toHaveBeenCalledWith('tok')
-      expect(api.getMemoryStats).toHaveBeenCalledWith('tok')
-      expect(api.getAppVersion).toHaveBeenCalledWith('tok')
-    } finally {
-      releaseBackup({ last: 'parallel' })
-      await flushPromises(10)
-      unmount()
-    }
+    await flushPromises(10)
+    expect(api.getRuntimeStatus).toHaveBeenCalledWith('tok')
+    expect(api.getMemoryStats).toHaveBeenCalledWith('tok')
+    expect(api.getAppVersion).toHaveBeenCalledWith('tok')
     expect(result.runtimeStatus.value).toEqual({ uptime: 1 })
     expect(result.memoryStats.value).toEqual({ rss: 1 })
+    unmount()
   })
 
   it('isDirty tracks field edits and dirtyLabels', async () => {

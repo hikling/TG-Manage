@@ -50,8 +50,8 @@ const DOC_PAGES = [
     changefreq: "monthly",
   },
   {
-    route: "/guide/backup-webdav",
-    file: "guide/backup-webdav.md",
+    route: "/guide/account-login-backup",
+    file: "guide/account-login-backup.md",
     priority: "0.7",
     changefreq: "monthly",
   },

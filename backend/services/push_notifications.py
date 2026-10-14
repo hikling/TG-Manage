@@ -418,47 +418,6 @@ async def send_login_notification(
     )
 
 
-async def send_auto_backup_failure_notification(
-    settings: Dict[str, Any],
-    *,
-    error: str,
-    detail: str = "",
-) -> None:
-    """自动备份失败时的 Bot 通知（打包失败或 WebDAV 上传失败）。
-
-    仅依赖通知总开关 + 已配置 Token/Chat。静默时段仍跳过。
-    """
-    if not settings.get("telegram_bot_notify_enabled"):
-        return
-    if is_in_quiet_hours(settings):
-        return
-
-    bot_token, chat_id, thread_id = _bot_config(settings)
-    if not bot_token or not chat_id:
-        return
-
-    fields = [
-        ("时间 (UTC)", utc_now_iso_z_seconds()),
-        ("原因", str(error)[:800]),
-    ]
-    if detail:
-        fields.append(("详情", str(detail)[:500]))
-    text = build_html_notification(
-        title="🗄️ TG Manage 自动备份失败",
-        fields=fields,
-    )
-    try:
-        await send_telegram_bot_message(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text=text,
-            message_thread_id=thread_id,
-            parse_mode="HTML",
-        )
-    except Exception as exc:
-        logger.warning("自动备份失败通知发送失败（%s）", type(exc).__name__)
-
-
 async def send_wecom_message(webhook_url: str, title: str, text: str) -> None:
     """发送企业微信群机器人 Webhook 通知。"""
     if not webhook_url or not webhook_url.strip():

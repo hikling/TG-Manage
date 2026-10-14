@@ -26,7 +26,6 @@ def scheduler_env(monkeypatch):
         "backend.services.config.get_config_service",
         lambda: SimpleNamespace(get_global_settings=lambda: dict(config)),
     )
-    monkeypatch.setattr(scheduling, "_sync_auto_backup_job", Mock())
     monkeypatch.setattr(instance_lock, "try_acquire_scheduler_lock", Mock(return_value=True))
     monkeypatch.setattr(instance_lock, "has_scheduler_lock", Mock(return_value=True))
     monkeypatch.setattr(instance_lock, "release_scheduler_lock", Mock())

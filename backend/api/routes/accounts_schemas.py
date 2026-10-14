@@ -16,6 +16,10 @@ class LoginStartRequest(BaseModel):
     proxy: Optional[str] = None
 
 
+class LoginBackupExportRequest(BaseModel):
+    password: str
+
+
 class LoginStartResponse(BaseModel):
     """开始登录响应"""
 

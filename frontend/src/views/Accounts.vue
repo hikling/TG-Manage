@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight } from 'lucide-vue-next'
+import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight, HardDriveDownload } from 'lucide-vue-next'
 import {
   deleteAccount,
   fetchAccountAvatar,
@@ -21,6 +21,7 @@ import EditAccountModal from '../components/accounts/EditAccountModal.vue'
 import AccountProxyStatus from '../components/accounts/AccountProxyStatus.vue'
 import DeviceManagerModal from '../components/accounts/DeviceManagerModal.vue'
 import OfficialMessagesModal from '../components/accounts/OfficialMessagesModal.vue'
+import LoginBackupModal from '../components/accounts/LoginBackupModal.vue'
 import PageRetry from '../components/PageRetry.vue'
 import FilterEmptyState from '../components/FilterEmptyState.vue'
 import { devLog } from '../lib/devLog'
@@ -66,6 +67,7 @@ const editingAccount = ref<AccountUiItem | null>(null)
 const showDeviceModal = ref(false)
 const deviceAccountName = ref('')
 const showOfficialMessagesModal = ref(false)
+const showLoginBackupModal = ref(false)
 const officialMessagesAccountName = ref('')
 const searchQuery = ref('')
 const loadError = ref(false)
@@ -475,6 +477,9 @@ const goLogs = (name: string) => {
         <button type="button" class="ui-btn-secondary !text-xs !px-3 !py-2" @click="openAddModal('qr')">
           <QrCode class="w-3.5 h-3.5" /> {{ t('accounts.qrLogin') }}
         </button>
+        <button type="button" class="ui-btn-secondary !text-xs !px-3 !py-2" @click="showLoginBackupModal = true">
+          <HardDriveDownload class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupImport') }}
+        </button>
       </div>
     </div>
 
@@ -506,6 +511,9 @@ const goLogs = (name: string) => {
           </button>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <button type="button" class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1" @click="showLoginBackupModal = true">
+            <HardDriveDownload class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupTitle') }}
+          </button>
           <div
             v-if="batchChecking && batchJob"
             class="flex flex-col items-end gap-0.5 min-w-0 sm:min-w-[7rem]"
@@ -651,5 +659,6 @@ const goLogs = (name: string) => {
     <EditAccountModal v-if="editingAccount" :isOpen="showEditModal" :account="editingAccount" @close="showEditModal = false" @success="loadAccounts" @relogin="handleRelogin" />
     <DeviceManagerModal :isOpen="showDeviceModal" :accountName="deviceAccountName" @close="showDeviceModal = false" />
     <OfficialMessagesModal :isOpen="showOfficialMessagesModal" :accountName="officialMessagesAccountName" @close="showOfficialMessagesModal = false" />
+    <LoginBackupModal :isOpen="showLoginBackupModal" :initialMode="accounts.length ? 'export' : 'import'" @close="showLoginBackupModal = false" @restored="loadAccounts" />
   </div>
 </template>

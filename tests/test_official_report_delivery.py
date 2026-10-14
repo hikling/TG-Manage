@@ -110,6 +110,23 @@ async def test_text_is_plain_complete_and_response_closed(monkeypatch, text):
 
 
 @pytest.mark.asyncio
+async def test_html_report_text_sets_parse_mode_without_changing_content(monkeypatch):
+    client = install_client(monkeypatch, Client())
+    text = "账户：A\n\n<b>Telegram 官方消息 #1</b>\n<blockquote>&lt;raw&gt;</blockquote>"
+    await delivery.OfficialReportDelivery(TARGET).send_text(text, parse_mode="HTML")
+    assert client.calls[0][1]["json"]["text"] == text
+    assert client.calls[0][1]["json"]["parse_mode"] == "HTML"
+
+
+@pytest.mark.asyncio
+async def test_unknown_text_parse_mode_rejected_before_send(monkeypatch):
+    client = install_client(monkeypatch, Client())
+    with pytest.raises(delivery.OfficialReportDeliveryError):
+        await delivery.OfficialReportDelivery(TARGET).send_text("notice", parse_mode="MarkdownV2")
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["", "a" * 4097, "😀" * 2049, "a" * 4095 + "😀", None])
 async def test_oversize_and_empty_text_rejected_before_send(monkeypatch, text):
     client = install_client(monkeypatch, Client())

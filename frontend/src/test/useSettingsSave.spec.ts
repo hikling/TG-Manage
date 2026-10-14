@@ -42,19 +42,13 @@ describe('useSettingsSave', () => {
   function setup() {
     const markSectionClean = vi.fn()
     const afterBotTokenSaved = vi.fn()
-    const afterWebdavSettingsSaved = vi.fn()
-    const loadBackupStatus = vi.fn(async () => {})
     const save = useSettingsSave({
       buildGeneralPayload: () => ({ general: 1 }),
       buildBotPayload: () => ({ bot: 1 }),
-      buildAdvancedPayload: () => ({ adv: 1 }),
-      buildBackupPayload: () => ({ backup: 1 }),
       markSectionClean,
       afterBotTokenSaved,
-      afterWebdavSettingsSaved,
-      loadBackupStatus,
     })
-    return { save, markSectionClean, afterBotTokenSaved, afterWebdavSettingsSaved, loadBackupStatus }
+    return { save, markSectionClean, afterBotTokenSaved }
   }
 
   it('saveSettings no-ops without token', async () => {
@@ -89,22 +83,13 @@ describe('useSettingsSave', () => {
     expect(markSectionClean).toHaveBeenCalledWith('bot')
   })
 
-  it('saveAdvancedSettings reloads backup status', async () => {
-    api.saveGlobalSettings.mockResolvedValue({})
-    const { save, loadBackupStatus, afterWebdavSettingsSaved } = setup()
-    await save.saveAdvancedSettings()
-    expect(afterWebdavSettingsSaved).toHaveBeenCalled()
-    expect(loadBackupStatus).toHaveBeenCalledWith('tok')
-  })
-
   it('saveAllSettings saves only supported global sections', async () => {
     api.saveGlobalSettings.mockResolvedValue({})
     const { save, markSectionClean } = setup()
     await save.saveAllSettings()
-    expect(api.saveGlobalSettings).toHaveBeenCalledWith('tok', { general: 1, bot: 1, adv: 1 })
+    expect(api.saveGlobalSettings).toHaveBeenCalledWith('tok', { general: 1, bot: 1 })
     expect(markSectionClean).toHaveBeenCalledWith('general')
     expect(markSectionClean).toHaveBeenCalledWith('bot')
-    expect(markSectionClean).toHaveBeenCalledWith('advanced')
   })
 
   it('testBot routes success/failure messages', async () => {

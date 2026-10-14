@@ -1,9 +1,8 @@
 """
 配置管理服务
-提供任务配置的导入导出功能
+管理全局设置。
 
-领域实现按配置主题拆分在 config_mixins.py：签到任务/导出导入与
-全局设置；本文件保留共享基础（JSON 读写、路径解析、单例）。
+领域实现在 config_mixins.py；本文件保留共享基础（JSON 读写、路径解析、单例）。
 """
 
 from __future__ import annotations
@@ -14,15 +13,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from backend.core.config import get_settings
-from backend.services.config_mixins import (
-    ConfigExportMixin,
-    GlobalSettingsMixin,
-)
+from backend.services.config_mixins import GlobalSettingsMixin
 from backend.utils.atomic_io import read_json_safe, write_json_atomic
 
 
 class ConfigService(
-    ConfigExportMixin,
     GlobalSettingsMixin,
 ):
     """配置管理服务类"""

@@ -9,7 +9,17 @@ import asyncio
 import contextlib
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 
 from backend.api.routes.accounts_helpers import (
     build_status_check_error_item,
@@ -31,6 +41,7 @@ from backend.api.routes.accounts_schemas import (
     AccountUpdateRequest,
     AccountUpdateResponse,
     DeleteAccountResponse,
+    LoginBackupExportRequest,
     LoginStartRequest,
     LoginStartResponse,
     LoginVerifyRequest,
@@ -50,6 +61,12 @@ from backend.core.auth import get_current_user
 from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
 from backend.models.user import User
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
+from backend.services.account_login_backup import (
+    MAX_BACKUP_BYTES,
+    LoginBackupError,
+    export_login_backup,
+    import_login_backup,
+)
 from backend.services.telegram import get_telegram_service
 from backend.services.telegram.credentials import resolve_login_api_credentials
 from backend.utils.names import validate_storage_name
@@ -57,6 +74,55 @@ from backend.utils.names import validate_storage_name
 router = APIRouter()
 logger = logging.getLogger("backend.accounts_api")
 rate_limiter = get_rate_limiter()
+
+
+@router.post("/login-backup/export")
+def export_account_login_backup(
+    payload: LoginBackupExportRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    _apply_rate_limit(
+        "accounts.login_backup.export", http_request,
+        "Too many backup exports. Please try again later.",
+        max_attempts=8, window_seconds=600, block_seconds=900,
+    )
+    try:
+        blob, count = export_login_backup(payload.password, service=get_telegram_service())
+    except LoginBackupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    return Response(
+        content=blob,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename="telegram-login-backup.tglogin"',
+            "Cache-Control": "no-store",
+            "X-Accounts-Exported": str(count),
+        },
+    )
+
+
+@router.post("/login-backup/import")
+async def import_account_login_backup(
+    http_request: Request,
+    password: str = Form(...),
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    _apply_rate_limit(
+        "accounts.login_backup.import", http_request,
+        "Too many backup import attempts. Please try again later.",
+        max_attempts=8, window_seconds=600, block_seconds=900,
+    )
+    try:
+        blob = await file.read(MAX_BACKUP_BYTES + 1)
+        return await asyncio.to_thread(
+            import_login_backup, blob, password, service=get_telegram_service()
+        )
+    except LoginBackupError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+    finally:
+        await file.close()
 
 
 def _login_api_credentials(api_id: int | None, api_hash: str | None) -> tuple[int, str]:

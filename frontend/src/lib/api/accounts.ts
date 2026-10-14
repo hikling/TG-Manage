@@ -1,7 +1,7 @@
 /**
  * 账号管理 API：登录流程、CRUD、状态检测、设备、官方消息、账号日志。
  */
-import { MEDIUM_TIMEOUT_MS, request, requestBlob } from "./core";
+import { LONG_TIMEOUT_MS, MEDIUM_TIMEOUT_MS, fetchWithAuth, request, requestBlob } from "./core";
 
 export interface LoginStartRequest {
   account_name: string;
@@ -146,6 +146,38 @@ export interface OfficialMessageInfo {
   date?: string | null;
   text: string;
   outgoing: boolean;
+}
+
+export interface LoginBackupImportResult {
+  restored: number;
+  skipped: number;
+}
+
+/** Only authorized account sessions and the API credentials needed to reuse them. */
+export const exportAccountLoginBackup = (token: string, password: string) =>
+  requestBlob("/accounts/login-backup/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  }, token, LONG_TIMEOUT_MS);
+
+/** Let the browser set multipart/form-data's boundary. */
+export async function importAccountLoginBackup(
+  token: string,
+  file: File,
+  password: string,
+): Promise<LoginBackupImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("password", password);
+  const response = await fetchWithAuth(
+    "/accounts/login-backup/import",
+    {},
+    { method: "POST", body: form },
+    token,
+    LONG_TIMEOUT_MS,
+  );
+  return response.json() as Promise<LoginBackupImportResult>;
 }
 
 export const startAccountLogin = (token: string, data: LoginStartRequest) =>

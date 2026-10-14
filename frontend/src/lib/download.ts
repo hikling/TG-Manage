@@ -3,7 +3,7 @@
  *
  * - downloadBlob：收敛「createObjectURL + a.click + revokeObjectURL」样板。
  * - normalizeNetworkError：收敛「NETWORK_* 重抛 + AbortError 归一化」样板，
- *   供长请求（备份下载/WebDAV 下载）的 catch 分支复用。
+ *   供长请求（账户登录备份下载等）的 catch 分支复用。
  */
 import { toNetworkError } from "./api/core";
 import type { ApiError } from "./types";
