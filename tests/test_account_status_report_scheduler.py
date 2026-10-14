@@ -223,7 +223,7 @@ async def test_midnight_run_can_finish_after_the_start_window(
 ):
     entered, finish = asyncio.Event(), asyncio.Event()
 
-    async def report_run():
+    async def report_run(**_kwargs):
         entered.set()
         await finish.wait()
         return {"checked": 1}
@@ -279,6 +279,28 @@ async def test_job_invokes_report_and_contains_sanitized_failures(
     assert "SECRET" not in caplog.text
 
 
+@pytest.mark.asyncio
+async def test_midnight_sends_one_combined_summary_after_official_scan(
+    scheduler_env, scheduler_clock, monkeypatch, official_run,
+):
+    rows = [{"account_name": "quiet", "ok": True, "proxy_status": "healthy"}]
+    status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
+    send_combined = AsyncMock(return_value=1)
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status_run),
+    )
+    monkeypatch.setattr("backend.services.account_status_report._send_report", send_combined)
+    official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
+
+    await scheduling._job_account_status_report()
+
+    status_run.assert_awaited_once_with(send_report=False)
+    assert official_run.await_args.kwargs["send_normal_summary"] is False
+    assert official_run.await_args.kwargs["account_names"] == ["quiet"]
+    send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
+
+
 def test_sync_report_before_scheduler_exists_is_noop(monkeypatch):
     monkeypatch.setattr(scheduling, "scheduler", None)
     scheduling._sync_account_status_report_job()
@@ -326,7 +348,7 @@ async def test_whole_workflow_single_flight_survives_timezone_sync(
 ):
     entered, finish = asyncio.Event(), asyncio.Event()
 
-    async def blocked():
+    async def blocked(**_kwargs):
         entered.set()
         await finish.wait()
         return {}

@@ -118,6 +118,25 @@ async def test_two_notices_share_one_formatted_message_with_complete_quoted_bodi
 
 
 @pytest.mark.asyncio
+async def test_combined_midnight_mode_only_sends_accounts_with_official_messages(report_env):
+    env = report_env
+    env.service.list_accounts.return_value = [{"name": "late-account"}]
+    env.page.side_effect = [[], [message(42)], []]
+
+    outcome = await report.OfficialMessageReportService().run(
+        start=START, end=END, timezone="Asia/Shanghai", send_normal_summary=False,
+        account_names=["quiet", "notice"],
+    )
+
+    assert outcome["account_status"] == {"quiet": "empty", "notice": "messages"}
+    assert outcome["empty"] == 1
+    assert len(env.texts) == 1
+    assert "账户：notice" in env.texts[0] and "账户：quiet" not in env.texts[0]
+    assert "🟢" not in env.texts[0] and "🔴" not in env.texts[0]
+    env.service.list_accounts.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_250_messages_include_short_middle_pages_and_exactly_once_overlap(report_env):
     env = report_env
     rows = [message(identifier, text=f"body-{identifier}") for identifier in range(250, 0, -1)]

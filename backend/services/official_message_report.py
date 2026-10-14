@@ -232,11 +232,14 @@ class OfficialMessageReportService:
 
     async def run(
         self, *, start: datetime, end: datetime, timezone: str | tzinfo,
+        send_normal_summary: bool = True,
+        account_names: list[str] | None = None,
     ) -> dict[str, Any]:
         target = current_report_target()
         result = {
             "accounts": 0, "messages": 0, "empty": 0, "failed": 0,
             "messages_sent": 0, "stopped": False,
+            "account_status": {},
         }
         # Disabled notifications must not cause official-history or media work.
         if target is None or self._running_lock.locked():
@@ -252,10 +255,11 @@ class OfficialMessageReportService:
             try:
                 _require_current(delivery)
                 service = get_telegram_service()
+                inventory = (account_names if account_names is not None else (
+                    account.get("name") for account in service.list_accounts(force_refresh=True)
+                ))
                 names = dict.fromkeys(
-                    str(account.get("name") or "").strip()
-                    for account in service.list_accounts(force_refresh=True)
-                    if str(account.get("name") or "").strip()
+                    name for item in inventory if (name := str(item or "").strip())
                 )
                 normal_names: list[str] = []
                 for name in names:
@@ -265,9 +269,15 @@ class OfficialMessageReportService:
                         service, delivery, name, start, end, display_timezone, result,
                     )
                     result["failed"] += int(failed)
+                    result["account_status"][name] = (
+                        "failed" if failed else "messages" if count else "empty"
+                    )
                     if not failed and count == 0:
                         normal_names.append(name)
-                await self._send_normal_summary(delivery, normal_names, result)
+                if send_normal_summary:
+                    await self._send_normal_summary(delivery, normal_names, result)
+                else:
+                    result["empty"] = len(normal_names)
             except OfficialReportStopped:
                 result["stopped"] = True
             return result

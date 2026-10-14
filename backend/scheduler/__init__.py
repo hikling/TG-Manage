@@ -104,13 +104,16 @@ async def _job_account_status_report() -> None:
     start = end - timedelta(hours=24)
     _midnight_workflow_running = True
     try:
+        status_rows = None
+        official_status = None
         try:
             from backend.services.account_status_report import (
                 get_account_status_report_service,
             )
 
-            result = await get_account_status_report_service().run()
-            logger.info("Midnight account status report finished: %s", result)
+            result = await get_account_status_report_service().run(send_report=False)
+            status_rows = result.get("rows")
+            logger.info("Midnight account status check finished: checked=%s", result.get("checked"))
         except Exception as exc:
             logger.error("零点账户状态日报失败（%s）", type(exc).__name__)
         try:
@@ -119,11 +122,20 @@ async def _job_account_status_report() -> None:
             )
 
             result = await get_official_message_report_service().run(
-                start=start, end=end, timezone=now.tzinfo,
+                start=start, end=end, timezone=now.tzinfo, send_normal_summary=False,
+                account_names=[row["account_name"] for row in status_rows] if status_rows is not None else None,
             )
-            logger.info("Midnight official message report finished: %s", result)
+            official_status = result.get("account_status")
+            logger.info("Midnight official message check finished: accounts=%s", result.get("accounts"))
         except Exception as exc:
             logger.error("零点官方消息日报失败（%s）", type(exc).__name__)
+        if status_rows is not None:
+            try:
+                from backend.services.account_status_report import _send_report
+
+                await _send_report(status_rows, official_status or {})
+            except Exception as exc:
+                logger.error("零点合并日报发送失败（%s）", type(exc).__name__)
     finally:
         _midnight_workflow_running = False
 

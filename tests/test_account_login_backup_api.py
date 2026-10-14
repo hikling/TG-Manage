@@ -7,18 +7,26 @@ from tests.test_api import _auth, _login, api_client, db  # noqa: F401
 
 
 def test_login_backup_export_requires_auth_and_returns_attachment(api_client, db) -> None:  # noqa: F811
-    anonymous = api_client.post("/api/accounts/login-backup/export", json={"password": "correct horse battery"})
+    payload = {"password": "correct horse battery", "allow_force_stop_container": True, "allow_restore_server": True}
+    anonymous = api_client.post("/api/accounts/login-backup/export", json=payload)
     assert anonymous.status_code == 401
     token = _login(api_client)
     with patch("backend.api.routes.accounts.export_login_backup", return_value=(b"TGLOGIN1encrypted", 2)):
         response = api_client.post(
             "/api/accounts/login-backup/export",
-            json={"password": "correct horse battery"}, headers=_auth(token),
+            json=payload, headers=_auth(token),
         )
     assert response.status_code == 200
     assert response.content == b"TGLOGIN1encrypted"
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-accounts-exported"] == "2"
+
+    for field in ("allow_force_stop_container", "allow_restore_server"):
+        denied = api_client.post(
+            "/api/accounts/login-backup/export",
+            json={**payload, field: False}, headers=_auth(token),
+        )
+        assert denied.status_code == 422
 
 
 def test_login_backup_import_reads_file_and_returns_counts(api_client, db) -> None:  # noqa: F811

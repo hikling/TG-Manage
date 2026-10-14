@@ -16,6 +16,8 @@ const toast = useToast()
 const mode = ref<'export' | 'import'>('export')
 const password = ref('')
 const confirmation = ref('')
+const allowForceStopContainer = ref(false)
+const allowRestoreServer = ref(false)
 const file = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
@@ -33,6 +35,8 @@ const errorText = computed(() => localErrorKey.value
 function clearSensitiveFields() {
   password.value = ''
   confirmation.value = ''
+  allowForceStopContainer.value = false
+  allowRestoreServer.value = false
   file.value = null
   if (fileInput.value) fileInput.value.value = ''
   error.value = null
@@ -75,6 +79,10 @@ async function submit() {
     localErrorKey.value = 'accounts.loginBackupPasswordMismatch'
     return
   }
+  if (mode.value === 'export' && (!allowForceStopContainer.value || !allowRestoreServer.value)) {
+    localErrorKey.value = 'accounts.loginBackupAuthorizationRequired'
+    return
+  }
   if (mode.value === 'import' && !file.value) {
     localErrorKey.value = 'accounts.loginBackupFileRequired'
     return
@@ -85,7 +93,7 @@ async function submit() {
   localErrorKey.value = ''
   try {
     if (mode.value === 'export') {
-      const blob = await exportAccountLoginBackup(token, password.value)
+      const blob = await exportAccountLoginBackup(token, password.value, allowForceStopContainer.value, allowRestoreServer.value)
       downloadBlob(blob, backupFilename())
       toast.success(t('accounts.loginBackupExportSuccess'))
       clearSensitiveFields()
@@ -147,6 +155,11 @@ watch(() => props.isOpen, open => {
         <div v-if="mode === 'export'">
           <label for="account-login-backup-confirmation" class="block text-xs font-medium mb-1.5">{{ t('accounts.loginBackupConfirmPassword') }}</label>
           <input id="account-login-backup-confirmation" v-model="confirmation" type="password" autocomplete="new-password" minlength="12" required class="ui-input" :disabled="busy">
+        </div>
+        <div v-if="mode === 'export'" class="space-y-2 text-xs leading-relaxed">
+          <label class="flex items-start gap-2"><input id="account-login-backup-allow-stop" v-model="allowForceStopContainer" type="checkbox" class="mt-0.5" :disabled="busy"><span>{{ t('accounts.loginBackupAllowStop') }}</span></label>
+          <label class="flex items-start gap-2"><input id="account-login-backup-allow-restore" v-model="allowRestoreServer" type="checkbox" class="mt-0.5" :disabled="busy"><span>{{ t('accounts.loginBackupAllowRestore') }}</span></label>
+          <p class="text-gray-500 dark:text-gray-400">{{ t('accounts.loginBackupAuthorizationHint') }}</p>
         </div>
         <div v-if="errorText" class="ui-alert-error" role="alert">{{ errorText }}</div>
         <div class="flex justify-end gap-2 pt-1">

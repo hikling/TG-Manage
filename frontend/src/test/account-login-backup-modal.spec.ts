@@ -74,6 +74,27 @@ describe('account login backup modal', () => {
     wrapper.unmount()
   })
 
+  it('requires both explicit permissions without operating a container', async () => {
+    mocks.exportBackup.mockResolvedValue(new Blob(['encrypted']))
+    const wrapper = await openModal()
+    setValue(field('account-login-backup-password'), 'long backup passphrase')
+    setValue(field('account-login-backup-confirmation'), 'long backup passphrase')
+    submit()
+    await flushPromises()
+    expect(mocks.exportBackup).not.toHaveBeenCalled()
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('两项')
+
+    for (const id of ['account-login-backup-allow-stop', 'account-login-backup-allow-restore']) {
+      const checkbox = field(id)
+      checkbox.checked = true
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    submit()
+    await flushPromises()
+    expect(mocks.exportBackup).toHaveBeenCalledWith('token', 'long backup passphrase', true, true)
+    wrapper.unmount()
+  })
+
   it('imports the chosen file and reports restored and skipped accounts', async () => {
     mocks.importBackup.mockResolvedValue({ restored: 2, skipped: 1 })
     const wrapper = await openModal('import')

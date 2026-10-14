@@ -79,7 +79,7 @@ async def test_report_failure_then_recovery_updates_saved_account_projection(
 
     assert service.list_accounts()[0]["status"] == "connected"
     assert await runner.run() == {"checked": 1, "ok": 0, "fail": 1, "messages_sent": 1}
-    assert f"🔴 alpha — 异常（{report_reason}）" in send.await_args.kwargs["text"]
+    assert f"🔴 alpha — 账户异常（{report_reason}）" in send.await_args.kwargs["text"]
     # The inventory itself was cached before the probe. Reads must overlay the
     # newly persisted outcome, rather than expose its old connected status.
     assert service._accounts_cache[0]["status"] == "connected"
@@ -99,7 +99,7 @@ async def test_report_failure_then_recovery_updates_saved_account_projection(
 
     client.failure = None
     assert await runner.run() == {"checked": 1, "ok": 1, "fail": 0, "messages_sent": 1}
-    assert "🟢 @alpha_user — 正常" in send.await_args.kwargs["text"]
+    assert "🟢 @alpha_user — 账户正常" in send.await_args.kwargs["text"]
     recovered = service.list_accounts()[0]
     saved = json.loads((tmp_path / "accounts.json").read_text(encoding="utf-8"))["accounts"]["alpha"]
     assert recovered["status"] == saved["status"] == "connected"

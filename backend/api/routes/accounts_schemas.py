@@ -1,7 +1,7 @@
 """账号 API 请求/响应模型。"""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
@@ -18,6 +18,8 @@ class LoginStartRequest(BaseModel):
 
 class LoginBackupExportRequest(BaseModel):
     password: str
+    allow_force_stop_container: Literal[True]
+    allow_restore_server: Literal[True]
 
 
 class LoginStartResponse(BaseModel):
