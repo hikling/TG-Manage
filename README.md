@@ -134,7 +134,6 @@ TeleBox 的插件和命令由 TeleBox 自身管理。内置系统插件随镜像
 | `SIGNPULSE_TG_API_ID/HASH`、`TG_API_ID/HASH` | 旧部署兼容别名，升级后仍可读取。 |
 | `APP_SECRET_KEY` | 凭据加密和认证密钥；默认持久化为 `data/.app_secret_key`，必须随数据备份。 |
 | `APP_DATA_DIR` | 数据库、会话、日志及 TeleBox 数据目录；Compose 使用 `/data`。 |
-| `TG_PROXY` | Telegram 全局代理；账号代理也可在界面中单独设置。 |
 | `APP_DATABASE_URL` | 覆盖默认 SQLite 数据库连接。 |
 | `TG_GLOBAL_CONCURRENCY` | Telegram 操作的并发上限，与已登录账号总数无关。 |
 | `TELEBOX_NODE` | 本地开发时指定 TeleBox 使用的 Node 24 可执行文件。 |

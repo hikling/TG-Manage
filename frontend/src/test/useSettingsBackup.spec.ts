@@ -44,7 +44,6 @@ function baseSettings(over: Partial<SettingsFormState> = {}): SettingsFormState 
   return {
     logDays: 7,
     dataDir: '',
-    proxy: '',
     concurrency: 1,
     deviceKeepaliveEnabled: true,
     deviceKeepaliveIntervalDays: 30,

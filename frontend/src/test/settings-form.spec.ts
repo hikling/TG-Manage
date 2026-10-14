@@ -16,7 +16,6 @@ import {
 const baseSettings = (): SettingsFormState => ({
   logDays: 7,
   dataDir: '/data',
-  proxy: '',
   concurrency: 2,
   deviceKeepaliveEnabled: true,
   deviceKeepaliveIntervalDays: 30,
@@ -58,6 +57,7 @@ describe('settings-form', () => {
   it('buildGeneralPayload maps fields', () => {
     const p = buildGeneralPayload(baseSettings())
     expect('sign_interval' in p).toBe(false)
+    expect('global_proxy' in p).toBe(false)
     expect(p.log_retention_days).toBe(7)
     expect(p.timezone).toBe('Asia/Hong_Kong')
   })

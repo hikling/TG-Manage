@@ -16,6 +16,7 @@ from backend.services.account_check_gate import (
     AccountCheckReservation,
     account_check_gate,
 )
+from backend.services.account_proxy_status import check_account_proxy
 from backend.services.background_job import BackgroundJobStore
 from backend.utils.names import validate_storage_name
 from tg_manage.utils import clamp
@@ -112,12 +113,12 @@ async def _run_status_check(
                 item = await service.check_account_status(
                     name, timeout_seconds=timeout_seconds
                 )
-            except Exception as exc:
+            except Exception:
                 item = {
                     "account_name": name,
                     "ok": False,
                     "status": "error",
-                    "message": str(exc) or "status check failed",
+                    "message": "status check failed",
                     "code": "STATUS_CHECK_FAILED",
                     "checked_at": None,
                     "needs_relogin": False,
@@ -130,6 +131,8 @@ async def _run_status_check(
                     "message": "invalid status payload",
                     "code": "STATUS_CHECK_FAILED",
                 }
+            if not store.is_cancel_requested(job_id):
+                item = {**item, **await check_account_proxy(name, timeout_seconds=timeout_seconds)}
             if reservation is not None:
                 reservation.finish(name, success=bool(item.get("ok")))
             results.append(item)
@@ -210,8 +213,8 @@ def start_account_status_check_job(
                 try:
                     await _run_status_check(job_id, names, timeout, reservation)
                 except Exception as exc:
-                    logger.exception("账号状态检测任务 %s 失败", job_id)
-                    store.mark_failed(job_id, str(exc) or "status check job failed")
+                    logger.error("账号状态检测任务 %s 失败（%s）", job_id, type(exc).__name__)
+                    store.mark_failed(job_id, "status check job failed")
                 finally:
                     reservation.release()
 

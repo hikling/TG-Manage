@@ -15,12 +15,13 @@ from backend.services.telegram.sessions import (
 )
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
-from backend.utils.proxy import build_proxy_dict
+from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     delete_account_session_string,
     delete_session_string_file,
     get_account_api_credentials,
     get_account_profile,
+    get_account_proxy_status,
     get_account_session_string,
     get_account_status,
     get_global_semaphore,
@@ -81,10 +82,12 @@ class TelegramAccountsMixin:
 
     @staticmethod
     def _account_status_payload(account_name: str) -> Dict[str, Any]:
+        proxy_status = get_account_proxy_status(account_name)
         try:
             get_account_api_credentials(account_name)
         except ValueError:
             return {
+                **proxy_status,
                 "status": "invalid",
                 "status_message": "缺少此账号的 Telegram API 凭据，请重新登录",
                 "status_code": "API_CREDENTIALS_MISSING",
@@ -93,6 +96,7 @@ class TelegramAccountsMixin:
             }
         status = get_account_status(account_name)
         return {
+            **proxy_status,
             "status": status.get("status") or "connected",
             "status_message": status.get("message") or "",
             "status_code": status.get("code"),
@@ -299,17 +303,6 @@ class TelegramAccountsMixin:
         if not self.account_exists(account_name):
             return None
 
-        proxy_dict = None
-        try:
-            profile = get_account_profile(account_name) or {}
-            proxy_value = profile.get("proxy")
-            if not proxy_value:
-                from backend.services.config import get_config_service
-                proxy_value = get_config_service().get_global_proxy()
-            if proxy_value:
-                proxy_dict = build_proxy_dict(proxy_value)
-        except Exception:
-            proxy_dict = None
 
         session_mode = get_session_mode()
         session_string = None
@@ -325,17 +318,16 @@ class TelegramAccountsMixin:
             in_memory = True
 
         try:
-            client = get_client(
-                account_name,
-                proxy=proxy_dict,
-                workdir=self.session_dir,
-                session_string=session_string,
-                in_memory=in_memory,
-                no_updates=True,
-            )
-
             lock = get_account_lock(account_name)
             async with lock:
+                client = get_client(
+                    account_name,
+                    proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
+                    workdir=self.session_dir,
+                    session_string=session_string,
+                    in_memory=in_memory,
+                    no_updates=True,
+                )
                 async with client:
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
                     if not me or not getattr(me, "photo", None):
@@ -356,7 +348,7 @@ class TelegramAccountsMixin:
         except Exception as e:
             # 瞬时错误（网络/限流/会话失效）不能与"无头像"混为一谈：抛出让路由层区分
             logger.warning(
-                "下载账号头像失败 %s: %s", account_name, e, exc_info=True
+                "下载账号头像失败 %s (%s)", account_name, type(e).__name__
             )
             raise
 
@@ -380,17 +372,6 @@ class TelegramAccountsMixin:
         if not self.account_exists(account_name):
             return None
 
-        proxy_dict = None
-        try:
-            profile = get_account_profile(account_name) or {}
-            proxy_value = profile.get("proxy")
-            if not proxy_value:
-                from backend.services.config import get_config_service
-                proxy_value = get_config_service().get_global_proxy()
-            if proxy_value:
-                proxy_dict = build_proxy_dict(proxy_value)
-        except Exception:
-            proxy_dict = None
 
         session_mode = get_session_mode()
         session_string = None
@@ -410,7 +391,7 @@ class TelegramAccountsMixin:
                 async with get_global_semaphore():
                     client = get_client(
                         account_name,
-                        proxy=proxy_dict,
+                        proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
                         workdir=self.session_dir,
                         session_string=session_string,
                         in_memory=in_memory,
@@ -445,8 +426,7 @@ class TelegramAccountsMixin:
                 "下载 Chat 头像失败 %s/%s: %s",
                 account_name,
                 chat_id,
-                e,
-                exc_info=True,
+                type(e).__name__,
             )
             raise
 
@@ -465,20 +445,6 @@ class TelegramAccountsMixin:
 
         account_name = self._normalize_account_name(account_name)
 
-        proxy_dict = None
-        try:
-            profile = get_account_profile(account_name) or {}
-            proxy_value = profile.get("proxy")
-            if not proxy_value:
-                from backend.services.config import get_config_service
-
-                proxy_value = get_config_service().get_global_settings().get(
-                    "global_proxy"
-                )
-            if proxy_value:
-                proxy_dict = build_proxy_dict(proxy_value)
-        except Exception:
-            proxy_dict = None
 
         session_mode = get_session_mode()
         session_string = None
@@ -493,6 +459,7 @@ class TelegramAccountsMixin:
                 raise ValueError("session_string 不存在或已失效")
             in_memory = True
 
+        proxy_dict = require_proxy_dict((get_account_profile(account_name) or {}).get("proxy"))
         client = get_client(
             account_name,
             proxy=proxy_dict,
@@ -535,20 +502,6 @@ class TelegramAccountsMixin:
                 "needs_relogin": True,
             }
 
-        proxy_dict = None
-        try:
-            profile = get_account_profile(account_name) or {}
-            proxy_value = profile.get("proxy")
-            if not proxy_value:
-                from backend.services.config import get_config_service
-
-                proxy_value = get_config_service().get_global_settings().get(
-                    "global_proxy"
-                )
-            if proxy_value:
-                proxy_dict = build_proxy_dict(proxy_value)
-        except Exception:
-            proxy_dict = None
 
         session_mode = get_session_mode()
         session_string = None
@@ -581,35 +534,20 @@ class TelegramAccountsMixin:
         timeout_seconds = max(1.0, min(float(timeout_seconds or 8.0), 20.0))
 
         try:
-            client = get_client(
-                account_name,
-                proxy=proxy_dict,
-                workdir=self.session_dir,
-                session_string=session_string,
-                in_memory=in_memory,
-                no_updates=no_updates,
-            )
-        except Exception as e:
-            return {
-                "account_name": account_name,
-                "ok": False,
-                "status": "error",
-                "message": str(e) or "client init failed",
-                "code": "CLIENT_INIT_FAILED",
-                "checked_at": checked_at,
-                "needs_relogin": False,
-            }
-
-        try:
-            # The shared context manager reference-counts active users and releases
-            # newly opened sessions even when get_me times out or fails.
-            lock = get_account_lock(account_name)
-            async with lock:
-                async def probe_account():
+            async def probe_account():
+                async with get_account_lock(account_name):
+                    client = get_client(
+                        account_name,
+                        proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
+                        workdir=self.session_dir,
+                        session_string=session_string,
+                        in_memory=in_memory,
+                        no_updates=no_updates,
+                    )
                     async with client:
                         return await client.get_me()
 
-                me = await asyncio.wait_for(probe_account(), timeout=timeout_seconds)
+            me = await asyncio.wait_for(probe_account(), timeout=timeout_seconds)
             set_account_status(
                 account_name,
                 status="connected",
@@ -638,12 +576,12 @@ class TelegramAccountsMixin:
                 "checked_at": checked_at,
                 "needs_relogin": False,
             }
-        except ConnectionError as e:
+        except ConnectionError:
             return {
                 "account_name": account_name,
                 "ok": False,
                 "status": "checking",
-                "message": str(e),
+                "message": "Telegram 连接失败，请检查网络或账号代理",
                 "code": "CONNECTION_ERROR",
                 "checked_at": checked_at,
                 "needs_relogin": False,
@@ -661,7 +599,7 @@ class TelegramAccountsMixin:
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
-                    "message": err_text,
+                    "message": "会话存储不可写，请检查目录权限",
                     "code": "STORAGE_PERMISSION_DENIED",
                     "checked_at": checked_at,
                     "needs_relogin": False,
@@ -671,7 +609,7 @@ class TelegramAccountsMixin:
                 set_account_status(
                     account_name,
                     status="invalid",
-                    message=err_text,
+                    message="Telegram 会话已失效，请重新登录",
                     code="ACCOUNT_SESSION_INVALID",
                     needs_relogin=True,
                 )
@@ -679,7 +617,7 @@ class TelegramAccountsMixin:
                     "account_name": account_name,
                     "ok": False,
                     "status": "invalid",
-                    "message": err_text,
+                    "message": "Telegram 会话已失效，请重新登录",
                     "code": "ACCOUNT_SESSION_INVALID",
                     "checked_at": checked_at,
                     "needs_relogin": True,
@@ -689,7 +627,7 @@ class TelegramAccountsMixin:
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
-                    "message": err_text,
+                    "message": "Telegram 请求过于频繁，请稍后重试",
                     "code": "FLOOD_WAIT",
                     "checked_at": checked_at,
                     "needs_relogin": False,
@@ -704,7 +642,7 @@ class TelegramAccountsMixin:
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
-                    "message": err_text,
+                    "message": "Request timed out",
                     "code": "TIMEOUT",
                     "checked_at": checked_at,
                     "needs_relogin": False,
@@ -719,7 +657,7 @@ class TelegramAccountsMixin:
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
-                    "message": err_text,
+                    "message": "Telegram 连接失败，请检查网络或账号代理",
                     "code": "CONNECTION_ERROR",
                     "checked_at": checked_at,
                     "needs_relogin": False,
@@ -728,7 +666,7 @@ class TelegramAccountsMixin:
                 "account_name": account_name,
                 "ok": False,
                 "status": "error",
-                "message": err_text,
+                "message": "Telegram 检测失败，请检查账号和网络配置",
                 "code": type(e).__name__.upper(),
                 "checked_at": checked_at,
                 "needs_relogin": False,
@@ -753,7 +691,7 @@ class TelegramAccountsMixin:
         try:
             await close_client_by_name(account_name, workdir=self.session_dir)
         except Exception as e:
-            logger.debug("关闭 Account Client 失败: %s", e)
+            logger.debug("关闭 Account Client 失败 (%s)", type(e).__name__)
 
         session_file = self.session_dir / f"{account_name}.session"
         journal_file = self.session_dir / f"{account_name}.session-journal"

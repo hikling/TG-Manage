@@ -28,11 +28,10 @@ class TelegramDevicesMixin:
         if not self.account_exists(account_name):
             raise ValueError("账号不存在")
 
-        client, _ = self._build_account_client(account_name, no_updates=True)
-
         timeout_seconds = max(1.0, min(float(timeout_seconds or 12.0), 30.0))
         lock = get_account_lock(account_name)
         async with lock:
+            client, _ = self._build_account_client(account_name, no_updates=True)
             if not getattr(client, "is_connected", False):
                 await client.connect()
             result = await asyncio.wait_for(
@@ -98,11 +97,10 @@ class TelegramDevicesMixin:
         if target.get("current"):
             raise ValueError("不能踢下线当前正在使用的会话")
 
-        client, _ = self._build_account_client(account_name, no_updates=True)
-
         timeout_seconds = max(1.0, min(float(timeout_seconds or 12.0), 30.0))
         lock = get_account_lock(account_name)
         async with lock:
+            client, _ = self._build_account_client(account_name, no_updates=True)
             if not getattr(client, "is_connected", False):
                 await client.connect()
             result = await asyncio.wait_for(
@@ -123,13 +121,11 @@ class TelegramDevicesMixin:
         if not self.account_exists(account_name):
             raise ValueError("账号不存在")
 
-        client, _ = self._build_account_client(account_name, no_updates=True)
-
         limit = max(1, min(int(limit or 20), 50))
         timeout_seconds = max(1.0, min(float(timeout_seconds or 12.0), 30.0))
         lock = get_account_lock(account_name)
 
-        async def _read_messages() -> List[Dict[str, Any]]:
+        async def _read_messages(client) -> List[Dict[str, Any]]:
             messages: List[Dict[str, Any]] = []
             # Use Client's ref-counted context: periodic code polling must not
             # leave every account session connected after each history read.
@@ -149,4 +145,5 @@ class TelegramDevicesMixin:
             return messages
 
         async with lock:
-            return await asyncio.wait_for(_read_messages(), timeout=timeout_seconds)
+            client, _ = self._build_account_client(account_name, no_updates=True)
+            return await asyncio.wait_for(_read_messages(client), timeout=timeout_seconds)

@@ -131,7 +131,6 @@ class GlobalSettingsRequest(BaseModel):
     chat_center_enabled: Optional[bool] = None
     log_retention_days: Optional[int] = None
     data_dir: Optional[str] = None
-    global_proxy: Optional[str] = None
     tg_global_concurrency: Optional[int] = None
     device_keepalive_enabled: Optional[bool] = None
     device_keepalive_interval_days: Optional[int] = None
@@ -161,7 +160,6 @@ class GlobalSettingsResponse(BaseModel):
     chat_center_enabled: bool = False
     log_retention_days: int = 7
     data_dir: Optional[str] = None
-    global_proxy: Optional[str] = None
     tg_global_concurrency: Optional[int] = None
     device_keepalive_enabled: bool = True
     device_keepalive_interval_days: int = 30

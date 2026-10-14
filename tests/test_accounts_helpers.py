@@ -28,11 +28,12 @@ def test_clamp_status_check_timeout():
 
 
 def test_build_status_check_error_item():
-    item = build_status_check_error_item("acc", RuntimeError("boom"))
+    item = build_status_check_error_item("acc", RuntimeError("socks5://user:SECRET@proxy:1080"))
     assert item["account_name"] == "acc"
     assert item["ok"] is False
     assert item["code"] == "STATUS_CHECK_FAILED"
-    assert "boom" in item["message"]
+    assert item["message"] == "status check failed"
+    assert "SECRET" not in str(item)
 
 
 def test_resolve_account_rename_target():

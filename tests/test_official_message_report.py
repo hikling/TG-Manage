@@ -127,8 +127,59 @@ async def test_no_daily_account_cap_and_duplicate_inventory_is_local_only(report
     assert outcome["accounts"] == outcome["empty"] == 225
     assert env.page.await_count == 225
     assert [item.args[1] for item in env.page.await_args_list] == names
-    assert len(env.texts) == 225
+    assert len(env.texts) == outcome["messages_sent"] == 2
     assert all("🟢 账户正常（最近24小时无官方消息）" in text for text in env.texts)
+    assert "\n".join(text.split("\n\n", 1)[1] for text in env.texts) == "\n".join(
+        f"🟢 账户：{name}" for name in names
+    )
+    assert all(report._units(text) <= report.MAX_CONTENT_UNITS for text in env.texts)
+
+
+@pytest.mark.asyncio
+async def test_quiet_accounts_share_one_summary_and_other_notices_keep_attribution(report_env):
+    env = report_env
+    env.service.list_accounts.return_value = [
+        {"name": name} for name in ("alpha", "notice", "beta", "partial", "gamma")
+    ]
+    env.page.side_effect = [
+        [], [message(2), message(1, text="second notice")], [], [],
+        [message(text="before failure")], OfficialReadError("safe failure"), [],
+    ]
+    outcome = await run()
+    assert outcome["accounts"] == 5 and outcome["messages"] == 3
+    assert outcome["empty"] == 3 and outcome["failed"] == 1
+    summaries = [text for text in env.texts if "账户正常" in text]
+    assert len(summaries) == 1
+    assert summaries[0].split("\n\n", 1)[1].splitlines() == [
+        "🟢 账户：alpha", "🟢 账户：beta", "🟢 账户：gamma",
+    ]
+    assert bodies(env.texts, "文字") == ["official notice", "second notice", "before failure"]
+    assert all("账户：notice" in text for text in env.texts[:2])
+    assert "账户：partial" in env.texts[2] and "账户：partial" in env.texts[3]
+    assert outcome["messages_sent"] == len(env.texts) == 5
+    env.persist.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_normal_summary_unicode_rows_split_only_at_message_budget(report_env):
+    env = report_env
+    names = [f"账户-{index}-" + "🙂" * 200 for index in range(30)]
+    env.service.list_accounts.return_value = [{"name": name} for name in names]
+    outcome = await run()
+    assert outcome["empty"] == 30 and outcome["failed"] == 0
+    assert len(env.texts) == 4
+    assert "\n".join(text.split("\n\n", 1)[1] for text in env.texts) == "\n".join(
+        f"🟢 账户：{name}" for name in names
+    )
+    assert all(report._units(text) <= report.MAX_CONTENT_UNITS for text in env.texts)
+
+
+@pytest.mark.asyncio
+async def test_no_accounts_produces_no_normal_summary(report_env):
+    report_env.service.list_accounts.return_value = []
+    outcome = await run()
+    assert outcome["accounts"] == outcome["empty"] == outcome["messages_sent"] == 0
+    report_env.delivery.send_text.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -365,19 +416,109 @@ async def test_bot_send_failure_never_normal_and_unrelated_accounts_continue(rep
 
 
 @pytest.mark.asyncio
-async def test_no_message_delivery_failure_still_continues_other_accounts(report_env):
+async def test_grouped_no_message_delivery_failure_counts_each_affected_account_once(report_env):
     env = report_env
     env.service.list_accounts.return_value = [{"name": "alpha"}, {"name": "beta"}]
     ordinary_send = env.delivery.send_text.side_effect
 
     async def send(text):
-        if "账户：alpha" in text:
+        if "账户正常" in text:
             raise OfficialReportDeliveryError("safe rejection")
         await ordinary_send(text)
     env.delivery.send_text.side_effect = send
     outcome = await run()
-    assert outcome["accounts"] == 2 and outcome["failed"] == 1 and outcome["empty"] == 1
-    assert all("账户：beta" in text for text in env.texts)
+    assert outcome["accounts"] == outcome["failed"] == 2 and outcome["empty"] == 0
+    assert env.page.await_count == 2
+    assert len(env.texts) == outcome["messages_sent"] == 1
+    assert "🔴" in env.texts[0] and "账户：alpha" in env.texts[0] and "账户：beta" in env.texts[0]
+    assert "账户正常" not in env.texts[0]
+
+
+@pytest.mark.asyncio
+async def test_failed_normal_summary_chunk_keeps_later_chunks_and_sanitized_notice(report_env, caplog):
+    env = report_env
+    names = [f"account-{index}-" + "🙂" * 1000 for index in range(3)]
+    env.service.list_accounts.return_value = [{"name": name} for name in names]
+    ordinary_send = env.delivery.send_text.side_effect
+
+    async def send(text):
+        if "账户正常" in text and names[1] in text:
+            raise OfficialReportDeliveryError("secret TOKEN https://private.example")
+        await ordinary_send(text)
+
+    env.delivery.send_text.side_effect = send
+    outcome = await run()
+    assert outcome["accounts"] == 3 and outcome["empty"] == 2 and outcome["failed"] == 1
+    assert len(env.texts) == outcome["messages_sent"] == 3
+    assert names[0] in env.texts[0] and names[2] in env.texts[1]
+    assert names[1] in env.texts[2] and "🔴" in env.texts[2]
+    assert "TOKEN" not in caplog.text + "".join(env.texts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_oversized_normal_name_retained_and_counted_only_when_complete(report_env, fail):
+    env = report_env
+    oversized = "🙂" * 4500
+    env.service.list_accounts.return_value = [{"name": oversized}, {"name": "beta"}]
+    ordinary_send = env.delivery.send_text.side_effect
+    normal_attempts = []
+
+    async def send(text):
+        if "账户正常" in text:
+            normal_attempts.append(text)
+            if fail and len(normal_attempts) in (1, 2):
+                raise OfficialReportDeliveryError("safe rejection")
+        await ordinary_send(text)
+
+    env.delivery.send_text.side_effect = send
+    outcome = await run()
+    assert outcome["empty"] == (1 if fail else 2)
+    assert outcome["failed"] == int(fail)
+    assert "".join(text.split("\n\n", 1)[1] for text in normal_attempts[:3]) == f"🟢 账户：{oversized}"
+    assert "账户：beta" in normal_attempts[-1]
+    assert all(report._units(text) <= report.MAX_CONTENT_UNITS for text in env.texts)
+
+
+@pytest.mark.asyncio
+async def test_target_change_between_normal_summary_chunks_stops_pending_delivery(report_env):
+    env = report_env
+    names = [f"account-{index}-" + "🙂" * 1000 for index in range(3)]
+    env.service.list_accounts.return_value = [{"name": name} for name in names]
+
+    async def send(text):
+        env.texts.append(text)
+        env.target[0] = None
+
+    env.delivery.send_text.side_effect = send
+    outcome = await run()
+    assert outcome["stopped"] is True and outcome["accounts"] == 3
+    assert outcome["empty"] == outcome["messages_sent"] == 1 and outcome["failed"] == 0
+    assert env.page.await_count == 3 and len(env.texts) == 1
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_normal_summary_releases_report_lock(report_env):
+    env = report_env
+    started = asyncio.Event()
+
+    async def send(text):
+        started.set()
+        await asyncio.Event().wait()
+
+    env.delivery.send_text.side_effect = send
+    service = report.OfficialMessageReportService()
+    task = asyncio.create_task(run(service))
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not service._running_lock.locked()
+        assert not env.texts
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.asyncio

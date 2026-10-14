@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime, tzinfo
@@ -60,6 +61,32 @@ def _content_chunks(header: str, content: str, label: str) -> Iterator[str]:
     count = sum(1 for _ in _slices(content, budget))
     for index, part in enumerate(_slices(content, budget), 1):
         yield f"{header}\n{label} · 分段 {index}/{count}\n\n{part}"
+
+
+def _normal_summary_chunks(names: list[str]) -> Iterator[tuple[str, tuple[str, ...]]]:
+    """Pack complete account rows where possible and track every represented name."""
+    header = "零点官方消息日报\n🟢 账户正常（最近24小时无官方消息）\n\n"
+    budget = MAX_CONTENT_UNITS - _units(header)
+    rows: list[str] = []
+    accounts: list[str] = []
+    used = 0
+    for name in names:
+        row = f"🟢 账户：{name}"
+        size = _units(row)
+        if rows and used + 1 + size > budget:
+            yield header + "\n".join(rows), tuple(accounts)
+            rows, accounts, used = [], [], 0
+        if size > budget:
+            # Preserve even an oversized name; it is complete only when all of
+            # its pieces are delivered, and one failed piece fails it once.
+            for part in _slices(row, budget):
+                yield header + part, (name,)
+            continue
+        used += size + int(bool(rows))
+        rows.append(row)
+        accounts.append(name)
+    if rows:
+        yield header + "\n".join(rows), tuple(accounts)
 
 
 def _message_header(account: str, message: OfficialMessage, timezone: tzinfo) -> str:
@@ -133,6 +160,7 @@ class OfficialMessageReportService:
                     for account in service.list_accounts(force_refresh=True)
                     if str(account.get("name") or "").strip()
                 )
+                normal_names: list[str] = []
                 for name in names:
                     _require_current(delivery)
                     result["accounts"] += 1
@@ -141,21 +169,45 @@ class OfficialMessageReportService:
                     )
                     result["failed"] += int(failed)
                     if not failed and count == 0:
-                        try:
-                            await self._send_content(
-                                delivery, f"账户：{name}",
-                                "🟢 账户正常（最近24小时无官方消息）", "零点官方消息日报", result,
-                            )
-                            result["empty"] += 1
-                        except OfficialReportStopped:
-                            raise
-                        except Exception as exc:
-                            result["failed"] += 1
-                            logger.warning("官方消息空记录通知发送失败（%s）", type(exc).__name__)
-                            await self._failure(delivery, f"账户：{name}", "通知转发失败", result)
+                        normal_names.append(name)
+                await self._send_normal_summary(delivery, normal_names, result)
             except OfficialReportStopped:
                 result["stopped"] = True
             return result
+
+    async def _send_normal_summary(
+        self, delivery: OfficialReportDelivery, names: list[str], result: dict[str, Any],
+    ) -> None:
+        chunks = list(_normal_summary_chunks(names))
+        remaining = Counter(name for _, accounts in chunks for name in accounts)
+        failed: set[str] = set()
+        for text, accounts in chunks:
+            _require_current(delivery)
+            try:
+                await delivery.send_text(text)
+                result["messages_sent"] += 1
+            except OfficialReportStopped:
+                raise
+            except Exception as exc:
+                result["failed"] += len(set(accounts) - failed)
+                failed.update(accounts)
+                logger.warning("官方消息正常账户汇总发送失败（%s）", type(exc).__name__)
+            for name in accounts:
+                remaining[name] -= 1
+                if remaining[name] == 0 and name not in failed:
+                    result["empty"] += 1
+        if failed:
+            try:
+                await self._send_content(
+                    delivery, "零点官方消息日报",
+                    "🔴 以下账户的正常汇总通知未完整发送：\n"
+                    + "\n".join(f"账户：{name}" for name in names if name in failed),
+                    "转发结果", result,
+                )
+            except OfficialReportStopped:
+                raise
+            except Exception as exc:
+                logger.warning("官方消息汇总失败通知发送失败（%s）", type(exc).__name__)
 
     async def _send_content(
         self, delivery: OfficialReportDelivery, header: str, content: str,

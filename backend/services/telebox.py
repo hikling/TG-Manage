@@ -175,71 +175,94 @@ class TeleBoxService:
         await process.stdin.drain()
 
     async def start(self, account: str):
-        # TeleBox workers run in the Linux container; defer the POSIX-only
-        # dependency so route/unit tests can import the module on Windows.
-        import fcntl
-
         account = self._account(account)
         async with self.locks.setdefault(account, asyncio.Lock()):
-            if self.closing:
-                raise ValueError("系统正在停止")
-            old = self.workers.get(account)
-            if old and old["process"].returncode is None:
-                return self.status(account)
-            node = shutil.which(os.getenv("TELEBOX_NODE", "node"))
-            if not node or not (self.source / "node_modules/teleproto").exists():
-                raise ValueError("TeleBox 需要 Node.js 24 和已安装的依赖，请重新构建镜像")
-            directory = self._prepare(account)
-            lock_handle = (directory / "runtime.lock").open("a")
-            try:
-                fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                lock_handle.close()
-                raise ValueError("此账号 TeleBox 已由另一个服务进程管理")
-            service = get_telegram_service()
-            client, proxy = service._build_account_client(account, no_updates=True)
-            credentials = {"api_id": client.api_id, "api_hash": client.api_hash}
-            if proxy:
-                scheme = proxy.get("scheme", "socks5")
-                if scheme not in ("socks4", "socks5"):
-                    lock_handle.close()
-                    raise ValueError("TeleBox Telegram 连接需要 SOCKS4/5 代理")
-                credentials["proxy"] = {"ip": proxy["hostname"], "port": proxy["port"],
-                                        "socksType": 4 if scheme == "socks4" else 5,
-                                        "username": proxy.get("username"), "password": proxy.get("password")}
-            self.secrets[account] = [str(credentials["api_hash"])]
-            if proxy and proxy.get("password"):
-                self.secrets[account].append(proxy["password"])
-            # Account-local .env supplies plugin-specific settings.
-            env = worker_environment(directory)
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
-                    "-r", "tsconfig-paths/register", "-r", "./scripts/esbuild-register.cjs",
-                    "./panel/worker.ts", cwd=directory, env=env,
-                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                    start_new_session=True, limit=65536)
-            except BaseException:
-                lock_handle.close()
-                self.secrets.pop(account, None)
-                raise
-            worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
-            ready = asyncio.get_running_loop().create_future()
-            worker["pending"]["init"] = ready
-            self.workers[account] = worker
-            self._marker(account, True)
-            worker["readers"] = [asyncio.create_task(self._stdout(account, worker)), asyncio.create_task(self._stderr(account, worker)), asyncio.create_task(self._watch(account, worker))]
-            await self._send(worker, {"action": "init", "id": "init", **credentials})
-            self._log(account, "TeleBox 正在启动独立账号会话")
-            try:
-                result = await asyncio.wait_for(asyncio.shield(ready), 3)
-                if not result.get("ok"):
-                    raise ValueError(result.get("message") or "TeleBox 启动失败，请查看运行日志")
-            except asyncio.TimeoutError:
-                # QR authorization can legitimately take minutes. The later
-                # state event and log report the actual outcome.
-                pass
+            return await self._start_locked(account)
+
+    async def _start_locked(self, account: str):
+        # Workers are Linux-only; keep imports portable for account API tests.
+        import fcntl
+
+        if self.closing:
+            raise ValueError("系统正在停止")
+        old = self.workers.get(account)
+        if old and old["process"].returncode is None:
             return self.status(account)
+        node = shutil.which(os.getenv("TELEBOX_NODE", "node"))
+        if not node or not (self.source / "node_modules/teleproto").exists():
+            raise ValueError("TeleBox 需要 Node.js 24 和已安装的依赖，请重新构建镜像")
+        directory = self._prepare(account)
+        lock_handle = (directory / "runtime.lock").open("a")
+        try:
+            fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock_handle.close()
+            raise ValueError("此账号 TeleBox 已由另一个服务进程管理")
+        service = get_telegram_service()
+        try:
+            client, proxy = service._build_account_client(account, no_updates=True)
+        except BaseException:
+            lock_handle.close()
+            raise
+        credentials = {"api_id": client.api_id, "api_hash": client.api_hash}
+        if proxy:
+            scheme = proxy.get("scheme", "socks5")
+            if scheme not in ("socks4", "socks5"):
+                lock_handle.close()
+                raise ValueError("TeleBox Telegram 连接需要 SOCKS4/5 代理")
+            credentials["proxy"] = {"ip": proxy["hostname"], "port": proxy["port"],
+                                    "socksType": 4 if scheme == "socks4" else 5,
+                                    "username": proxy.get("username"), "password": proxy.get("password")}
+        self.secrets[account] = [str(credentials["api_hash"])]
+        if proxy and proxy.get("password"):
+            self.secrets[account].append(proxy["password"])
+        # Account-local .env supplies plugin-specific settings.
+        env = worker_environment(directory)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
+                "-r", "tsconfig-paths/register", "-r", "./scripts/esbuild-register.cjs",
+                "./panel/worker.ts", cwd=directory, env=env,
+                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                start_new_session=True, limit=65536)
+        except BaseException:
+            lock_handle.close()
+            self.secrets.pop(account, None)
+            raise
+        worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
+        ready = asyncio.get_running_loop().create_future()
+        worker["pending"]["init"] = ready
+        self.workers[account] = worker
+        self._marker(account, True)
+        worker["readers"] = [asyncio.create_task(self._stdout(account, worker)), asyncio.create_task(self._stderr(account, worker)), asyncio.create_task(self._watch(account, worker))]
+        await self._send(worker, {"action": "init", "id": "init", **credentials})
+        self._log(account, "TeleBox 正在启动独立账号会话")
+        try:
+            result = await asyncio.wait_for(asyncio.shield(ready), 3)
+            if not result.get("ok"):
+                raise ValueError(result.get("message") or "TeleBox 启动失败，请查看运行日志")
+        except asyncio.TimeoutError:
+            # QR authorization can legitimately take minutes. The later
+            # state event and log report the actual outcome.
+            pass
+        return self.status(account)
+
+    async def refresh_account_proxy(self, account: str):
+        """Reconnect an enabled running worker after an explicit route edit."""
+        account = self._account(account)
+        async with self.locks.setdefault(account, asyncio.Lock()):
+            worker = self.workers.get(account)
+            if (self.closing or not self.status(account)["enabled"] or not worker
+                    or worker["process"].returncode is not None):
+                return
+            await self._stop_locked(account, disable=False)
+            try:
+                await self._start_locked(account)
+            except Exception as exc:
+                worker = self.workers.get(account, worker)
+                worker["status"] = "failed"
+                worker["message"] = "代理已保存，TeleBox 重连失败，请检查代理配置后重新启动"
+                self._log(account, f"TeleBox 代理重连失败 ({type(exc).__name__})", "error")
 
     async def _accept(self, account: str, worker: dict, token: str):
         from pyrogram import raw
@@ -248,8 +271,8 @@ class TeleBoxService:
             if not 1 <= len(payload) <= 4096:
                 raise ValueError("invalid token")
             service = get_telegram_service()
-            client, _ = service._build_account_client(account, no_updates=True)
             async with get_account_lock(account):
+                client, _ = service._build_account_client(account, no_updates=True)
                 async with client:
                     await asyncio.wait_for(
                         client.invoke(raw.functions.auth.AcceptLoginToken(token=payload)), 30

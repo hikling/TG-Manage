@@ -54,7 +54,6 @@ export interface GlobalSettings {
   chat_center_enabled?: boolean;
   log_retention_days?: number;    // 日志保留天数，默认 7
   data_dir?: string | null;
-  global_proxy?: string | null;
   tg_global_concurrency?: number | null;
   device_keepalive_enabled?: boolean;
   device_keepalive_interval_days?: number;

@@ -31,7 +31,41 @@ def report_env(monkeypatch):
     monkeypatch.setattr(report, "send_telegram_bot_message", send)
     monkeypatch.setattr(report, "set_account_status", persist)
     monkeypatch.setattr(report, "INTER_DELAY_SECONDS", 0)
+    monkeypatch.setattr(report, "check_account_proxy", AsyncMock(return_value={"proxy_status": "unconfigured"}))
     return config, service, send, persist
+
+
+@pytest.mark.asyncio
+async def test_daily_proxy_health_is_reported_independently_for_every_account(report_env, monkeypatch):
+    _, service, send, persist = report_env
+    service.list_accounts.return_value = [{"name": name} for name in ["direct", "good", "bad", "changed"]]
+    check_proxy = AsyncMock(side_effect=[
+        {"proxy_status": "unconfigured"}, {"proxy_status": "healthy"},
+        {"proxy_status": "error", "proxy_status_code": "PROXY_AUTH_FAILED"},
+        {"proxy_status": "pending"},
+    ])
+    monkeypatch.setattr(report, "check_account_proxy", check_proxy)
+    result = await report.AccountStatusReportService().run()
+    assert result["ok"] == 4 and result["fail"] == 0
+    assert check_proxy.await_args_list == [
+        call(name, timeout_seconds=8.0) for name in ["direct", "good", "bad", "changed"]
+    ]
+    rows = send.await_args.kwargs["text"].splitlines()
+    assert "🟢 direct — 正常" in rows
+    assert "🟢 good — 正常 · SOCKS5 🟢 正常" in rows
+    assert "🟢 bad — 正常 · SOCKS5 🔴 异常" in rows
+    assert "🟢 changed — 正常 · SOCKS5 ⚪ 待检测" in rows
+    persist.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_daily_proxy_check_runs_even_after_account_failure(report_env, monkeypatch):
+    _, service, _, _ = report_env
+    service.check_account_status.side_effect = RuntimeError("account failed")
+    check_proxy = AsyncMock(return_value={"proxy_status": "healthy"})
+    monkeypatch.setattr(report, "check_account_proxy", check_proxy)
+    assert (await report.AccountStatusReportService().run())["fail"] == 1
+    check_proxy.assert_awaited_once_with("alpha", timeout_seconds=8.0)
 
 
 @pytest.mark.asyncio

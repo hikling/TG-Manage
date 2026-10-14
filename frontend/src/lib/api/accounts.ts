@@ -78,7 +78,15 @@ export interface QrLoginPasswordResponse {
   username?: string;
 }
 
-export interface AccountInfo {
+export type AccountProxyStatus = 'unconfigured' | 'pending' | 'healthy' | 'error';
+
+export interface AccountProxyHealth {
+  proxy_status?: AccountProxyStatus;
+  proxy_status_code?: string | null;
+  proxy_checked_at?: string | null;
+}
+
+export interface AccountInfo extends AccountProxyHealth {
   name: string;
   session_file: string;
   exists: boolean;
@@ -99,7 +107,7 @@ export interface AccountStatusCheckRequest {
   refresh_avatar?: boolean;
 }
 
-export interface AccountStatusItem {
+export interface AccountStatusItem extends AccountProxyHealth {
   account_name: string;
   ok: boolean;
   status: "connected" | "invalid" | "error" | "not_found" | string;

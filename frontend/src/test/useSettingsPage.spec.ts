@@ -151,7 +151,7 @@ describe('useSettingsPage (mount + dirty)', () => {
     await vi.waitFor(() => expect(result.pageLoading.value).toBe(false))
 
     expect(result.isDirty.value).toBe(false)
-    result.settings.value.proxy = 'socks5://x'
+    result.settings.value.dataDir = '/data/edited'
     expect(result.isDirty.value).toBe(true)
     expect(result.dirtyLabels.value.length).toBeGreaterThan(0)
     unmount()
@@ -171,7 +171,7 @@ describe('useSettingsPage (mount + dirty)', () => {
   it('beforeunload is blocked when dirty', async () => {
     const { result, unmount } = mountComposable(() => useSettingsPage())
     await vi.waitFor(() => expect(result.pageLoading.value).toBe(false))
-    result.settings.value.proxy = 'x'
+    result.settings.value.dataDir = '/data/edited'
     const ev = new Event('beforeunload') as BeforeUnloadEvent
     Object.defineProperty(ev, 'returnValue', { writable: true, value: '' })
     const prevent = vi.spyOn(ev, 'preventDefault')
@@ -188,7 +188,7 @@ describe('useSettingsPage (mount + dirty)', () => {
     // clean → allow
     await expect(routeLeaveGuard.handler!()).resolves.toBe(true)
 
-    result.settings.value.proxy = 'dirty'
+    result.settings.value.dataDir = '/data/edited'
     confirmMock.confirm.mockResolvedValueOnce(false)
     await expect(routeLeaveGuard.handler!()).resolves.toBe(false)
     expect(confirmMock.confirm).toHaveBeenCalled()

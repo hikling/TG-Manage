@@ -67,6 +67,11 @@ export function useAccountBatchCheck(options: {
     for (const acc of options.accounts.value) {
       const r = map[acc.name]
       if (!r) continue
+      if (acc.raw && r.proxy_status) {
+        acc.raw.proxy_status = r.proxy_status
+        acc.raw.proxy_status_code = r.proxy_status_code ?? null
+        acc.raw.proxy_checked_at = r.proxy_checked_at ?? null
+      }
       if (r.ok) {
         acc.status = 'active'
         acc.message = ''

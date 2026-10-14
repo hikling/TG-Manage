@@ -108,7 +108,7 @@ describe('useAccountBatchCheck (job poll)', () => {
         job_id: 'j1',
         status: 'running',
         progress: { done: 1, total: 2, ok: 1, fail: 0 },
-        results: [{ account_name: 'a1', ok: true, status: 'connected', message: 'ok' }],
+        results: [{ account_name: 'a1', ok: true, status: 'connected', message: 'ok', proxy_status: 'error', proxy_status_code: 'PROXY_TIMEOUT', proxy_checked_at: '2026-10-14T00:00:00Z' }],
       })
       .mockResolvedValueOnce({
         job_id: 'j1',
@@ -127,6 +127,9 @@ describe('useAccountBatchCheck (job poll)', () => {
     expect(api.startAccountStatusCheckJob).toHaveBeenCalled()
     expect(result.batchChecking.value).toBe(true)
     expect(pollTicks.length).toBe(1)
+    expect(accounts.value[0]?.raw).toMatchObject({
+      proxy_status: 'error', proxy_status_code: 'PROXY_TIMEOUT', proxy_checked_at: '2026-10-14T00:00:00Z',
+    })
 
     // 第一次 start 内已 await poll 一次（running）
     // 再跑一轮 poll 到 finished

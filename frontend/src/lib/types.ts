@@ -31,6 +31,7 @@ const API_ERROR_CODE_MESSAGES: Record<string, string> = {
   NETWORK_ABORTED: 'Request cancelled',
   NETWORK_ERROR: 'Network error',
   ACCOUNT_SESSION_INVALID: 'Account session invalid, please re-login',
+  INVALID_ACCOUNT_PROXY: 'Invalid proxy address. Check the protocol, host, and port.',
   LOGIN_LOG_NOT_FOUND: 'Login log not found',
   INVALID_DATE_FILTER: 'Invalid date filter',
   ACCOUNT_NOT_FOUND: 'Account not found',
