@@ -7,9 +7,12 @@ from datetime import timezone as datetime_timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 scheduler: AsyncIOScheduler | None = None
 ACCOUNT_STATUS_REPORT_JOB_ID = "system-account-status-report"
+ROUTE_HEALTH_JOB_ID = "system-account-route-health"
+SUBSCRIPTION_REFRESH_JOB_ID = "system-account-subscription-refresh"
 _midnight_workflow_running = False
 
 
@@ -262,6 +265,48 @@ def _sync_account_status_report_job() -> None:
         scheduler.reschedule_job(ACCOUNT_STATUS_REPORT_JOB_ID, trigger=trigger)
 
 
+async def _job_route_health() -> None:
+    from backend.scheduler.instance_lock import has_scheduler_lock
+    from backend.services.account_routes import get_route_service
+
+    if has_scheduler_lock():
+        await get_route_service().health_tick()
+
+
+async def _job_subscription_refresh() -> None:
+    from backend.scheduler.instance_lock import has_scheduler_lock
+    from backend.services.account_routes import get_route_service
+
+    if has_scheduler_lock():
+        await get_route_service().subscription_tick()
+
+
+def _sync_route_jobs() -> None:
+    if scheduler is None:
+        return
+    from backend.scheduler.instance_lock import has_scheduler_lock
+
+    if not has_scheduler_lock():
+        for job_id in (ROUTE_HEALTH_JOB_ID, SUBSCRIPTION_REFRESH_JOB_ID):
+            if scheduler.get_job(job_id) is not None:
+                scheduler.remove_job(job_id)
+        return
+    for job_id, func, minutes in (
+        (ROUTE_HEALTH_JOB_ID, _job_route_health, 5),
+        (SUBSCRIPTION_REFRESH_JOB_ID, _job_subscription_refresh, 60),
+    ):
+        if scheduler.get_job(job_id) is None:
+            scheduler.add_job(
+                func,
+                trigger=IntervalTrigger(minutes=minutes, jitter=20),
+                id=job_id,
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+                misfire_grace_time=30,
+            )
+
+
 def _remove_retired_jobs() -> None:
     if scheduler is not None:
         for job in scheduler.get_jobs():
@@ -275,6 +320,7 @@ async def sync_jobs() -> None:
     """Refresh system jobs; remove jobs from the retired task orchestration."""
     _remove_retired_jobs()
     _sync_account_status_report_job()
+    _sync_route_jobs()
 
 
 async def init_scheduler(sync_on_startup: bool = True) -> AsyncIOScheduler:
@@ -311,6 +357,7 @@ async def init_scheduler(sync_on_startup: bool = True) -> AsyncIOScheduler:
         scheduler.start()
 
         _sync_account_status_report_job()
+        _sync_route_jobs()
 
         if sync_on_startup:
             await sync_jobs()

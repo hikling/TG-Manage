@@ -11,7 +11,7 @@
 | `docker stats --no-stream tg-manage` | 整个容器的内存、CPU 使用情况。 |
 | `docker inspect -f '&#123;&#123;.State.OOMKilled&#125;&#125;' tg-manage` | 检查上次退出是否由内存不足引起。 |
 
-使用 `docker stats` 观察整个容器的资源占用，其中包含应用和每个运行中的 TeleBox 账号的独立 Node 进程。按实际负载评估容量并扩容。
+使用 `docker stats` 观察整个容器的资源占用，其中包含应用、Xray 子进程和每个运行中的 TeleBox 账号的独立 Node 进程。按实际负载评估容量并扩容。
 
 ## 数据目录
 
@@ -20,6 +20,7 @@ Compose 固定将宿主机 `./data` 挂载为容器 `/data`。下列内容应作
 - `db.sqlite` 及可能存在的 `-wal`、`-shm` 文件。
 - `sessions/`、`telebox/`、日志、任务历史和其他账号数据。
 - 隐藏文件，尤其是 `.app_secret_key`。丢失密钥会使已加密的账号凭据和 Bot Token 无法读取。
+- 机场订阅凭据及 Xray 运行配置。备份包同样属于敏感资料。
 
 若使用外部 PostgreSQL，`data/` 仍需备份，同时对外部数据库单独执行 `pg_dump` 等数据库级备份。备份包能恢复敏感凭据，不要上传公共仓库。
 
@@ -61,6 +62,9 @@ docker compose start app
 | --- | --- |
 | 重启后数据不见 | `docker-compose.yml` 的 `./data:/data` 挂载、宿主机目录和写权限。 |
 | 所有账号凭据失效 | `data/.app_secret_key` 是否仍是原文件，以及完整备份是否正确恢复。 |
-| 单个账号需重新登录 | Telegram 会话状态、账号 API 凭据与代理。 |
+| 单个账号需重新登录 | Telegram 会话状态、账号 API 凭据与当前订阅线路；线路失败本身不应清除授权。 |
+| 账号显示待配置 | 在设置中保存并刷新至少一个 HTTPS 机场订阅；旧 SOCKS5 地址不再作为线路。 |
+| 账号显示直连 | 查看主/兜底订阅可用节点及最近两次健康检测；节点恢复后会自动回切。 |
+| Xray 构建或启动失败 | 核对镜像构建时官方资产 SHA-256 校验、`/usr/local/bin/xray version` 和 `/data` 写权限；不要在运行容器中覆盖二进制文件。 |
 | TeleBox 启动失败 | 账号卡片的 TeleBox 状态与日志、容器内存、插件依赖。 |
 | `/readyz` 返回错误 | `docker compose logs --tail=200 app`、数据目录权限和磁盘空间。 |

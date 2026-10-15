@@ -23,11 +23,11 @@ from pathlib import Path
 from typing import Any
 
 from backend.core.config import get_settings
+from backend.services.account_routes import resolve_account_route
 from backend.services.telegram import get_telegram_service
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
-from backend.utils.proxy import require_proxy_dict
-from backend.utils.tg_session import get_account_api_credentials, get_account_profile
+from backend.utils.tg_session import get_account_api_credentials
 
 SOURCE = Path(__file__).resolve().parents[2] / "telebox"
 logger = logging.getLogger(__name__)
@@ -418,7 +418,7 @@ class TeleBoxService:
         # Reading saved credentials and route must not cache a disconnected
         # Pyrogram Client for the independent Node worker.
         api_id, api_hash = get_account_api_credentials(account)
-        proxy = require_proxy_dict((get_account_profile(account) or {}).get("proxy"))
+        proxy = resolve_account_route(account)
         credentials = {"api_id": api_id, "api_hash": api_hash}
         secrets = [str(api_hash)]
         if proxy:
@@ -433,7 +433,7 @@ class TeleBoxService:
         return credentials, secrets
 
     async def refresh_account_proxy(self, account: str):
-        """Reconnect an enabled running worker after an explicit route edit."""
+        """Reconnect an enabled worker after its assigned route changes."""
         account = self._account(account)
         async with self.locks.setdefault(account, asyncio.Lock()):
             worker = self.workers.get(account)
@@ -446,7 +446,7 @@ class TeleBoxService:
             except Exception as exc:
                 worker = self.workers.get(account, worker)
                 worker["status"] = "failed"
-                worker["message"] = "代理已保存，TeleBox 重连失败，请检查代理配置后重新启动"
+                worker["message"] = "节点切换后 TeleBox 重连失败，请检查当前路由"
                 self._log(account, f"TeleBox 代理重连失败 ({type(exc).__name__})", "error")
 
     async def _accept(self, account: str, worker: dict, token: str):

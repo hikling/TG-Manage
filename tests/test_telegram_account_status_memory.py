@@ -11,6 +11,12 @@ import pytest
 from backend.services.telegram import accounts as accounts_mod
 
 
+@pytest.fixture(autouse=True)
+def _configured_route(monkeypatch):
+    """These client-lifecycle tests run after route selection has completed."""
+    monkeypatch.setattr(accounts_mod, "resolve_account_route", lambda _name: None)
+
+
 class _Service(accounts_mod.TelegramAccountsMixin):
     def __init__(self, session_dir):
         self.session_dir = session_dir

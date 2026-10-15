@@ -13,7 +13,9 @@ class LoginStartRequest(BaseModel):
     phone_number: str
     api_id: Optional[int] = None
     api_hash: Optional[str] = None
-    proxy: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class LoginBackupExportRequest(BaseModel):
@@ -56,7 +58,9 @@ class LoginVerifyRequest(BaseModel):
     phone_code: str
     phone_code_hash: str
     password: Optional[str] = None  # 2FA 密码
-    proxy: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class LoginVerifyResponse(BaseModel):
@@ -75,7 +79,9 @@ class QrLoginStartRequest(BaseModel):
     account_name: str
     api_id: Optional[int] = None
     api_hash: Optional[str] = None
-    proxy: Optional[str] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class QrLoginStartResponse(BaseModel):
@@ -95,11 +101,17 @@ class AccountInfo(BaseModel):
     exists: bool
     size: int
     remark: Optional[str] = None
-    proxy: Optional[str] = None
     status: str = "connected"
-    proxy_status: str = "unconfigured"
-    proxy_status_code: Optional[str] = None
-    proxy_checked_at: Optional[str] = None
+    route_mode: Literal["primary", "fallback", "direct", "setup_required"] = "setup_required"
+    route_status: str = "pending"
+    node_label: Optional[str] = None
+    latency_ms: Optional[int] = None
+    route_checked_at: Optional[str] = None
+    exit_ip: Optional[str] = None
+    exit_country: Optional[str] = None
+    exit_region: Optional[str] = None
+    exit_checked_at: Optional[str] = None
+    shared_node: bool = False
     status_message: Optional[str] = None
     status_code: Optional[str] = None
     status_checked_at: Optional[str] = None
@@ -166,11 +178,13 @@ class DeleteAccountResponse(BaseModel):
 
 class AccountUpdateRequest(BaseModel):
     new_account_name: Optional[str] = None
-    """更新账号备注/代理/标签"""
+    """更新账号备注和标签"""
 
     remark: Optional[str] = None
-    proxy: Optional[str] = None
     tags: Optional[list[str]] = None
+
+    class Config:
+        extra = "forbid"
 
 
 class AccountUpdateResponse(BaseModel):
@@ -198,9 +212,16 @@ class AccountStatusItem(BaseModel):
     message: str = ""
     code: Optional[str] = None
     checked_at: Optional[str] = None
-    proxy_status: str = "unconfigured"
-    proxy_status_code: Optional[str] = None
-    proxy_checked_at: Optional[str] = None
+    route_mode: Literal["primary", "fallback", "direct", "setup_required"] = "setup_required"
+    route_status: str = "pending"
+    node_label: Optional[str] = None
+    latency_ms: Optional[int] = None
+    route_checked_at: Optional[str] = None
+    exit_ip: Optional[str] = None
+    exit_country: Optional[str] = None
+    exit_region: Optional[str] = None
+    exit_checked_at: Optional[str] = None
+    shared_node: bool = False
     needs_relogin: bool = False
     user_id: Optional[int] = None
     avatar_refreshed: bool = False

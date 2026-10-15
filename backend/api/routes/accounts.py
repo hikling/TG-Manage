@@ -184,7 +184,6 @@ async def start_account_login(
         result = await asyncio.wait_for(get_telegram_service().start_login(
             account_name=request.account_name,
             phone_number=request.phone_number,
-            proxy=request.proxy,
             api_id=api_id,
             api_hash=api_hash,
         ), timeout=45)
@@ -274,7 +273,6 @@ async def verify_account_login(
             phone_code=request.phone_code,
             phone_code_hash=request.phone_code_hash,
             password=request.password,
-            proxy=request.proxy,
         )
         rate_limiter.reset("accounts.login.verify", limit_key)
 
@@ -336,7 +334,7 @@ async def start_qr_login(
         )
         api_id, api_hash = _login_api_credentials(request.api_id, request.api_hash)
         result = await asyncio.wait_for(get_telegram_service().start_qr_login(
-            account_name=request.account_name, proxy=request.proxy,
+            account_name=request.account_name,
             api_id=api_id, api_hash=api_hash,
         ), timeout=45)
         return QrLoginStartResponse(
@@ -516,9 +514,9 @@ async def check_accounts_status(
                             item["avatar_refresh_error"] = True
                 except Exception as exc:
                     item = build_status_check_error_item(name, exc)
-                from backend.services.account_proxy_status import check_account_proxy
+                from backend.services.account_routes import account_route_status
 
-                item = {**item, **await check_account_proxy(name, timeout_seconds=timeout_seconds)}
+                item = {**item, **account_route_status(name)}
                 result = AccountStatusItem(**item)
                 reservation.finish(name, success=bool(result.ok))
                 results.append(result)
@@ -808,7 +806,7 @@ async def update_account(
     current_user: User = Depends(get_current_user),
 ):
     """
-    更新账号备注/代理（不影响登录状态）
+    更新账号备注/标签（不影响登录状态）
     """
     try:
         account_name = validate_storage_name(account_name, field_name="account_name")
@@ -825,12 +823,7 @@ async def update_account(
         )
 
     try:
-        from backend.utils.proxy import require_proxy_dict
-        from backend.utils.tg_session import get_account_proxy, set_account_profile
-
-        proxy_supplied = "proxy" in request.__fields_set__
-        if proxy_supplied:
-            require_proxy_dict(request.proxy)
+        from backend.utils.tg_session import set_account_profile
 
         actual_account_name = str(current_account.get("name") or account_name).strip()
         target_account_name, renamed = resolve_account_rename_target(
@@ -853,18 +846,11 @@ async def update_account(
                 actual_account_name, target_account_name
             )
 
-        previous_proxy = get_account_proxy(target_account_name)
         set_account_profile(
             target_account_name,
             remark=request.remark,
-            **({"proxy": request.proxy} if proxy_supplied else {}),
             tags=request.tags,
         )
-
-        if proxy_supplied and previous_proxy != get_account_proxy(target_account_name):
-            from backend.services.telebox import get_telebox_service
-
-            await get_telebox_service().refresh_account_proxy(target_account_name)
 
         updated = find_account_by_name(
             service.list_accounts(force_refresh=True),

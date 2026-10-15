@@ -11,12 +11,9 @@ from fastapi import HTTPException
 from backend.services.telegram import get_telegram_service
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
-from backend.utils.proxy import build_proxy_dict, normalize_proxy_url
 from backend.utils.tg_session import (
-    get_account_proxy,
     get_global_semaphore,
     get_media_upload_semaphore,
-    set_account_profile,
 )
 
 MAX_MEDIA_BYTES = 20 * 1024 * 1024
@@ -226,16 +223,3 @@ async def dialog_action(account: str, chat_id: str, action: str):
     return {"ok": True}
 
 
-def proxies():
-    return {"items": [{"account": item["name"], "proxy": get_account_proxy(item["name"]) or ""} for item in get_telegram_service().list_accounts()]}
-
-
-async def set_proxy(account: str, proxy: str):
-    service, account = checked_account(account)
-    proxy = normalize_proxy_url(proxy)
-    if proxy and not build_proxy_dict(proxy):
-        raise HTTPException(422, "代理地址无效，支持 HTTP、HTTPS、SOCKS4 和 SOCKS5")
-    async with get_account_lock(account):
-        set_account_profile(account, proxy=proxy)
-        service._accounts_cache = None
-    return {"ok": True, "message": "代理已保存，将在账号下一次连接时生效"}

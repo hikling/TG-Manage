@@ -86,6 +86,42 @@ export const saveGlobalSettings = async (token: string, settings: GlobalSettings
   return result;
 };
 
+export interface SubscriptionSourceStatus {
+  configured: boolean;
+  status: string;
+  last_refreshed_at: string | null;
+  usable_count: number;
+  unsupported_count: number;
+  label: string | null;
+}
+
+export interface ProxySubscriptionSettings {
+  primary: SubscriptionSourceStatus;
+  fallback: SubscriptionSourceStatus;
+  latency_threshold_ms: number;
+  route_mode: 'primary' | 'fallback' | 'direct' | 'setup_required' | string;
+}
+
+export interface ProxySubscriptionUpdate {
+  primary_url?: string | null;
+  fallback_url?: string | null;
+  latency_threshold_ms?: number;
+}
+
+export const getProxySubscriptions = (token: string) =>
+  request<ProxySubscriptionSettings>('/config/settings/proxy-subscriptions', {}, token);
+
+export const saveProxySubscriptions = (token: string, update: ProxySubscriptionUpdate) =>
+  request<ProxySubscriptionSettings>('/config/settings/proxy-subscriptions', {
+    method: 'PUT',
+    body: JSON.stringify(update),
+  }, token, MEDIUM_TIMEOUT_MS);
+
+export const refreshProxySubscriptions = (token: string) =>
+  request<ProxySubscriptionSettings>('/config/settings/proxy-subscriptions/refresh', {
+    method: 'POST',
+  }, token, MEDIUM_TIMEOUT_MS);
+
 export const testBotNotification = (token: string) =>
   request<{ success: boolean; message: string; job_id: string | null }>("/config/bot/test", {
     method: "POST",

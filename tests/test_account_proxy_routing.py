@@ -21,6 +21,9 @@ from tg_manage.core import client as client_mod
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.setattr(tg_session, "_account_store_path", lambda: tmp_path / "accounts.json")
+    # Resource tests isolate Telegram clients from subscription setup.
+    for module in (accounts_mod, login_phone, login_qr):
+        monkeypatch.setattr(module, "resolve_account_route", lambda _name: None)
     return tmp_path
 
 
@@ -92,20 +95,23 @@ async def test_route_edit_preserves_active_refs_and_next_acquisition(store, monk
     monkeypatch.setattr(tg_session, "get_account_api_credentials", lambda _name: (123, "a" * 32))
     service = accounts_mod.TelegramAccountsMixin()
     service.session_dir = store
-    tg_session.set_account_profile("one", proxy="socks5://first:1080")
+    route = {"value": {"scheme": "socks5", "hostname": "127.0.0.1", "port": 18080}}
+    monkeypatch.setattr(accounts_mod, "resolve_account_route", lambda _name: route["value"])
+    tg_session.set_account_profile("one", proxy="socks5://legacy:1080")
     first, _ = service._build_account_client("one")
     async with first:
-        tg_session.set_account_profile("one", proxy="socks5://second:1080")
+        route["value"] = {"scheme": "socks5", "hostname": "127.0.0.1", "port": 18081}
         second, _ = service._build_account_client("one")
         assert second is not first and first.is_connected and first.stop_count == 0
         async with second:
-            assert second.proxy["hostname"] == "second"
+            assert second.proxy["port"] == 18081
             assert first.is_connected
         assert first.is_connected and first.stop_count == 0
-        tg_session.set_account_profile("one", proxy="")
+        route["value"] = None
         direct, proxy = service._build_account_client("one")
         async with direct:
             assert proxy is None and direct.proxy is None
+        assert tg_session.get_account_proxy("one") == "socks5://legacy:1080"
     assert first.stop_count == second.stop_count == direct.stop_count == 1
     assert not any(str(store) in key for key in client_mod._CLIENT_REFS)
     assert not any(str(store) in key for key in client_mod._CLIENT_INSTANCES)
@@ -204,9 +210,9 @@ async def test_account_status_errors_do_not_return_proxy_credentials(store, monk
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["start_login", "start_qr_login"])
-@pytest.mark.parametrize("proxy", [None, "socks5://user:p%40ss@account-proxy:1080"])
+@pytest.mark.parametrize("route", [None, {"scheme": "socks5", "hostname": "127.0.0.1", "port": 18080}])
 @pytest.mark.parametrize("failure", [False, True])
-async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch, caplog, method, proxy, failure):
+async def test_login_first_connection_uses_selected_route(store, monkeypatch, caplog, method, route, failure):
     captured = []
 
     class LoginClient:
@@ -263,12 +269,14 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
     monkeypatch.setattr("tg_manage.core.close_client_by_name", AsyncMock())
     lock = asyncio.Lock()
     module = login_phone if method == "start_login" else login_qr
+    monkeypatch.setattr(module, "resolve_account_route", lambda _name: route)
     monkeypatch.setattr(module, "get_account_lock", lambda _name: lock)
     monkeypatch.setattr(module, "get_session_mode", lambda: "file")
     monkeypatch.setattr(module, "get_global_semaphore", lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(module, "_cleanup_expired_login_sessions", AsyncMock())
     monkeypatch.setattr(login_phone, "set_account_api_credentials", Mock())
-    kwargs = {"account_name": "one", "proxy": proxy, "api_id": 12345, "api_hash": "a" * 32}
+    tg_session.set_account_profile("one", proxy="socks5://legacy:1080")
+    kwargs = {"account_name": "one", "api_id": 12345, "api_hash": "a" * 32}
     if method == "start_login":
         kwargs["phone_number"] = "+12345678900"
     if failure:
@@ -280,9 +288,9 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
         return
     result = await getattr(service, method)(**kwargs)
     assert previous_session.read_text() == "existing authorized session"
-    assert captured == [build_proxy_dict(proxy) if proxy else None]
+    assert captured == [route]
     session_store = login_phone._login_sessions if method == "start_login" else login_qr._qr_login_sessions
-    assert next(iter(session_store.values()))["proxy"] == proxy
+    assert "proxy" not in next(iter(session_store.values()))
     if method == "start_login":
         assert result["delivery_type"] == "app"
         assert result["next_type"] == "sms"
@@ -291,7 +299,7 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
         assert not expiry_task.done()
         await service.verify_login("one", "+12345678900", "12345", "code-hash")
         assert expiry_task.cancelled()
-        assert tg_session.get_account_proxy("one") == proxy
+        assert tg_session.get_account_proxy("one") == "socks5://legacy:1080"
     else:
         await service._cleanup_qr_login(result["login_id"])
         assert previous_session.read_text() == "existing authorized session"
@@ -486,21 +494,20 @@ async def test_phone_verify_exception_keeps_credentials_out_of_api(store, monkey
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("payload,expected", [({}, "socks5://first:1080"), ({"proxy": None}, None), ({"proxy": ""}, None)])
-async def test_edit_patch_omission_preserves_route_but_empty_clears(store, monkeypatch, payload, expected):
+async def test_account_edit_rejects_legacy_proxy_and_preserves_saved_value(store, monkeypatch):
+    from pydantic import ValidationError
+
     from backend.api.routes import accounts as routes
 
     tg_session.set_account_profile("one", proxy="socks5://first:1080")
     service = SimpleNamespace(list_accounts=lambda **kwargs: [{
         "name": "one", "status": "connected", "session_file": "one.session", "exists": True, "size": 1}])
     monkeypatch.setattr(routes, "get_telegram_service", lambda: service)
-    refresh = AsyncMock()
-    monkeypatch.setattr("backend.services.telebox.get_telebox_service",
-                        lambda: SimpleNamespace(refresh_account_proxy=refresh))
-    result = await routes.update_account("one", routes.AccountUpdateRequest(**payload), None)
+    result = await routes.update_account("one", routes.AccountUpdateRequest(remark="renamed"), None)
     assert result.success
-    assert tg_session.get_account_proxy("one") == expected
-    assert refresh.await_count == int("proxy" in payload)
+    assert tg_session.get_account_proxy("one") == "socks5://first:1080"
+    with pytest.raises(ValidationError):
+        routes.AccountUpdateRequest(proxy="socks5://new:1080")
 
 
 @pytest.mark.asyncio

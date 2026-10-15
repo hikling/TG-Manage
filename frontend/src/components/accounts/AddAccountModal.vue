@@ -27,8 +27,7 @@ const form = ref({
   remark: '',
   phone_number: '',
   phone_code: '',
-  password: '',
-  proxy: ''
+  password: ''
 })
 
 const loading = ref(false)
@@ -123,7 +122,7 @@ const reset = async () => {
       devLog.warn('cancelQrLogin failed:', getLocalizedErrorMessage(e, t))
     }
   }
-  form.value = { account_name: props.initialAccountName || '', api_id: '', api_hash: '', remark: '', phone_number: '', phone_code: '', password: '', proxy: '' }
+  form.value = { account_name: props.initialAccountName || '', api_id: '', api_hash: '', remark: '', phone_number: '', phone_code: '', password: '' }
   enableTelebox.value = false
   phoneCodeHash.value = ''
   error.value = ''
@@ -157,7 +156,6 @@ watch(loginMethod, () => {
   const enable = enableTelebox.value
   const remark = form.value.remark
   const password = form.value.password
-  const proxy = form.value.proxy
   reset()
   form.value.account_name = accountName
   form.value.api_id = apiId
@@ -165,7 +163,6 @@ watch(loginMethod, () => {
   enableTelebox.value = enable
   form.value.remark = remark
   form.value.password = password
-  form.value.proxy = proxy
 })
 
 const handleClose = () => {
@@ -277,8 +274,7 @@ const handleGetQr = async () => {
     const res = await startQrLogin(token, {
       account_name: form.value.account_name,
       api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
-      api_hash: form.value.api_hash.trim() || undefined,
-      proxy: form.value.proxy || undefined
+      api_hash: form.value.api_hash.trim() || undefined
     })
     loginId.value = res.login_id
     qrImage.value = res.qr_image || ''
@@ -320,8 +316,7 @@ const handleSendCode = async () => {
         account_name: form.value.account_name,
         api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
         api_hash: form.value.api_hash.trim() || undefined,
-        phone_number: form.value.phone_number,
-        proxy: form.value.proxy || undefined
+        phone_number: form.value.phone_number
       })
     phoneCodeHash.value = res.phone_code_hash
     codeSent.value = true
@@ -361,8 +356,7 @@ const handleSave = async () => {
         phone_number: form.value.phone_number,
         phone_code: form.value.phone_code,
         phone_code_hash: phoneCodeHash.value,
-        password: form.value.password || undefined,
-        proxy: form.value.proxy || undefined
+        password: form.value.password || undefined
       })
       await saveRemarkIfPresent(token)
       await applyTeleboxPreference()
@@ -519,7 +513,7 @@ onUnmounted(() => {
         </div>
       </template>
 
-      <!-- Cloud Password & Proxy for BOTH -->
+      <!-- Cloud password for both login methods -->
       <div class="space-y-1.5">
         <label class="ui-label" for="add-account-2fa">{{ t('addAccount.cloudPassword') }}</label>
         <input 
@@ -532,16 +526,6 @@ onUnmounted(() => {
         >
       </div>
 
-      <div class="space-y-1.5">
-        <label class="ui-label" for="add-account-proxy">{{ t('addAccount.proxy') }}</label>
-        <input 
-          id="add-account-proxy"
-          v-model="form.proxy"
-          type="text" 
-          :placeholder="t('addAccount.proxyPlaceholder')"
-          class="ui-input"
-        >
-      </div>
 
       <!-- QR specific block -->
       <div v-if="loginMethod === 'qr'" class="ui-form-section mt-2">

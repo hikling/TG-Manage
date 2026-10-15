@@ -23,6 +23,9 @@ const api = vi.hoisted(() => ({
   getGlobalSettings: vi.fn(),
   getRuntimeStatus: vi.fn(),
   getMemoryStats: vi.fn(),
+  getProxySubscriptions: vi.fn(),
+  saveProxySubscriptions: vi.fn(),
+  refreshProxySubscriptions: vi.fn(),
   // save/version dependencies used via nested composables
   saveGlobalSettings: vi.fn(),
   runDeviceKeepalive: vi.fn(),
@@ -76,6 +79,12 @@ describe('useSettingsPage (mount + dirty)', () => {
     })
     api.getRuntimeStatus.mockResolvedValue({ uptime: 1 })
     api.getMemoryStats.mockResolvedValue({ rss: 1 })
+    api.getProxySubscriptions.mockResolvedValue({
+      primary: { configured: true, status: 'healthy', last_refreshed_at: null, usable_count: 2, unsupported_count: 0, label: 'Provider' },
+      fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, usable_count: 0, unsupported_count: 0, label: null },
+      latency_threshold_ms: 800,
+      route_mode: 'primary',
+    })
     api.getAppVersion.mockResolvedValue({
       version: '1.0.0',
       update_check_enabled: false,
@@ -188,6 +197,19 @@ describe('useSettingsPage (mount + dirty)', () => {
     await result.saveSettings()
     expect(api.saveGlobalSettings).toHaveBeenCalled()
     expect(result.isDirty.value).toBe(false)
+    unmount()
+  })
+
+  it('keeps subscription URLs write-only and sends explicit clearing', async () => {
+    api.saveProxySubscriptions.mockImplementation(async () => api.getProxySubscriptions.mock.results.at(-1)?.value)
+    const { result, unmount } = mountComposable(() => useSettingsPage())
+    await vi.waitFor(() => expect(result.pageLoading.value).toBe(false))
+    expect(result.subscriptionDraft.value.primaryUrl).toBe('')
+    result.subscriptionDraft.value.clearPrimary = true
+    expect(result.isDirty.value).toBe(true)
+    expect(result.dirtyLabels.value).toContain('settings.subscriptions.title')
+    await result.saveSubscriptions()
+    expect(api.saveProxySubscriptions).toHaveBeenCalledWith('tok', { primary_url: null })
     unmount()
   })
 })

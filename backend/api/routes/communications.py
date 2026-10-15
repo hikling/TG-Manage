@@ -1,4 +1,4 @@
-"""所有聊天、群聊及账号代理 API。"""
+"""Account chat and group API."""
 from __future__ import annotations
 
 from typing import Literal
@@ -41,20 +41,6 @@ class MessageInput(ChatInput):
 
 class DialogAction(ChatInput):
     action: Literal["read", "archive", "unarchive", "pin", "unpin", "mute", "unmute"]
-
-
-class ProxyInput(BaseModel):
-    proxy: constr(max_length=2048)
-
-
-@router.get("/proxies")
-async def proxies():
-    return service.proxies()
-
-
-@router.put("/{account}/proxy")
-async def set_proxy(account: str, body: ProxyInput):
-    return await service.set_proxy(account, body.proxy)
 
 
 @router.get("/{account}/dialogs", dependencies=[Depends(require_chat_center)])

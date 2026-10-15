@@ -27,6 +27,7 @@ dependencies = [
     "json_repair",
     "typing-extensions",
     "httpx[socks]",
+    "PyYAML>=6,<7",
     "fastapi>=0.109.2",
     "uvicorn[standard]",
     "sqlalchemy",

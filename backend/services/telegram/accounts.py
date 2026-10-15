@@ -9,19 +9,23 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from backend.core.config import get_settings
+from backend.services.account_routes import (
+    account_route_status,
+    delete_account_route,
+    rename_account_route,
+    resolve_account_route,
+)
 from backend.services.telegram.sessions import (
     _login_sessions,
     _qr_login_sessions,
 )
 from backend.utils.account_locks import get_account_lock
 from backend.utils.names import validate_storage_name
-from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     delete_account_session_string,
     delete_session_string_file,
     get_account_api_credentials,
     get_account_profile,
-    get_account_proxy_status,
     get_account_session_string,
     get_account_status,
     get_global_semaphore,
@@ -82,12 +86,12 @@ class TelegramAccountsMixin:
 
     @staticmethod
     def _account_status_payload(account_name: str) -> Dict[str, Any]:
-        proxy_status = get_account_proxy_status(account_name)
+        route_status = account_route_status(account_name)
         try:
             get_account_api_credentials(account_name)
         except ValueError:
             return {
-                **proxy_status,
+                **route_status,
                 "status": "invalid",
                 "status_message": "缺少此账号的 Telegram API 凭据，请重新登录",
                 "status_code": "API_CREDENTIALS_MISSING",
@@ -96,7 +100,7 @@ class TelegramAccountsMixin:
             }
         status = get_account_status(account_name)
         return {
-            **proxy_status,
+            **route_status,
             "status": status.get("status") or "connected",
             "status_message": status.get("message") or "",
             "status_code": status.get("code"),
@@ -206,7 +210,6 @@ class TelegramAccountsMixin:
                             "exists": session_exists,
                             "size": session_size,
                             "remark": profile.get("remark"),
-                            "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
                             **self._account_status_payload(account_name),
                         }
@@ -231,7 +234,6 @@ class TelegramAccountsMixin:
                             "exists": session_exists,
                             "size": session_size,
                             "remark": profile.get("remark"),
-                            "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
                             **self._account_status_payload(account_name),
                         }
@@ -252,7 +254,6 @@ class TelegramAccountsMixin:
                             "exists": session_exists,
                             "size": session_size,
                             "remark": profile.get("remark"),
-                            "proxy": profile.get("proxy"),
                             "tags": profile.get("tags") or [],
                             **self._account_status_payload(account_name),
                         }
@@ -330,7 +331,7 @@ class TelegramAccountsMixin:
             async with lock:
                 client = get_client(
                     account_name,
-                    proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
+                    proxy=resolve_account_route(account_name),
                     workdir=self.session_dir,
                     session_string=session_string,
                     in_memory=in_memory,
@@ -399,7 +400,7 @@ class TelegramAccountsMixin:
                 async with get_global_semaphore():
                     client = get_client(
                         account_name,
-                        proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
+                        proxy=resolve_account_route(account_name),
                         workdir=self.session_dir,
                         session_string=session_string,
                         in_memory=in_memory,
@@ -467,7 +468,7 @@ class TelegramAccountsMixin:
                 raise ValueError("session_string 不存在或已失效")
             in_memory = True
 
-        proxy_dict = require_proxy_dict((get_account_profile(account_name) or {}).get("proxy"))
+        proxy_dict = resolve_account_route(account_name)
         client = get_client(
             account_name,
             proxy=proxy_dict,
@@ -561,7 +562,7 @@ class TelegramAccountsMixin:
                 async with get_account_lock(account_name):
                     client = get_client(
                         account_name,
-                        proxy=require_proxy_dict((get_account_profile(account_name) or {}).get("proxy")),
+                        proxy=resolve_account_route(account_name),
                         workdir=self.session_dir,
                         session_string=session_string,
                         in_memory=in_memory,
@@ -765,6 +766,7 @@ class TelegramAccountsMixin:
             # A file-session account can still carry proxy, status and API
             # credentials in accounts.json; remove that entry as well.
             delete_account_session_string(account_name)
+            delete_account_route(account_name)
 
             # 确保 .session_string 残留被清理
             delete_session_string_file(self.session_dir, account_name)
@@ -852,6 +854,7 @@ class TelegramAccountsMixin:
                 self._move_path(source, target)
 
             rename_account_entry(actual_account_name, new_account_name)
+            rename_account_route(actual_account_name, new_account_name)
             self._rename_pending_login_records(actual_account_name, new_account_name)
 
             self._accounts_cache = None
