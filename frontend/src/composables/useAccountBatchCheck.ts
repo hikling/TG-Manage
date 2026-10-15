@@ -70,11 +70,16 @@ export function useAccountBatchCheck(options: {
       const r = map[acc.name]
       if (!r) continue
       if (acc.raw) {
-        for (const key of ['route_mode', 'route_status', 'node_label', 'latency_ms',
-          'route_checked_at', 'exit_ip', 'exit_country', 'exit_region',
-          'exit_checked_at', 'shared_node'] as const) {
-          if (key in r) (acc.raw as unknown as Record<string, unknown>)[key] = r[key]
-        }
+        if ('route_mode' in r) acc.raw.route_mode = r.route_mode
+        if ('route_status' in r) acc.raw.route_status = r.route_status
+        if ('node_label' in r) acc.raw.node_label = r.node_label
+        if ('latency_ms' in r) acc.raw.latency_ms = r.latency_ms
+        if ('route_checked_at' in r) acc.raw.route_checked_at = r.route_checked_at
+        if ('exit_ip' in r) acc.raw.exit_ip = r.exit_ip
+        if ('exit_country' in r) acc.raw.exit_country = r.exit_country
+        if ('exit_region' in r) acc.raw.exit_region = r.exit_region
+        if ('exit_checked_at' in r) acc.raw.exit_checked_at = r.exit_checked_at
+        if ('shared_node' in r) acc.raw.shared_node = r.shared_node
       }
       if (r.ok) {
         acc.status = 'active'
