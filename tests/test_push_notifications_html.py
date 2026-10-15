@@ -108,6 +108,35 @@ class TestBuildHtmlNotification:
 
 class TestParseModePropagation:
     @pytest.mark.asyncio()
+    async def test_connection_verification_requires_bot_api_ok(self, monkeypatch):
+        class _FakeClient:
+            async def post(self, url, json=None):
+                return httpx.Response(200, json={"ok": False}, request=httpx.Request("POST", url))
+
+        monkeypatch.setattr(
+            "backend.services.push_notifications._get_shared_http_client",
+            lambda: _FakeClient(),
+        )
+        with pytest.raises(TelegramBotDeliveryError, match="未确认测试消息"):
+            await send_telegram_bot_message(
+                bot_token="secret", chat_id="123", text="ping", verify_response=True,
+            )
+
+    @pytest.mark.asyncio()
+    async def test_connection_verification_accepts_bot_api_ok(self, monkeypatch):
+        class _FakeClient:
+            async def post(self, url, json=None):
+                return httpx.Response(200, json={"ok": True}, request=httpx.Request("POST", url))
+
+        monkeypatch.setattr(
+            "backend.services.push_notifications._get_shared_http_client",
+            lambda: _FakeClient(),
+        )
+        await send_telegram_bot_message(
+            bot_token="secret", chat_id="123", text="ping", verify_response=True,
+        )
+
+    @pytest.mark.asyncio()
     async def test_send_message_passes_parse_mode(self, monkeypatch):
         sent: dict = {}
 
@@ -246,7 +275,6 @@ class TestNotificationTimeLabels:
         settings = {
             "telegram_bot_notify_enabled": True,
             "telegram_bot_login_notify_enabled": True,
-            "telegram_bot_quiet_hours_enabled": False,
             "telegram_bot_token": "tok",
             "telegram_bot_chat_id": "chat",
         }

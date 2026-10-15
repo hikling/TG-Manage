@@ -27,7 +27,7 @@ GLOBAL_SETTINGS_CACHE_TTL = 2.0
 
 def _is_retired_setting(key: str) -> bool:
     """Ignore removed controls, including the legacy account proxy fallback."""
-    return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_")) or key in {
+    return key.startswith(("sign_task_", "ai_vision_", "telegram_bot_task_", "telegram_bot_quiet_hours_")) or key in {
         "sign_interval", "global_proxy", "auto_backup_enabled",
         "auto_backup_interval_hours", "auto_backup_keep", "webdav_url",
         "webdav_username", "webdav_password", "webdav_remote_dir",
@@ -136,9 +136,6 @@ class GlobalSettingsMixin:
             "telegram_bot_notify_enabled": False,
             "telegram_bot_login_notify_enabled": False,
             "telegram_bot_code_enabled": False,
-            "telegram_bot_quiet_hours_enabled": False,
-            "telegram_bot_quiet_hours_start": "23:00",
-            "telegram_bot_quiet_hours_end": "07:00",
             "telegram_bot_token": None,
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
@@ -157,7 +154,7 @@ class GlobalSettingsMixin:
             for key, value in default_settings.items():
                 if key not in settings:
                     settings[key] = value
-        # 时区：文件值优先，否则回退环境/核心配置（静默时段等依赖）
+        # 时区：文件值优先，否则回退环境/核心配置
         if not settings.get("timezone"):
             try:
                 settings["timezone"] = get_settings().timezone

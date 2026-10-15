@@ -12,9 +12,6 @@ export type SettingsFormState = {
   botEnabled: boolean
   botLoginNotify: boolean
   botCodeEnabled: boolean
-  quietEnabled: boolean
-  quietStart: string
-  quietEnd: string
   botToken: string
   botChatId: string
   botThreadId: string
@@ -66,9 +63,6 @@ export function buildBotPayload(s: SettingsFormState) {
     telegram_bot_notify_enabled: s.botEnabled,
     telegram_bot_login_notify_enabled: s.botLoginNotify,
     telegram_bot_code_enabled: s.botCodeEnabled,
-    telegram_bot_quiet_hours_enabled: s.quietEnabled,
-    telegram_bot_quiet_hours_start: s.quietStart || '23:00',
-    telegram_bot_quiet_hours_end: s.quietEnd || '07:00',
     // 空 Token 表示不覆盖服务端已有值
     ...(s.botToken ? { telegram_bot_token: s.botToken } : {}),
     telegram_bot_chat_id: s.botChatId || null,
@@ -96,9 +90,6 @@ export function snapSection(
         botEnabled: s.botEnabled,
         botLoginNotify: s.botLoginNotify,
         botCodeEnabled: s.botCodeEnabled,
-        quietEnabled: s.quietEnabled,
-        quietStart: s.quietStart,
-        quietEnd: s.quietEnd,
         botToken: s.botToken ? '***set***' : '',
         botChatId: s.botChatId,
         botThreadId: s.botThreadId,
@@ -149,9 +140,6 @@ export function applyGlobalSettingsToForm(
     telegram_bot_notify_enabled?: boolean
     telegram_bot_login_notify_enabled?: boolean
     telegram_bot_code_enabled?: boolean
-    telegram_bot_quiet_hours_enabled?: boolean
-    telegram_bot_quiet_hours_start?: string | null
-    telegram_bot_quiet_hours_end?: string | null
     telegram_bot_token_set?: boolean
     telegram_bot_chat_id?: string | null
     telegram_bot_message_thread_id?: number | null
@@ -166,9 +154,6 @@ export function applyGlobalSettingsToForm(
   s.botEnabled = res.telegram_bot_notify_enabled || false
   s.botLoginNotify = res.telegram_bot_login_notify_enabled || false
   s.botCodeEnabled = res.telegram_bot_code_enabled || false
-  s.quietEnabled = res.telegram_bot_quiet_hours_enabled || false
-  s.quietStart = res.telegram_bot_quiet_hours_start || '23:00'
-  s.quietEnd = res.telegram_bot_quiet_hours_end || '07:00'
   s.botToken = ''
   s.botChatId = res.telegram_bot_chat_id || ''
   s.botThreadId = res.telegram_bot_message_thread_id

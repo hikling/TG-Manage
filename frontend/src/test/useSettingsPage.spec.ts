@@ -27,6 +27,7 @@ const api = vi.hoisted(() => ({
   saveGlobalSettings: vi.fn(),
   runDeviceKeepalive: vi.fn(),
   testBotNotification: vi.fn(),
+  testBotConnection: vi.fn(),
   getAppVersion: vi.fn(),
   checkAppVersion: vi.fn(),
 }))

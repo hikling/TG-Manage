@@ -13,6 +13,7 @@ const {
   runtimeStatus,
   memoryStats,
   botTestLoading,
+  botConnectionLoading,
   pageLoading,
   loadFailed,
   revealSecrets,
@@ -32,6 +33,7 @@ const {
   saveBotSettings,
   saveAllSettings,
   testBot,
+  testBotConnection,
   handleCheckUpdate,
   toggleReveal,
   reload: reloadData,
@@ -97,8 +99,10 @@ const {
             :reveal="{ botToken: revealSecrets.botToken }"
             :bot-loading="botLoading"
             :bot-test-loading="botTestLoading"
+            :bot-connection-loading="botConnectionLoading"
             @save="saveBotSettings"
             @test="testBot"
+            @test-connection="testBotConnection"
             @toggle-reveal="toggleReveal"
           />
         </details>
