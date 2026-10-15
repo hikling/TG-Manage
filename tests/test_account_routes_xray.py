@@ -115,7 +115,7 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         await self.service.shutdown()
         self.temp.cleanup()
 
-    async def test_setup_required_then_distinct_and_shared_assignment(self):
+    async def test_setup_required_then_distinct_and_direct_when_nodes_run_out(self):
         with self.assertRaises(RouteSetupRequired):
             self.service.resolve_account_route("one")
         self.service._secret["ever_configured"] = True
@@ -131,10 +131,13 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.service._state["health"][self.service._key(self.second_primary)]["healthy"] = False
         self.service._state["assignments"].clear()
         self.service._reconcile()
-        self.assertEqual(self.service.resolve_account_route("one")["port"], self.service.resolve_account_route("two")["port"])
-        self.assertTrue(self.service.account_route_status("one")["shared_node"])
+        self.assertEqual(self.service.resolve_account_route("one")["port"], 21001)
+        self.assertIsNone(self.service.resolve_account_route("two"))
+        self.assertFalse(self.service.account_route_status("one")["shared_node"])
+        self.assertFalse(self.service.account_route_status("two")["shared_node"])
 
     async def test_two_failures_switch_to_fallback_then_two_successes_recover(self):
+        self.service._all_accounts = lambda: {"one"}
         self.service._secret["ever_configured"] = True
         p = self.service._key(self.primary)
         f = self.service._key(self.fallback)
@@ -157,6 +160,95 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.service._reconcile()
         self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
 
+    async def test_legacy_shared_route_moves_second_account_to_free_fallback(self):
+        self.service._secret["ever_configured"] = True
+        primary_key = self.service._key(self.primary)
+        fallback_key = self.service._key(self.fallback)
+        self.service._record_sample(primary_key, 90)
+        self.service._record_sample(fallback_key, 110)
+        self.service._assign("one", self.primary)
+        self.service._assign("two", self.primary)
+
+        self.service._reconcile()
+
+        self.assertEqual(self.service.resolve_account_route("one")["port"], 21001)
+        self.assertEqual(self.service.resolve_account_route("two")["port"], 21002)
+        self.assertFalse(self.service.account_route_status("one")["shared_node"])
+        self.assertFalse(self.service.account_route_status("two")["shared_node"])
+
+    async def test_same_verified_exit_ip_does_not_serve_two_accounts(self):
+        self.service._secret["ever_configured"] = True
+        for node in (self.primary, self.second_primary, self.fallback):
+            self.service._record_sample(self.service._key(node), 90)
+        self.service._geo_cache[self.service._key(self.primary)] = (time.monotonic(), {"ip": "8.8.8.8"})
+        self.service._geo_cache[self.service._key(self.second_primary)] = (time.monotonic(), {"ip": "8.8.8.8"})
+        self.service._geo_cache[self.service._key(self.fallback)] = (time.monotonic(), {"ip": "1.1.1.1"})
+
+        self.service._reconcile()
+
+        self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
+        self.assertEqual(self.service.account_route_status("two")["route_mode"], "fallback")
+
+    async def test_primary_then_fallback_then_direct_without_reuse(self):
+        self.service._all_accounts = lambda: {"one", "two", "three", "four"}
+        self.service._secret["ever_configured"] = True
+        self.service._state["health"].clear()
+        self.service._record_sample(self.service._key(self.primary), 90)
+        self.service._record_sample(self.service._key(self.fallback), 100)
+
+        self.service._reconcile()
+
+        modes = [self.service.account_route_status(name)["route_mode"] for name in ("one", "two", "three", "four")]
+        self.assertEqual(modes.count("primary"), 1)
+        self.assertEqual(modes.count("fallback"), 1)
+        self.assertEqual(modes.count("direct"), 2)
+
+    async def test_geo_worker_count_stays_bounded_for_large_account_list(self):
+        release = asyncio.Event()
+        started = set()
+
+        async def verify(account):
+            started.add(account)
+            await release.wait()
+
+        self.service._schedule_geo_for_accounts = AccountRouteService._schedule_geo_for_accounts.__get__(self.service)
+        self.service._verify_exit = verify
+        self.service._schedule_geo_for_accounts({f"account-{index}" for index in range(1000)})
+        await asyncio.sleep(0)
+        self.assertEqual(len(self.service._geo_tasks), 6)
+        self.assertEqual(len(started), 6)
+        release.set()
+        await asyncio.gather(*self.service._geo_tasks)
+        self.assertFalse(self.service._geo_pending)
+
+    async def test_duplicate_exit_discovered_after_assignment_moves_second_account(self):
+        self.service._secret["ever_configured"] = True
+        for node in (self.primary, self.second_primary, self.fallback):
+            self.service._record_sample(self.service._key(node), 90)
+        self.service._reconcile()
+
+        class GeoClient:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+            async def get(self, _url):
+                return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {
+                    "ip": "8.8.8.8", "country": "US", "region": "", "success": True,
+                })
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", GeoClient):
+            await self.service._verify_exit("one")
+            await self.service._verify_exit("two")
+
+        self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
+        self.assertEqual(self.service.account_route_status("two")["route_mode"], "fallback")
+
     async def test_stale_geo_result_does_not_restore_old_ip(self):
         self.service._secret["ever_configured"] = True
         p = self.service._key(self.primary)
@@ -168,11 +260,11 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.service.delete_account_route("one")
         self.assertNotIn("one", self.service._state["assignments"])
 
-    async def test_shared_route_uses_one_geo_request_and_rejects_stale_result(self):
+    async def test_direct_geo_request_is_coalesced_and_stale_result_rejected(self):
         self.service._secret["ever_configured"] = True
         self.service._record_sample(self.service._key(self.primary), 90)
         self.service._reconcile()
-        self.assertTrue(self.service.account_route_status("one")["shared_node"])
+        self.assertEqual(self.service.account_route_status("two")["route_mode"], "direct")
         entered, release = asyncio.Event(), asyncio.Event()
         calls = 0
 
@@ -199,15 +291,15 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
             first = asyncio.create_task(self.service._verify_exit("one"))
             second = asyncio.create_task(self.service._verify_exit("two"))
             await asyncio.wait_for(entered.wait(), timeout=1)
-            self.service._assign("one", self.fallback)
+            self.service._assign("two", self.fallback)
             release.set()
             await asyncio.gather(first, second)
 
-        self.assertEqual(calls, 1)
-        self.assertIsNone(self.service.account_route_status("one")["exit_ip"])
-        self.assertEqual(self.service.account_route_status("two")["exit_ip"], "8.8.8.8")
+        self.assertEqual(calls, 2)
+        self.assertEqual(self.service.account_route_status("one")["exit_ip"], "8.8.8.8")
+        self.assertIsNone(self.service.account_route_status("two")["exit_ip"])
 
-    async def test_manual_batch_reuses_one_fresh_ip_probe_for_shared_route(self):
+    async def test_manual_batch_probes_distinct_routes(self):
         self.service._secret["ever_configured"] = True
         self.service._record_sample(self.service._key(self.primary), 90)
         self.service._reconcile()
@@ -234,7 +326,7 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         with patch("backend.services.account_routes.httpx.AsyncClient", GeoClient):
             one = await self.service.refresh_account_exit("one", fresh_after=started)
             two = await self.service.refresh_account_exit("two", fresh_after=started)
-        self.assertEqual(calls, 1)
+        self.assertEqual(calls, 2)
         self.assertEqual(one["exit_ip"], "8.8.8.8")
         self.assertEqual(two["exit_ip"], "8.8.8.8")
 
@@ -271,7 +363,7 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
             await self.service.refresh_subscriptions()
 
         self.assertEqual(self.service.account_route_status("one")["route_mode"], "fallback")
-        self.assertEqual(self.service.account_route_status("two")["route_mode"], "fallback")
+        self.assertEqual(self.service.account_route_status("two")["route_mode"], "direct")
         self.assertEqual(self.service.resolve_account_route("one")["port"], 21001)
 
     async def test_refresh_keeps_working_pool_when_new_exits_all_fail(self):

@@ -266,6 +266,7 @@ async function startTunnelOnce(bin: string, port: number): Promise<string> {
     let urlCaptured = false;
     let stdoutBuffer = "";
     let stderrBuffer = "";
+    const MAX_CAPTURE_CHARS = 16 * 1024;
 
     try {
       // Use --loglevel info to get the URL in the info box output (stderr)
@@ -307,7 +308,7 @@ async function startTunnelOnce(bin: string, port: number): Promise<string> {
 
       tunnelProc.stdout?.on("data", (chunk) => {
         const text = chunk.toString();
-        stdoutBuffer += text;
+        stdoutBuffer = (stdoutBuffer + text).slice(-MAX_CAPTURE_CHARS);
         logger.debug(`[panel-tunnel] stdout: ${text.trim()}`);
         if (!urlCaptured && checkAndCapture(text, "stdout")) {
           urlCaptured = true;
@@ -320,7 +321,7 @@ async function startTunnelOnce(bin: string, port: number): Promise<string> {
 
       tunnelProc.stderr?.on("data", (chunk) => {
         const text = chunk.toString();
-        stderrBuffer += text;
+        stderrBuffer = (stderrBuffer + text).slice(-MAX_CAPTURE_CHARS);
         logger.debug(`[panel-tunnel] stderr: ${text.trim()}`);
         if (!urlCaptured && checkAndCapture(text, "stderr")) {
           urlCaptured = true;

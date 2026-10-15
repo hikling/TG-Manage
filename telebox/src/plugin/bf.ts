@@ -508,8 +508,9 @@ class BfPlugin extends Plugin {
                   let tarError = "";
                   let gzipError = "";
                   let settled = false;
-                  tar.stderr.on("data", (d) => (tarError += d.toString()));
-                  gzip.stderr.on("data", (d) => (gzipError += d.toString()));
+                  const MAX_ERROR_CHARS = 8 * 1024;
+                  tar.stderr.on("data", (d) => { tarError = (tarError + d.toString()).slice(-MAX_ERROR_CHARS); });
+                  gzip.stderr.on("data", (d) => { gzipError = (gzipError + d.toString()).slice(-MAX_ERROR_CHARS); });
 
                   const finish = (callback: () => void): void => {
                     if (settled) return;
