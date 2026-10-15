@@ -195,35 +195,6 @@ async def save_global_settings(
         )
 
 
-class DeviceKeepaliveResponse(BaseModel):
-    success: bool
-    enabled: bool = True
-    checked: int = 0
-    kept_alive: int = 0
-    skipped: int = 0
-    failed: int = 0
-    interval_days: Optional[int] = None
-    results: list[dict] = Field(default_factory=list)
-    # 并发冲突等场景下服务层返回的提示信息
-    message: Optional[str] = None
-
-
-@router.post("/settings/device-keepalive/run", response_model=DeviceKeepaliveResponse)
-async def run_device_keepalive(current_user: User = Depends(get_current_user)):
-    """立即执行一次设备保活。"""
-    try:
-        from backend.services.device_keepalive import get_device_keepalive_service
-
-        result = await get_device_keepalive_service().run_due(force=True)
-        return DeviceKeepaliveResponse(**result)
-    except Exception as e:
-        logger.error("设备保活失败: %s", e, exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="设备保活失败",
-        )
-
-
 class BotTestResponse(BaseModel):
     success: bool
     message: str

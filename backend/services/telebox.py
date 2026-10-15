@@ -17,8 +17,6 @@ import shutil
 import signal
 import tempfile
 import uuid
-from collections import deque
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -81,7 +79,6 @@ class TeleBoxService:
         self.source = source
         self.workers: dict[str, dict[str, Any]] = {}
         self.locks: dict[str, asyncio.Lock] = {}
-        self.logs: dict[str, deque] = {}
         self.secrets: dict[str, list[str]] = {}
         self._admission_lock = asyncio.Lock()
         self._starting: set[str] = set()
@@ -109,16 +106,14 @@ class TeleBoxService:
             if marker.exists():
                 state = json.loads(marker.read_text())
                 self._private_json(marker, {"account": new, "enabled": bool(state.get("enabled"))})
-        self.logs[new] = self.logs.pop(old, deque(maxlen=300))
         self.secrets.pop(old, None)
         self.workers.pop(old, None)
         self.locks.pop(old, None)
 
     def forget_account(self, account: str) -> None:
-        """Release in-memory worker/log references after an account is deleted."""
+        """Release in-memory worker and secret references after account deletion."""
         self.workers.pop(account, None)
         self.locks.pop(account, None)
-        self.logs.pop(account, None)
         self.secrets.pop(account, None)
 
     async def _reserve_worker_slot(self, account: str) -> None:
@@ -257,10 +252,10 @@ class TeleBoxService:
         return removed
 
     def _log(self, account: str, message: str, level: str = "info"):
-        self.logs.setdefault(account, deque(maxlen=300)).append({
-            "time": datetime.now(timezone.utc).isoformat(), "level": level,
-            "message": redact(message, self.secrets.get(account, [])),
-        })
+        # Child streams must still be drained; only failures reach the server
+        # logger. Do not retain per-account process output in panel memory.
+        if level == "error":
+            logger.error("TeleBox %s: %s", account, redact(message, self.secrets.get(account, [])))
 
     def _marker(self, account: str, enabled: bool):
         directory = self.directory(account)
@@ -398,7 +393,7 @@ class TeleBoxService:
                 try:
                     result = await asyncio.wait_for(asyncio.shield(ready), 3)
                     if not result.get("ok"):
-                        message = result.get("message") or "TeleBox 启动失败，请查看运行日志"
+                        message = result.get("message") or "TeleBox 启动失败，请检查服务日志"
                         raise ValueError(redact(message, self.secrets.get(account, [])))
                 except asyncio.TimeoutError:
                     # QR authorization can legitimately take minutes. The later
@@ -505,7 +500,7 @@ class TeleBoxService:
                         future.set_result(event)
                     if identifier == "init" and not event.get("ok"):
                         worker["status"] = "failed"
-                        worker["message"] = redact(event.get("message") or "TeleBox 启动失败，请检查运行日志", self.secrets.get(account, []))
+                        worker["message"] = redact(event.get("message") or "TeleBox 启动失败，请检查服务日志", self.secrets.get(account, []))
                         self._log(account, worker["message"], "error")
         except OSError:
             self._log(account, "TeleBox 控制通道已关闭", "error")
@@ -531,7 +526,7 @@ class TeleBoxService:
         code = await worker["process"].wait()
         worker["status"] = "stopped" if worker.get("stopping") else "failed"
         if not worker.get("stopping") and not worker.get("message"):
-            worker["message"] = f"TeleBox 进程退出（代码 {code}），请查看运行日志"
+            worker["message"] = f"TeleBox 进程退出（代码 {code}），请检查服务日志"
         for future in worker["pending"].values():
             if not future.done():
                 future.set_result({"ok": False, "message": "TeleBox 进程已停止"})
@@ -625,12 +620,6 @@ class TeleBoxService:
         await self._send(worker, {"action": "password", "password": password})
         worker["status"] = "starting"
         return self.status(account)
-
-    def log_items(self, account: str):
-        status = self.status(account)
-        if not status["enabled"]:
-            return {"items": []}
-        return {"items": list(self.logs.get(status["account"], []))}
 
     async def startup(self):
         self.closing = False

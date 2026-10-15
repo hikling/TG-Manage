@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * 通用设置区块：日志保留、数据目录、并发、设备保活、时区。
- * 父组件 Settings.vue 持有表单状态，本组件通过 v-model 双向同步并触发保存/立即保活事件。
+ * 通用设置区块：日志保留、数据目录、并发、账户检测说明、时区。
+ * 父组件 Settings.vue 持有表单状态，本组件通过 v-model 双向同步并触发保存事件。
  */
 import { Settings2 } from 'lucide-vue-next'
 import CustomSelect from '../CustomSelect.vue'
@@ -20,14 +20,11 @@ const props = defineProps<{
   timezoneOptions: TimezoneOption[]
   /** 主保存中 */
   loading?: boolean
-  /** 设备保活「立即执行」中 */
-  keepaliveLoading?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: SettingsFormState): void
   (e: 'save'): void
-  (e: 'run-keepalive'): void
 }>()
 
 const { t } = useI18n()
@@ -82,9 +79,6 @@ const onStringInput = (key: keyof SettingsFormState, e: Event) => {
             <p class="text-[10px] text-gray-500 mt-1">{{ t('settings.deviceKeepaliveDesc') }}</p>
           </div>
         </div>
-        <button type="button" class="ui-btn-secondary !px-3 !py-2 !text-xs" :disabled="keepaliveLoading" @click="emit('run-keepalive')">
-          {{ keepaliveLoading ? t('common.saving') : t('settings.keepaliveNow') }}
-        </button>
       </div>
       <div class="space-y-1.5">
         <label class="ui-label">{{ t('settings.timezone') }}</label>

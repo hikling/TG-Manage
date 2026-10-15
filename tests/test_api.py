@@ -627,63 +627,13 @@ class TestAppearanceSettings:
         assert reset.json()["position_y"] == 50.0
 
 
-class TestDeviceKeepaliveRunResponse:
-    """设备保活手动执行端点的响应建模守钉"""
-
-    @staticmethod
-    def _patch_service(result: dict):
-        svc = MagicMock()
-        svc.run_due = AsyncMock(return_value=result)
-        return patch(
-            "backend.services.device_keepalive.get_device_keepalive_service",
-            return_value=svc,
-        )
-
-    def test_busy_result_keeps_message(self, api_client):
-        """并发冲突时响应需保留服务层的提示信息"""
+class TestRetiredManualActions:
+    def test_manual_keepalive_and_telebox_logs_are_unavailable(self, api_client):
         token = _login(api_client)
-        busy_result = {
-            "success": False,
-            "enabled": True,
-            "checked": 0,
-            "kept_alive": 0,
-            "skipped": 0,
-            "failed": 0,
-            "results": [],
-            "message": "设备保活正在运行中，请稍后重试",
-        }
-        with self._patch_service(busy_result):
-            resp = api_client.post(
-                "/api/config/settings/device-keepalive/run", headers=_auth(token)
-            )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is False
-        assert body["message"] == "设备保活正在运行中，请稍后重试"
-
-    def test_normal_result_message_defaults_null(self, api_client):
-        """正常执行无提示信息时 message 为空，其余字段正常回传"""
-        token = _login(api_client)
-        ok_result = {
-            "success": True,
-            "enabled": True,
-            "checked": 2,
-            "kept_alive": 1,
-            "skipped": 1,
-            "failed": 0,
-            "interval_days": 7,
-            "results": [{"account_name": "acc1", "ok": True}],
-        }
-        with self._patch_service(ok_result):
-            resp = api_client.post(
-                "/api/config/settings/device-keepalive/run", headers=_auth(token)
-            )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["message"] is None
-        assert body["kept_alive"] == 1
-        assert body["interval_days"] == 7
+        assert api_client.post(
+            "/api/config/settings/device-keepalive/run", headers=_auth(token)
+        ).status_code in {404, 405}
+        assert api_client.get("/api/telebox/one/logs", headers=_auth(token)).status_code in {404, 405}
 
 
 

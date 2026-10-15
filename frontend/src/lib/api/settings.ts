@@ -127,22 +127,3 @@ export const testBotConnection = (token: string) =>
     method: "POST",
   }, token);
 
-export interface DeviceKeepaliveRunResult {
-  success: boolean;
-  enabled: boolean;
-  checked: number;
-  kept_alive: number;
-  skipped: number;
-  failed: number;
-  interval_days?: number | null;
-  results: Array<{ account_name: string; status: string; message?: string }>;
-}
-
-export const runDeviceKeepalive = (token: string) =>
-  request<DeviceKeepaliveRunResult>(
-    "/config/settings/device-keepalive/run",
-    { method: "POST" },
-    token,
-    // 多账号保活可能超过默认 30s
-    MEDIUM_TIMEOUT_MS,
-  );

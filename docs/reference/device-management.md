@@ -51,11 +51,7 @@ DELETE /api/accounts/{account_name}/devices/{auth_hash}
 GET /api/accounts/{account_name}/official-messages?limit=20
 ```
 
-### 设备保活
-
-```
-POST /api/config/settings/device-keepalive/run
-```
+账户状态与官方消息报告由配置时区的每日 00:00 定时任务自动运行；账户管理中的单卡和批量状态检测仍可手动执行。
 
 ## 配置项
 

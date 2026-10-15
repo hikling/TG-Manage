@@ -100,35 +100,18 @@ describe('设置页拆分组件契约', () => {
     }
   })
 
-  it('GeneralSettings 手动保活不受旧开关影响且执行中不重复触发', async () => {
+  it('GeneralSettings 只展示自动检测规则，不再提供手动保活', () => {
     const wrapper = mount(GeneralSettings, {
       props: {
         modelValue: { ...settingsState(), deviceKeepaliveEnabled: false },
         timezoneOptions: [],
-        keepaliveLoading: false,
       },
       global: { plugins: [i18n] },
     })
-    const button = wrapper.get('button.ui-btn-secondary')
-    expect(button.element).toBeInstanceOf(HTMLButtonElement)
-    expect(button.attributes('type')).toBe('button')
-    expect(button.attributes('disabled')).toBeUndefined()
-    expect(button.text()).toBe(i18n.global.t('settings.keepaliveNow'))
-
-    await button.trigger('click')
-    expect(wrapper.emitted('run-keepalive')).toHaveLength(1)
+    expect(wrapper.text()).toContain(i18n.global.t('settings.deviceKeepaliveDesc'))
+    expect(wrapper.find('button.ui-btn-secondary').exists()).toBe(false)
+    expect(wrapper.emitted('run-keepalive')).toBeUndefined()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-
-    await wrapper.setProps({ keepaliveLoading: true })
-    expect(button.attributes('disabled')).toBeDefined()
-    expect(button.text()).toBe(i18n.global.t('common.saving'))
-    await button.trigger('click')
-    expect(wrapper.emitted('run-keepalive')).toHaveLength(1)
-
-    await wrapper.setProps({ keepaliveLoading: false })
-    expect(button.attributes('disabled')).toBeUndefined()
-    await button.trigger('click')
-    expect(wrapper.emitted('run-keepalive')).toHaveLength(2)
   })
 
   it('BotNotifySettings 的私人验证码选项支持英文界面', () => {

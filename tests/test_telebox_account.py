@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections import deque
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -68,7 +67,6 @@ async def test_purge_deleted_account_removes_only_its_telebox_data(monkeypatch, 
     service._marker("live", True)
     (service.directory("deleted") / "config.json").write_text('{"session":"private"}')
     (service.directory("live") / "config.json").write_text('{"session":"keep"}')
-    service.logs["deleted"] = deque([{"message": "old"}])
     service.secrets["deleted"] = ["sensitive"]
     stop = AsyncMock()
     monkeypatch.setattr(service, "_terminate_worker", stop)
@@ -77,7 +75,7 @@ async def test_purge_deleted_account_removes_only_its_telebox_data(monkeypatch, 
     stop.assert_awaited_once_with("deleted")
     assert not service.directory("deleted").exists()
     assert (service.directory("live") / "config.json").is_file()
-    assert "deleted" not in service.logs and "deleted" not in service.secrets
+    assert "deleted" not in service.secrets
     assert "deleted" not in service.locks
     assert await service.purge_account_data("deleted") is False
 
@@ -163,46 +161,22 @@ def test_deleted_account_releases_worker_and_secret_references(tmp_path):
     service = telebox.TeleBoxService(root=tmp_path)
     service.workers["removed"] = {"process": object()}
     service.locks["removed"] = object()
-    service.logs["removed"] = deque([{"message": "old"}])
     service.secrets["removed"] = ["sensitive"]
     service.forget_account("removed")
     assert "removed" not in service.workers
     assert "removed" not in service.locks
-    assert "removed" not in service.logs
     assert "removed" not in service.secrets
 
 
-@pytest.mark.parametrize("worker_status", ["running", "failed", "stopped"])
-def test_enabled_logs_remain_available_independent_of_worker_status(monkeypatch, tmp_path, worker_status):
+def test_telebox_output_only_logs_sanitized_errors_without_account_cache(tmp_path, caplog):
     service = telebox.TeleBoxService(root=tmp_path)
-    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
-        _normalize_account_name=lambda name: name.strip(), account_exists=lambda name: name == "one"))
-    service.workers["one"] = {"status": worker_status}
-    service._marker("one", True)
-    service._log("one", "diagnostic output")
-
-    assert service.log_items(" one ")["items"] == list(service.logs["one"])
-
-
-@pytest.mark.asyncio
-async def test_disabled_logs_are_hidden_without_deleting_retained_history(monkeypatch, tmp_path):
-    service = telebox.TeleBoxService(root=tmp_path)
-    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
-        _normalize_account_name=lambda name: name, account_exists=lambda name: name == "one"))
-    service._log("one", "retained output")
-    retained = list(service.logs["one"])
-    assert service.log_items("one") == {"items": []}
-
-    service._marker("one", True)
-    assert service.log_items("one") == {"items": retained}
-    await service.stop("one")
-    assert service.log_items("one") == {"items": []}
-    assert list(service.logs["one"]) == retained
-
-    service._marker("one", True)
-    assert service.log_items("one") == {"items": retained}
-    with pytest.raises(ValueError, match="账号不存在"):
-        service.log_items("unknown")
+    service.secrets["one"] = ["private-token"]
+    service._log("one", "normal output private-token")
+    service._log("one", "failed private-token", "error")
+    assert not hasattr(service, "logs")
+    assert "normal output" not in caplog.text
+    assert "failed [REDACTED]" in caplog.text
+    assert "private-token" not in caplog.text
 
 
 def test_overview_still_includes_disabled_telebox_accounts(monkeypatch, tmp_path):
@@ -340,18 +314,18 @@ def test_existing_account_refreshes_upstream_core_and_keeps_plugin_data(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_plugin_action_error_keeps_line_across_stderr_chunks(tmp_path):
+async def test_plugin_action_error_keeps_line_across_stderr_chunks(tmp_path, caplog):
     service = telebox.TeleBoxService(root=tmp_path)
     stream = SimpleNamespace(read=AsyncMock(side_effect=[b"[KITT] match ok\n[KITT] action ",
                                                        b"error: missing dep\n", b""]))
     await service._stderr("one", {"process": SimpleNamespace(stderr=stream)})
-    assert [(entry["level"], entry["message"]) for entry in service.logs["one"]] == [
-        ("info", "[KITT] match ok"), ("error", "[KITT] action error: missing dep")
-    ]
+    assert "[KITT] match ok" not in caplog.text
+    assert "[KITT] action error: missing dep" in caplog.text
+    assert stream.read.await_count == 3
 
 
 @pytest.mark.asyncio
-async def test_stdout_drains_after_bad_lines_and_bounds_authorization_tasks(monkeypatch, tmp_path):
+async def test_stdout_drains_after_bad_lines_and_bounds_authorization_tasks(monkeypatch, tmp_path, caplog):
     service = telebox.TeleBoxService(root=tmp_path)
     stream = SimpleNamespace(readline=AsyncMock(side_effect=[
         ValueError("Separator is not found, and chunk exceed the limit"),
@@ -376,8 +350,9 @@ async def test_stdout_drains_after_bad_lines_and_bounds_authorization_tasks(monk
     assert worker["status"] == "running"
     assert accepted == ["one"]
     assert len(worker["tasks"]) == 1
-    assert any("单行过长" in entry["message"] for entry in service.logs["one"])
-    assert any("非对象数据" in entry["message"] for entry in service.logs["one"])
+    assert "单行过长" in caplog.text
+    assert "非对象数据" in caplog.text
+    assert stream.readline.await_count == 6
     waiting.set()
     await asyncio.gather(*worker["tasks"])
 

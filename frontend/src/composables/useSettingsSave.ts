@@ -4,7 +4,6 @@
 import { ref } from 'vue'
 import {
   saveGlobalSettings,
-  runDeviceKeepalive,
   testBotConnection as testBotConnectionRequest,
 } from '../lib/api'
 import { withToken } from '../lib/api/core'
@@ -29,14 +28,13 @@ export function useSettingsSave(options: {
   const botLoading = ref(false)
   const saveAllLoading = ref(false)
   const botConnectionLoading = ref(false)
-  const keepaliveLoading = ref(false)
 
   const saveSettings = async () => {
     return withToken(async (token) => {
       loading.value = true
       try {
         await saveGlobalSettings(token, options.buildGeneralPayload())
-        // 保存成功后立即同步面板展示时区，Dashboard/Logs 等页时间格式跟随
+        // 保存成功后立即同步面板展示时区，Dashboard 等页时间格式跟随
         setPanelTimezone(String(options.buildGeneralPayload().timezone || ''))
         options.markSectionClean('general')
         notifySuccess('settings.saveSuccess')
@@ -44,27 +42,6 @@ export function useSettingsSave(options: {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {
         loading.value = false
-      }
-    })
-  }
-
-  const runKeepaliveNow = async () => {
-    return withToken(async (token) => {
-      keepaliveLoading.value = true
-      try {
-        const res = await runDeviceKeepalive(token)
-        // 整句走 i18n 插值：标点与语序交给词条，避免英文界面混入中文全角标点
-        notifySuccess(
-          'settings.keepaliveSummary', {
-            kept: res.kept_alive,
-            checked: res.checked,
-            failed: res.failed,
-          },
-        )
-      } catch (e: unknown) {
-        notifyError(resolveApiErrorMessage(e, 'settings.keepaliveFailed'))
-      } finally {
-        keepaliveLoading.value = false
       }
     })
   }
@@ -93,7 +70,7 @@ export function useSettingsSave(options: {
           ...options.buildGeneralPayload(),
           ...options.buildBotPayload(),
         })
-        // 保存成功后立即同步面板展示时区，Dashboard/Logs 等页时间格式跟随
+        // 保存成功后立即同步面板展示时区，Dashboard 等页时间格式跟随
         setPanelTimezone(String(options.buildGeneralPayload().timezone || ''))
         options.afterBotTokenSaved()
         options.markSectionClean('general')
@@ -128,9 +105,7 @@ export function useSettingsSave(options: {
     botLoading,
     saveAllLoading,
     botConnectionLoading,
-    keepaliveLoading,
     saveSettings,
-    runKeepaliveNow,
     saveBotSettings,
     saveAllSettings,
     testBotConnection,
