@@ -161,6 +161,7 @@ function socks5Connect(
     });
 
     socket.on("data", (chunk: Buffer) => {
+      if (buf.length + chunk.length > 16 * 1024) return fail(new Error("proxy handshake too large"));
       buf = Buffer.concat([buf, chunk]);
       try {
         if (stage === "greeting") {
@@ -290,6 +291,7 @@ function httpConnect(
       socket.write(req);
     });
     socket.on("data", (chunk: Buffer) => {
+      if (buf.length + chunk.length > 16 * 1024) return fail(new Error("proxy response headers too large"));
       buf += chunk.toString("binary");
       const idx = buf.indexOf("\r\n\r\n");
       if (idx < 0) return;
@@ -347,6 +349,7 @@ async function connectViaProxy(
         });
         let buf = Buffer.alloc(0);
         socket.on("data", (chunk: Buffer) => {
+          if (buf.length + chunk.length > 16 * 1024) return fail(new Error("proxy handshake too large"));
           buf = Buffer.concat([buf, chunk]);
           if (buf.length < 8) return;
           if (buf[1] !== 0x5a) {

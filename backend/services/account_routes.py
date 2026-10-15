@@ -109,6 +109,7 @@ class AccountRouteService:
         self._callbacks: list[Callable[[set[str]], Any]] = []
         self._confirm_tasks: dict[str, asyncio.Task[None]] = {}
         self._geo_tasks: set[asyncio.Task[None]] = set()
+        self._geo_pending: set[str] = set()
         self._geo_inflight: dict[str, asyncio.Task[dict[str, str | None]]] = {}
         self._last_health = 0.0
         self._secret = read_json_safe(self.secrets_path, {})
@@ -205,6 +206,7 @@ class AccountRouteService:
             await asyncio.gather(*self._confirm_tasks.values(), *self._geo_tasks, *self._geo_inflight.values(), return_exceptions=True)
         self._confirm_tasks.clear()
         self._geo_tasks.clear()
+        self._geo_pending.clear()
         self._geo_inflight.clear()
         self._callbacks.clear()
         await self.runtime.shutdown()
@@ -409,33 +411,44 @@ class AccountRouteService:
         self._schedule_geo_for_accounts(changed | geo_due)
         return changed
 
-    def _best_node(self, account: str, *, exclude: str | None = None, source: str | None = None) -> ImportedNode | None:
-        assignments = self._state["assignments"]
-        loads: dict[str, int] = {}
-        used_ips: set[str] = set()
-        for name, entry in assignments.items():
-            if name == account or not isinstance(entry, dict):
-                continue
-            key = entry.get("key")
-            if key:
-                loads[key] = loads.get(key, 0) + 1
-            if entry.get("exit_ip"):
-                used_ips.add(entry["exit_ip"])
+    def _node_exit_ips(self) -> dict[str, str]:
+        ips: dict[str, str] = {}
+        for entry in self._state["assignments"].values():
+            if isinstance(entry, dict) and entry.get("key") and entry.get("exit_ip"):
+                ips[entry["key"]] = entry["exit_ip"]
+        for key, (_, geo) in self._geo_cache.items():
+            if geo.get("ip"):
+                ips[key] = geo["ip"]
+        return ips
+
+    def _best_node(
+        self, account: str, *, exclude: str | None = None, source: str | None = None,
+        occupied_keys: set[str] | None = None, used_ips: set[str] | None = None,
+        node_ips: dict[str, str] | None = None,
+    ) -> ImportedNode | None:
+        if node_ips is None:
+            node_ips = self._node_exit_ips()
+        if occupied_keys is None:
+            occupied_keys = {
+                entry["key"] for name, entry in self._state["assignments"].items()
+                if name != account and isinstance(entry, dict) and entry.get("key")
+            }
+        if used_ips is None:
+            used_ips = {ip for key in occupied_keys if (ip := node_ips.get(key))}
         eligible: list[ImportedNode] = []
         for node in self._nodes():
             key = self._key(node)
             health = self._state["health"].get(key, {})
-            if key == exclude or (source and node.source != source) or health.get("healthy") is not True or self.runtime.port_for(key) is None:
+            if (key == exclude or key in occupied_keys or (source and node.source != source)
+                    or health.get("healthy") is not True or self.runtime.port_for(key) is None
+                    or node_ips.get(key) in used_ips):
                 continue
             eligible.append(node)
         if not eligible:
             return None
         return min(eligible, key=lambda node: (
             0 if node.source == "primary" else 1,
-            1 if self._geo_cache.get(self._key(node), (0, {}))[1].get("ip") in used_ips else 0,
-            1 if loads.get(self._key(node), 0) else 0,
             self._state["health"][self._key(node)].get("latency_ms") or 999999,
-            loads.get(self._key(node), 0),
         ))
 
     def _assign(self, account: str, node: ImportedNode | None) -> bool:
@@ -461,28 +474,59 @@ class AccountRouteService:
 
     def _reconcile(self) -> set[str]:
         changed: set[str] = set()
-        for account in sorted(self._all_accounts()):
+        accounts = sorted(self._all_accounts())
+        nodes = {self._key(node): node for node in self._nodes()}
+        node_ips = self._node_exit_ips()
+        occupied_keys: set[str] = set()
+        used_ips: set[str] = set()
+        sticky: dict[str, ImportedNode] = {}
+        # Reserve the existing healthy routes first; a previously shared route
+        # keeps one owner and the other accounts must find an unused exit.
+        for account in accounts:
             current = self._state["assignments"].get(account)
             current_key = current.get("key") if isinstance(current, dict) else None
             health = self._state["health"].get(current_key, {}) if current_key else {}
-            active = current_key and self.runtime.port_for(current_key) is not None and health.get("bad_streak", 0) < 2
-            node: ImportedNode | None = None
-            if active:
-                node = next((item for item in self._nodes() if self._key(item) == current_key), None)
-                if node and node.source == "fallback":
-                    primary = self._best_node(account, source="primary")
-                    if primary and self._state["health"][self._key(primary)].get("good_streak", 0) >= 2:
-                        node = primary
-            else:
-                node = self._best_node(account, exclude=current_key if health.get("bad_streak", 0) >= 2 else None)
+            ip = node_ips.get(current_key) if current_key else None
+            if (current_key in nodes and current_key not in occupied_keys and ip not in used_ips
+                    and self.runtime.port_for(current_key) is not None and health.get("bad_streak", 0) < 2):
+                sticky[account] = nodes[current_key]
+                occupied_keys.add(current_key)
+                if ip:
+                    used_ips.add(ip)
+
+        for account in accounts:
+            current = self._state["assignments"].get(account)
+            current_key = current.get("key") if isinstance(current, dict) else None
+            health = self._state["health"].get(current_key, {}) if current_key else {}
+            node = sticky.get(account)
+            if node and node.source == "fallback":
+                primary = self._best_node(account, source="primary", occupied_keys=occupied_keys, used_ips=used_ips, node_ips=node_ips)
+                if primary and self._state["health"][self._key(primary)].get("good_streak", 0) >= 2:
+                    occupied_keys.remove(current_key)
+                    old_ip = node_ips.get(current_key)
+                    if old_ip:
+                        used_ips.remove(old_ip)
+                    node = primary
+            if node is None:
+                node = self._best_node(
+                    account, exclude=current_key if health.get("bad_streak", 0) >= 2 else None,
+                    occupied_keys=occupied_keys, used_ips=used_ips, node_ips=node_ips,
+                )
                 if node and current and current.get("mode") == "direct" and self._state["health"][self._key(node)].get("good_streak", 0) < 2:
                     node = None
+            if node:
+                key = self._key(node)
+                occupied_keys.add(key)
+                ip = node_ips.get(key)
+                if ip:
+                    used_ips.add(ip)
             if self._assign(account, node):
                 changed.add(account)
             elif node and current:
-                current["latency_ms"] = health.get("latency_ms")
-                current["route_checked_at"] = health.get("checked_at")
-                current["status"] = "healthy" if health.get("bad_streak", 0) == 0 else "degraded"
+                node_health = self._state["health"].get(self._key(node), {})
+                current["latency_ms"] = node_health.get("latency_ms")
+                current["route_checked_at"] = node_health.get("checked_at")
+                current["status"] = "healthy" if node_health.get("bad_streak", 0) == 0 else "degraded"
         self._save_state()
         return changed
 
@@ -545,10 +589,19 @@ class AccountRouteService:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return
-        for account in accounts:
-            task = loop.create_task(self._verify_exit(account))
+        self._geo_pending.update(accounts)
+        while len(self._geo_tasks) < min(6, len(self._geo_pending)):
+            task = loop.create_task(self._drain_geo())
             self._geo_tasks.add(task)
             task.add_done_callback(self._geo_tasks.discard)
+
+    async def _drain_geo(self) -> None:
+        while self._geo_pending:
+            account = self._geo_pending.pop()
+            try:
+                await self._verify_exit(account)
+            except Exception as exc:
+                logger.warning("账户出口 IP 检测失败（%s）", type(exc).__name__)
 
     async def refresh_account_exit(
         self, account: str, *, fresh_after: float | None = None,
@@ -591,6 +644,16 @@ class AccountRouteService:
             if current and current.get("key") == key and current.get("generation") == generation:
                 current.update({"exit_ip": geo["ip"], "exit_country": geo["country"], "exit_region": geo["region"], "exit_checked_at": _now() if geo["ip"] else None})
                 self._save_state()
+                duplicate = bool(key and geo["ip"] and any(
+                    name != account and isinstance(other, dict) and other.get("key")
+                    and other.get("key") != key and other.get("exit_ip") == geo["ip"]
+                    for name, other in self._state["assignments"].items()
+                ))
+                changed = self._reconcile() if duplicate else set()
+            else:
+                changed = set()
+        await self._notify(changed)
+        self._schedule_geo_for_accounts(changed)
 
     async def _fetch_geo(self, cache_key: str, port: int | None, runtime_generation: int | None) -> dict[str, str | None]:
         def current_route() -> bool:
