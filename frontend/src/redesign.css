@@ -304,8 +304,10 @@ button, a, summary, [role="button"] { cursor: pointer; }
 .account-tile-divider { height: 1px; background: var(--tg-border); margin: 20px 0 14px; }
 .account-tile-signals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .account-tile-signals > div { display: flex; flex-direction: column; min-width: 0; }
+.account-ip-heading { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 5px; }
 .account-ip-address { margin-top: 2px; font-size: .72rem; color: var(--tg-text-muted); overflow-wrap: anywhere; }
-.account-ip-route { margin-top: 4px; font-size: .68rem; color: var(--tg-text-muted); overflow-wrap: anywhere; }
+.account-ip-route, .account-ip-shared { font-size: .68rem; color: var(--tg-text-muted); overflow-wrap: anywhere; }
+.account-ip-shared { margin-top: 4px; }
 .account-signal-label { color: var(--tg-text-muted); font-size: .65rem; font-weight: 750; letter-spacing: .09em; }
 .account-tile-status { min-width: 0; margin: 5px 0 0; padding: 0; font-size: .81rem; font-weight: 650; white-space: normal; overflow-wrap: anywhere; }
 .account-tile-password { margin-top: 16px; }

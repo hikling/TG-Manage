@@ -15,8 +15,7 @@ const source = computed(() => {
 })
 const location = computed(() => {
   if (!props.account.exit_ip || !props.account.exit_checked_at) return t('accounts.ipLocation.unknown')
-  const parts = [props.account.exit_country, props.account.exit_region].filter(Boolean)
-  return parts.length ? parts.join(' · ') : t('accounts.ipLocation.unknown')
+  return props.account.exit_country || t('accounts.ipLocation.unknown')
 })
 const address = computed(() => props.account.exit_ip && props.account.exit_checked_at
   ? props.account.exit_ip : t('accounts.ipLocation.pendingIp'))
@@ -34,7 +33,10 @@ const details = computed(() => {
 
 <template>
   <div class="account-ip-signal" :title="details">
-    <span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span>
+    <div class="account-ip-heading">
+      <span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span>
+      <span class="account-ip-route">{{ source }}</span>
+    </div>
     <span class="account-tile-status" :class="{
       'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip,
       'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable',
@@ -42,6 +44,6 @@ const details = computed(() => {
       <span class="account-status-dot" aria-hidden="true" />{{ location }}
     </span>
     <span class="account-ip-address">{{ address }}</span>
-    <span class="account-ip-route">{{ source }}<span v-if="account.shared_node"> · {{ t('accounts.ipLocation.shared') }}</span></span>
+    <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
   </div>
 </template>

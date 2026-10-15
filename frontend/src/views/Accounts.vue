@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Play, FileText, Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight, HardDriveDownload } from 'lucide-vue-next'
+import { Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreVertical, LogOut, Power, ShieldCheck, ArrowUpRight, HardDriveDownload } from 'lucide-vue-next'
 import {
   deleteAccount,
   fetchAccountAvatar,
@@ -426,10 +426,6 @@ const openAddModal = (method: 'code' | 'qr') => {
   showAddModal.value = true
 }
 
-const goLogs = (name: string) => {
-  router.push({ name: 'logs', query: { account: name } })
-}
-
 </script>
 
 <template>
@@ -604,8 +600,6 @@ const goLogs = (name: string) => {
         <div class="account-tile-actions" @click.stop>
           <button type="button" class="account-more" :aria-label="t('accounts.actions', { name: acc.name })" :title="t('accounts.actions', { name: acc.name })" :aria-expanded="openActionsName === acc.name" aria-haspopup="true" @click="openActionsName = openActionsName === acc.name ? null : acc.name"><MoreVertical class="w-5 h-5" /></button>
           <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="t('accounts.actions', { name: acc.name })">
-            <button type="button" :disabled="checkingAccount === acc.name" @click="runCardAction(() => handleCheck(acc.name))"><Play class="w-4 h-4" />{{ t('accounts.check') }}</button>
-            <button type="button" @click="runCardAction(() => goLogs(acc.name))"><FileText class="w-4 h-4" />{{ t('accounts.logs') }}</button>
             <button type="button" @click="runCardAction(() => router.push({ name: 'chats', query: { account: acc.name } }))"><MessagesSquare class="w-4 h-4" />{{ t('nav.chats') }}</button>
             <button v-if="teleboxStates[acc.name]?.enabled" type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, false))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStop') }}</button>
             <button v-else type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, true))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStart') }}</button>

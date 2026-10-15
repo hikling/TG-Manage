@@ -15,12 +15,14 @@ const account = (overrides: Partial<AccountInfo> = {}): AccountInfo => ({
 afterEach(() => { i18n.global.locale.value = 'zh-CN' })
 
 describe('account IP location', () => {
-  it('shows verified country, region, public IP and source in both locales', async () => {
+  it('shows verified country, public IP and source beside the label in both locales', async () => {
     const wrapper = mount(AccountIpLocation, { props: { account: account() }, global: { plugins: [i18n] } })
     expect(wrapper.text()).toContain('IP定位')
-    expect(wrapper.text()).toContain('Japan · Tokyo')
+    expect(wrapper.find('.account-ip-heading').text()).toBe('IP定位主订阅')
+    expect(wrapper.find('.account-tile-status').text()).toContain('Japan')
+    expect(wrapper.text()).not.toContain('Tokyo')
     expect(wrapper.text()).toContain('203.0.113.12')
-    expect(wrapper.text()).toContain('主订阅')
+    expect(wrapper.find('.account-ip-address').text()).toBe('203.0.113.12')
     i18n.global.locale.value = 'en-US'
     await nextTick()
     expect(wrapper.text()).toContain('IP location')
@@ -33,7 +35,8 @@ describe('account IP location', () => {
       props: { account: account({ route_mode: 'fallback', shared_node: true, exit_ip: null, exit_checked_at: null, node_label: 'secret.example' }) },
       global: { plugins: [i18n] },
     })
-    expect(wrapper.text()).toContain('兜底订阅 · 共用节点')
+    expect(wrapper.find('.account-ip-heading').text()).toBe('IP定位兜底订阅')
+    expect(wrapper.find('.account-ip-shared').text()).toBe('共用节点')
     expect(wrapper.text()).toContain('未知位置')
     expect(wrapper.text()).toContain('IP 待验证')
     expect(wrapper.text()).not.toContain('secret.example')
