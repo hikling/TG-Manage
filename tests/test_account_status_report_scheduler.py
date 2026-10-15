@@ -286,11 +286,13 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     rows = [{"account_name": "quiet", "ok": True, "proxy_status": "healthy"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send_combined = AsyncMock(return_value=1)
+    save_combined = Mock()
     monkeypatch.setattr(
         "backend.services.account_status_report.get_account_status_report_service",
         lambda: SimpleNamespace(run=status_run),
     )
     monkeypatch.setattr("backend.services.account_status_report._send_report", send_combined)
+    monkeypatch.setattr("backend.services.account_status_report.save_latest_midnight_report", save_combined)
     official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
 
     await scheduling._job_account_status_report()
@@ -299,6 +301,34 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     assert official_run.await_args.kwargs["send_normal_summary"] is False
     assert official_run.await_args.kwargs["account_names"] == ["quiet"]
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
+    assert save_combined.call_count == 1
+    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in save_combined.call_args.args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_partial_midnight_summary_does_not_replace_saved_report(
+    scheduler_env, scheduler_clock, monkeypatch, official_run,
+):
+    rows = [{"account_name": "quiet", "ok": True, "proxy_status": "unconfigured"}]
+    status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
+    send_combined = AsyncMock(return_value=1)
+    save_combined = Mock()
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status_run),
+    )
+    monkeypatch.setattr("backend.services.account_status_report._send_report", send_combined)
+    monkeypatch.setattr(
+        "backend.services.account_status_report.report_chunks",
+        Mock(return_value=["第一段", "第二段"]),
+    )
+    monkeypatch.setattr("backend.services.account_status_report.save_latest_midnight_report", save_combined)
+    official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
+
+    await scheduling._job_account_status_report()
+
+    send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
+    save_combined.assert_not_called()
 
 
 def test_sync_report_before_scheduler_exists_is_noop(monkeypatch):

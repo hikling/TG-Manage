@@ -57,7 +57,6 @@ const startCodeCountdown = (seconds = 60) => {
 // Code login specific
 const phoneCodeHash = ref('')
 const codeSent = ref(false)
-const preferredCodeSource = ref<'sms' | 'app' | ''>('')
 const codeDeliveryNotice = ref('')
 const codeDeliveryType = ref<string | null>(null)
 const codeNextType = ref<string | null>(null)
@@ -82,13 +81,7 @@ const deliveryNoticeFor = (deliveryType?: string | null, nextType?: string | nul
   const fallback = nextType === 'sms' || nextType === 'sms_phrase' || nextType === 'sms_word'
     ? 'addAccount.codeResendSms'
     : nextType ? 'addAccount.codeResendAvailable' : 'addAccount.codeResendUnavailable'
-  const matchesPreference = preferredCodeSource.value === 'app'
-    ? deliveryType === 'app'
-    : ['sms', 'sms_phrase', 'sms_word'].includes(deliveryType || '')
-  const preferenceNotice = !deliveryType
-    ? t('addAccount.codePreferenceUnconfirmed')
-    : matchesPreference ? '' : t('addAccount.codePreferenceMismatch')
-  return [notice, preferenceNotice, t(fallback)].filter(Boolean).join(' ')
+  return [notice, t(fallback)].join(' ')
 }
 watch(locale, () => {
   error.value = ''
@@ -135,7 +128,6 @@ const reset = async () => {
   phoneCodeHash.value = ''
   error.value = ''
   codeSent.value = false
-  preferredCodeSource.value = ''
   codeDeliveryNotice.value = ''
   codeDeliveryType.value = null
   codeNextType.value = null
@@ -304,10 +296,6 @@ const handleGetQr = async () => {
 // ============ Code Login Logic ============
 
 const handleSendCode = async () => {
-  if (!preferredCodeSource.value) {
-    error.value = t('addAccount.codePreferenceRequired')
-    return
-  }
   if (enableTelebox.value && (!form.value.api_id || !form.value.api_hash)) {
     error.value = t('addAccount.apiCredentialsRequired')
     return
@@ -495,20 +483,6 @@ onUnmounted(() => {
 
       <!-- Code specific fields -->
       <template v-if="loginMethod === 'code'">
-        <fieldset class="space-y-2" aria-describedby="code-source-hint">
-          <legend class="ui-label">{{ t('addAccount.codePreferenceLabel') }} <span class="text-rose-500">*</span></legend>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <label class="flex items-center gap-2 rounded-xl border border-[var(--tg-border)] px-3 py-2 cursor-pointer focus-within:ring-2 focus-within:ring-sky-500" :class="{ 'border-sky-500 bg-sky-500/5': preferredCodeSource === 'sms' }">
-              <input v-model="preferredCodeSource" type="radio" name="preferred-code-source" value="sms" :disabled="codeSent || loading" class="h-4 w-4 accent-sky-500">
-              <span>{{ t('addAccount.codePreferenceSms') }}</span>
-            </label>
-            <label class="flex items-center gap-2 rounded-xl border border-[var(--tg-border)] px-3 py-2 cursor-pointer focus-within:ring-2 focus-within:ring-sky-500" :class="{ 'border-sky-500 bg-sky-500/5': preferredCodeSource === 'app' }">
-              <input v-model="preferredCodeSource" type="radio" name="preferred-code-source" value="app" :disabled="codeSent || loading" class="h-4 w-4 accent-sky-500">
-              <span>{{ t('addAccount.codePreferenceApp') }}</span>
-            </label>
-          </div>
-          <p id="code-source-hint" class="text-xs text-[var(--tg-text-muted)]">{{ t('addAccount.codePreferenceHint') }}</p>
-        </fieldset>
         <div class="space-y-1.5">
           <label class="ui-label" for="add-account-phone">{{ t('addAccount.phone') }} <span class="text-rose-500">*</span></label>
           <input 
@@ -535,7 +509,7 @@ onUnmounted(() => {
             >
             <button 
               @click="handleSendCode"
-              :disabled="loading || !preferredCodeSource || !form.account_name || !form.phone_number || codeCountdown > 0 || (codeSent && !codeNextType)"
+              :disabled="loading || !form.account_name || !form.phone_number || codeCountdown > 0 || (codeSent && !codeNextType)"
               class="ui-btn-secondary !px-4 !py-2 whitespace-nowrap"
             >
               {{ codeCountdown > 0 ? t('addAccount.resendIn', { s: codeCountdown }) : codeSent ? t('addAccount.resendCode') : t('addAccount.getCode') }}

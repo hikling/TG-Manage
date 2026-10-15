@@ -171,10 +171,6 @@ async def run_device_keepalive(current_user: User = Depends(get_current_user)):
         )
 
 
-class BotTestRequest(BaseModel):
-    message: Optional[str] = None
-
-
 class BotTestResponse(BaseModel):
     success: bool
     message: str
@@ -182,34 +178,19 @@ class BotTestResponse(BaseModel):
 
 @router.post("/bot/test", response_model=BotTestResponse)
 async def test_bot_notification(
-    request: BotTestRequest = BotTestRequest(),
     current_user: User = Depends(get_current_user),
 ):
-    """使用已保存的 Bot 配置发送测试消息。"""
-    cfg = get_config_service().get_global_settings()
-    bot_token = (cfg.get("telegram_bot_token") or "").strip()
-    chat_id = (cfg.get("telegram_bot_chat_id") or "").strip()
-    if not bot_token or not chat_id:
-        return BotTestResponse(success=False, message="未配置 Bot Token 或 Chat ID")
-    raw_msg = (request.message or "").strip()
-    text = raw_msg or "TG Manage 通知测试：连接正常"
-    # 限制长度，避免误填超大文本导致 Telegram API 失败
-    text = text[:3900]
+    """重发最近一次完整零点日报，不触发任何账户或代理检测。"""
     try:
-        from backend.services.push_notifications import send_telegram_bot_message
-
-        thread_id = cfg.get("telegram_bot_message_thread_id")
-        try:
-            thread_id = int(thread_id) if thread_id not in (None, "") else None
-        except (TypeError, ValueError):
-            thread_id = None
-        await send_telegram_bot_message(
-            bot_token=bot_token,
-            chat_id=chat_id,
-            text=text,
-            message_thread_id=thread_id,
+        from backend.services.account_status_report import (
+            MidnightReportReplayError,
+            replay_latest_midnight_report,
         )
-        return BotTestResponse(success=True, message="测试消息已发送")
+
+        count = await replay_latest_midnight_report()
+        return BotTestResponse(success=True, message=f"已重发零点日报（{count} 条）")
+    except MidnightReportReplayError as e:
+        return BotTestResponse(success=False, message=str(e))
     except Exception as e:
         # 不回传完整异常栈，避免 token/网络细节外泄到前端
         err = type(e).__name__
