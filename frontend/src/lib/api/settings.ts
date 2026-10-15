@@ -89,10 +89,9 @@ export const saveGlobalSettings = async (token: string, settings: GlobalSettings
   return result;
 };
 
-export const testBotNotification = (token: string, message?: string) =>
+export const testBotNotification = (token: string) =>
   request<{ success: boolean; message: string }>("/config/bot/test", {
     method: "POST",
-    body: JSON.stringify({ message: message || undefined }),
   }, token);
 
 export interface DeviceKeepaliveRunResult {

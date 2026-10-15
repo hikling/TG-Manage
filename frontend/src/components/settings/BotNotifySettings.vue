@@ -162,6 +162,7 @@ const isPrivateTarget = (value: string) => {
         <button type="button" class="ui-btn-primary flex-1 py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
         <button type="button" class="ui-btn-secondary flex-1 py-2.5" :disabled="botTestLoading" @click="emit('test')">{{ botTestLoading ? t('settings.testing') : t('settings.testBot') }}</button>
       </div>
+      <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotHint') }}</p>
     </div>
   </section>
 </template>

@@ -55,6 +55,9 @@ class TestAdvancedSettingsApi:
 
 class TestBotTestApi:
     def test_bot_test_requires_config(self, client, authenticated_admin):
+        from backend.services.account_status_report import save_latest_midnight_report
+
+        save_latest_midnight_report(["零点账户状态与官方消息日报\n🟢 alpha — 账户正常"])
         # 清空 token/chat
         client.post(
             "/api/config/settings",
@@ -68,6 +71,10 @@ class TestBotTestApi:
         assert "配置" in body["message"] or "Token" in body["message"] or "token" in body["message"].lower()
 
     def test_bot_test_success(self, client, authenticated_admin):
+        from backend.services.account_status_report import save_latest_midnight_report
+
+        chunks = ["零点账户状态与官方消息日报\n🟢 alpha — 账户正常", "🔴 beta — 账户异常"]
+        save_latest_midnight_report(chunks)
         client.post(
             "/api/config/settings",
             json={
@@ -78,15 +85,26 @@ class TestBotTestApi:
             headers=_auth_headers(),
         )
         with patch(
-            "backend.services.push_notifications.send_telegram_bot_message",
+            "backend.services.account_status_report.send_telegram_bot_message",
             new_callable=AsyncMock,
-        ) as m:
+        ) as m, patch(
+            "backend.services.account_status_report.get_telegram_service",
+            side_effect=AssertionError("Bot test must not read accounts"),
+        ), patch(
+            "backend.services.official_message_report.get_official_message_report_service",
+            side_effect=AssertionError("Bot test must not read official history"),
+        ), patch(
+            "backend.services.account_status_report.check_account_proxy",
+            side_effect=AssertionError("Bot test must not probe SOCKS5"),
+        ):
             resp = client.post("/api/config/bot/test", headers=_auth_headers())
         assert resp.status_code == 200
         assert resp.json()["success"] is True
-        m.assert_awaited()
+        assert m.await_count == 2
+        assert [call.kwargs["text"] for call in m.await_args_list] == chunks
+        assert all(call.kwargs["chat_id"] == "999" for call in m.await_args_list)
 
-    def test_bot_test_whitespace_message_uses_default(self, client, authenticated_admin):
+    def test_bot_test_without_completed_midnight_report_does_not_send(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -96,22 +114,14 @@ class TestBotTestApi:
             headers=_auth_headers(),
         )
         with patch(
-            "backend.services.push_notifications.send_telegram_bot_message",
+            "backend.services.account_status_report.send_telegram_bot_message",
             new_callable=AsyncMock,
         ) as m:
-            resp = client.post(
-                "/api/config/bot/test",
-                json={"message": "   "},
-                headers=_auth_headers(),
-            )
+            resp = client.post("/api/config/bot/test", headers=_auth_headers())
         assert resp.status_code == 200
-        assert resp.json()["success"] is True
-        sent_text = m.await_args.kwargs.get("text") or m.await_args.args[0]
-        # 关键字参数调用
-        if m.await_args.kwargs:
-            sent_text = m.await_args.kwargs["text"]
-        assert sent_text
-        assert sent_text.strip() != ""
+        assert resp.json()["success"] is False
+        assert "零点日报" in resp.json()["message"]
+        m.assert_not_awaited()
 
 
 class TestQuietHours:

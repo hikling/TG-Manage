@@ -131,9 +131,17 @@ async def _job_account_status_report() -> None:
             logger.error("零点官方消息日报失败（%s）", type(exc).__name__)
         if status_rows is not None:
             try:
-                from backend.services.account_status_report import _send_report
+                from backend.services.account_status_report import (
+                    _send_report,
+                    report_chunks,
+                    save_latest_midnight_report,
+                )
 
-                await _send_report(status_rows, official_status or {})
+                combined_official_status = official_status or {}
+                sent = await _send_report(status_rows, combined_official_status)
+                chunks = report_chunks(status_rows, combined_official_status)
+                if sent == len(chunks):
+                    save_latest_midnight_report(chunks)
             except Exception as exc:
                 logger.error("零点合并日报发送失败（%s）", type(exc).__name__)
     finally:
