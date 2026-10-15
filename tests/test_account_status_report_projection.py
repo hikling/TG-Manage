@@ -57,6 +57,13 @@ async def test_report_failure_then_recovery_updates_saved_account_projection(
     monkeypatch.setattr(tg_session, "get_settings", lambda: settings)
     monkeypatch.setattr(accounts_mod, "is_string_session_mode", lambda: False)
     monkeypatch.setattr(accounts_mod, "get_session_mode", lambda: "file")
+    monkeypatch.setattr(accounts_mod, "resolve_account_route", lambda _name: None)
+    monkeypatch.setattr(accounts_mod, "account_route_status", lambda _name: {
+        "route_mode": "direct", "route_status": "healthy",
+    })
+    monkeypatch.setattr(report, "account_route_status", lambda _name: {
+        "route_mode": "direct", "route_status": "healthy",
+    })
     (tmp_path / "alpha.session").write_bytes(b"saved-session")
     tg_session.set_account_api_credentials("alpha", 12345, "a" * 32)
 

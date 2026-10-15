@@ -8,7 +8,6 @@ export interface LoginStartRequest {
   phone_number: string;
   api_id?: number;
   api_hash?: string;
-  proxy?: string;
 }
 
 export interface LoginStartResponse {
@@ -27,7 +26,6 @@ export interface LoginVerifyRequest {
   phone_code: string;
   phone_code_hash: string;
   password?: string;
-  proxy?: string;
 }
 
 export interface LoginVerifyResponse {
@@ -42,7 +40,6 @@ export interface QrLoginStartRequest {
   account_name: string;
   api_id?: number;
   api_hash?: string;
-  proxy?: string;
 }
 
 export interface QrLoginStartResponse {
@@ -81,21 +78,22 @@ export interface QrLoginPasswordResponse {
   username?: string;
 }
 
-export type AccountProxyStatus = 'unconfigured' | 'pending' | 'healthy' | 'error';
-
-export interface AccountProxyHealth {
-  proxy_status?: AccountProxyStatus;
-  proxy_status_code?: string | null;
-  proxy_checked_at?: string | null;
-}
-
-export interface AccountInfo extends AccountProxyHealth {
+export interface AccountInfo {
   name: string;
   session_file: string;
   exists: boolean;
   size: number;
   remark?: string | null;
-  proxy?: string | null;
+  route_mode?: 'primary' | 'fallback' | 'direct' | 'setup_required' | null;
+  route_status?: string | null;
+  node_label?: string | null;
+  latency_ms?: number | null;
+  route_checked_at?: string | null;
+  exit_ip?: string | null;
+  exit_country?: string | null;
+  exit_region?: string | null;
+  exit_checked_at?: string | null;
+  shared_node?: boolean;
   status?: "connected" | "invalid" | "checking" | "error" | string;
   status_message?: string | null;
   status_code?: string | null;
@@ -110,7 +108,7 @@ export interface AccountStatusCheckRequest {
   refresh_avatar?: boolean;
 }
 
-export interface AccountStatusItem extends AccountProxyHealth {
+export interface AccountStatusItem {
   account_name: string;
   ok: boolean;
   status: "connected" | "invalid" | "error" | "not_found" | string;
@@ -294,7 +292,6 @@ export const updateAccount = (
   data: {
     new_account_name?: string | null;
     remark?: string | null;
-    proxy?: string | null;
     tags?: string[];
   }
 ) =>

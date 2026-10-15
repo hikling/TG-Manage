@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, Optional
 
 from backend.core.config import get_settings
+from backend.services.account_routes import RouteSetupRequired, resolve_account_route
 from backend.services.telegram.accounts import (
     mark_account_connected,
 )
@@ -25,7 +26,6 @@ from backend.services.telegram.sessions import (
     _start_phone_login_expiry,
 )
 from backend.utils.account_locks import get_account_lock
-from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     get_global_semaphore,
     get_session_mode,
@@ -106,7 +106,7 @@ class TelegramPhoneLoginMixin:
 
 
     async def start_login(
-        self, account_name: str, phone_number: str, proxy: Optional[str] = None,
+        self, account_name: str, phone_number: str,
         api_id: int = None, api_hash: str = None,
     ) -> Dict[str, Any]:
         """
@@ -120,13 +120,11 @@ class TelegramPhoneLoginMixin:
         Args:
             account_name: 账号名称
             phone_number: 手机号（国际格式，如 +8613800138000）
-            proxy: 代理地址（可选）
 
         Returns:
             包含 phone_code_hash 的字典
         """
 
-        proxy_dict = require_proxy_dict(proxy)
         account_name = self._normalize_account_name(account_name)
         phone_number = str(phone_number or "").strip().replace(" ", "").replace("-", "")
         if not phone_number:
@@ -197,12 +195,17 @@ class TelegramPhoneLoginMixin:
 
         pending_path = None
         try:
+            proxy_dict = resolve_account_route(account_name)
             pending_path = new_pending_session_path(self.session_dir, account_name) if session_mode == "file" else None
             client = Client(
                 name=str(pending_path or self.session_dir / account_name),
                 api_id=api_id, api_hash=api_hash, proxy=proxy_dict,
                 in_memory=session_mode == "string", no_updates=True,
             )
+        except RouteSetupRequired:
+            cleanup_pending_session(pending_path)
+            _release_account_lock()
+            raise
         except Exception:
             cleanup_pending_session(pending_path)
             _release_account_lock()
@@ -233,7 +236,6 @@ class TelegramPhoneLoginMixin:
                 "client": client,
                 "phone_code_hash": sent_code.phone_code_hash,
                 "phone_number": phone_number,
-                "proxy": proxy,
                 "lock": account_lock,
                 "account_name": account_name,
                 "api_id": api_id,
@@ -342,7 +344,6 @@ class TelegramPhoneLoginMixin:
         phone_code: str,
         phone_code_hash: str,
         password: Optional[str] = None,
-        proxy: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         验证登录（输入验证码和可选的2FA密码）
@@ -353,7 +354,6 @@ class TelegramPhoneLoginMixin:
             phone_code: 验证码
             phone_code_hash: 从 start_login 返回的 hash
             password: 2FA 密码（可选）
-            proxy: 代理地址（可选）
 
         Returns:
             登录结果
@@ -417,7 +417,7 @@ class TelegramPhoneLoginMixin:
                     # 登录成功，获取用户信息
                     # get_me 走超时保护：网络挂起时登录接口不能无限等待
                     me = await asyncio.wait_for(client.get_me(), timeout=10)
-                    await self._persist_client_session(client, account_name, session_data.get("proxy"))
+                    await self._persist_client_session(client, account_name)
                     set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                     # 断开连接并清理（成功路径同样容忍断连抖动，避免已登录被误报失败）
@@ -442,7 +442,7 @@ class TelegramPhoneLoginMixin:
                     try:
                         await client.check_password(password)
                         me = await asyncio.wait_for(client.get_me(), timeout=10)
-                        await self._persist_client_session(client, account_name, session_data.get("proxy"))
+                        await self._persist_client_session(client, account_name)
                         set_account_api_credentials(account_name, session_data["api_id"], session_data["api_hash"])
 
                         # 断开连接并清理
@@ -514,9 +514,7 @@ class TelegramPhoneLoginMixin:
         return True
 
 
-    async def _persist_client_session(
-        self, client, account_name: str, proxy: Optional[str] = None
-    ) -> None:
+    async def _persist_client_session(self, client, account_name: str) -> None:
         session_mode = get_session_mode()
         if session_mode == "string":
             session_string = await client.export_session_string()
@@ -540,6 +538,6 @@ class TelegramPhoneLoginMixin:
                     pass
         from backend.utils.tg_session import set_account_profile
 
-        set_account_profile(account_name, proxy=proxy)
+        set_account_profile(account_name)
         mark_account_connected(account_name)
         self._accounts_cache = None

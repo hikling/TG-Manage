@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
-from backend.services.account_proxy_status import check_account_proxy
+from backend.services.account_routes import account_route_status
 from backend.services.config import get_config_service
 from backend.services.push_notifications import _bot_config, send_telegram_bot_message
 from backend.services.telegram import get_telegram_service
@@ -77,7 +77,8 @@ def report_chunks(
     def healthy(result: dict[str, Any]) -> bool:
         return (
             bool(result.get("ok"))
-            and result.get("proxy_status", "unconfigured") in {"healthy", "unconfigured"}
+            and result.get("route_mode") != "setup_required"
+            and result.get("route_status") != "error"
             and (official_status is None or official_status.get(result["account_name"]) == "empty")
         )
 
@@ -96,12 +97,12 @@ def report_chunks(
             notes.append(f"账户异常（{_failure_reason(result)}）")
         else:
             notes.append("账户正常")
-        proxy_status = result.get("proxy_status", "unconfigured")
-        if proxy_status != "unconfigured":
-            proxy_label = {
-                "healthy": "正常", "error": "异常", "pending": "待检测",
-            }.get(proxy_status, "待检测")
-            notes.append(f"SOCKS5 {proxy_label}")
+        route_label = {
+            "primary": "主订阅", "fallback": "兜底订阅",
+            "direct": "直连", "setup_required": "待配置订阅",
+        }.get(result.get("route_mode"), "路由待确认")
+        exit_ip = result.get("exit_ip") or "IP 未知"
+        notes.append(f"{route_label} · {exit_ip}")
         if official_status is not None:
             official = official_status.get(result["account_name"])
             notes.append({"empty": "官方消息无新消息", "messages": "有官方消息，详见单独推送"}.get(
@@ -219,7 +220,7 @@ class AccountStatusReportService:
                                 lock.release()
                         except Exception as exc:
                             logger.warning("保存账户日报状态失败（%s）", type(exc).__name__)
-                    result.update(await check_account_proxy(name, timeout_seconds=PROBE_TIMEOUT_SECONDS))
+                    result.update(account_route_status(name))
                     reservation.finish(name, success=bool(result.get("ok")))
                     results[name] = result
                 finally:

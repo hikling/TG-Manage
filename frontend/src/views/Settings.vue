@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
+import ProxySubscriptionsSettings from '../components/settings/ProxySubscriptionsSettings.vue'
 import AboutSettings from '../components/settings/AboutSettings.vue'
 import PageRetry from '../components/PageRetry.vue'
 import { useSettingsPage } from '../composables/useSettingsPage'
@@ -12,6 +13,15 @@ const {
   loading,
   runtimeStatus,
   memoryStats,
+  subscriptions,
+  subscriptionDraft,
+  subscriptionDirty,
+  subscriptionError,
+  subscriptionLoading,
+  subscriptionRefreshing,
+  loadSubscriptions,
+  saveSubscriptions,
+  refreshSubscriptions,
   botTestLoading,
   botConnectionLoading,
   pageLoading,
@@ -57,7 +67,7 @@ const {
       <button
         type="button"
         class="ui-btn-primary !px-3 !py-1.5 !text-xs shrink-0"
-        :disabled="saveAllLoading || loading || botLoading"
+        :disabled="saveAllLoading || loading || botLoading || subscriptionLoading || subscriptionRefreshing"
         @click="saveAllSettings"
       >
         {{ saveAllLoading ? t('common.saving') : t('settings.saveAll') }}
@@ -104,6 +114,20 @@ const {
             @test="testBot"
             @test-connection="testBotConnection"
             @toggle-reveal="toggleReveal"
+          />
+        </details>
+        <details class="settings-accordion">
+          <summary>{{ t('settings.subscriptions.title') }} <span>{{ t('settings.subscriptions.summary') }}</span></summary>
+          <ProxySubscriptionsSettings
+            v-model="subscriptionDraft"
+            :status="subscriptions"
+            :loading="subscriptionLoading"
+            :refreshing="subscriptionRefreshing"
+            :error="subscriptionError"
+            :dirty="subscriptionDirty"
+            @save="saveSubscriptions"
+            @refresh="refreshSubscriptions"
+            @retry="loadSubscriptions"
           />
         </details>
       </div>

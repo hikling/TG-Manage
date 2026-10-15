@@ -15,6 +15,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY telebox/package.json telebox/package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund
 
+# Xray is an application-owned child process, not a separate public service.
+# The hashes are the official GitHub release asset SHA-256 values for v26.3.27.
+# Updating Xray requires reviewing both architecture archives and their hashes.
+FROM --platform=$BUILDPLATFORM alpine:3.21 AS xray-builder
+ARG TARGETARCH
+RUN apk add --no-cache ca-certificates curl unzip
+RUN set -eu; \
+  case "${TARGETARCH}" in \
+    amd64) asset='Xray-linux-64.zip'; expected='23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae' ;; \
+    arm64) asset='Xray-linux-arm64-v8a.zip'; expected='4d30283ae614e3057f730f67cd088a42be6fdf91f8639d82cb69e48cde80413c' ;; \
+    *) echo "Unsupported Xray target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+  esac; \
+  curl --fail --silent --show-error --location --retry 3 --max-time 120 \
+    "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/${asset}" \
+    --output /tmp/xray.zip; \
+  printf '%s  %s\n' "${expected}" /tmp/xray.zip | sha256sum --check --status; \
+  unzip -p /tmp/xray.zip xray > /usr/local/bin/xray; \
+  test -s /usr/local/bin/xray; \
+  chmod 0755 /usr/local/bin/xray; \
+  rm /tmp/xray.zip
+
 # Python runtime.
 # Python 3.11 for Telethon + dependencies.
 FROM python:3.11-slim-bookworm AS production
@@ -49,6 +70,7 @@ COPY telebox /app/telebox
 COPY --from=telebox-builder /telebox/node_modules /app/telebox/node_modules
 COPY --from=telebox-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=telebox-builder /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=xray-builder /usr/local/bin/xray /usr/local/bin/xray
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm && \
     ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 

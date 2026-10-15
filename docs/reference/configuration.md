@@ -4,11 +4,13 @@
 
 ## 必需环境
 
-服务器需 Docker Engine 24+、Compose v2 和 Git，并有私有仓库读取权限；构建需要下载 Python/npm 依赖，运行时需连接 Telegram。Compose 镜像内包含 Python 3.11、前端构建用 Node 22、TeleBox 用 Node 24。小型部署最低支持 1 vCPU / 1 GiB RAM，Compose 不设置固定 CPU 或内存上限；更大实例按账号数量和实际负载扩容。
+服务器需 Docker Engine 24+、Compose v2 和 Git，并有私有仓库读取权限；构建需要下载 Python/npm 依赖与 Xray 官方发布文件，运行时需连接 Telegram。Compose 镜像内包含 Python 3.11、前端构建用 Node 22、TeleBox 用 Node 24 和 Linux amd64/arm64 的 Xray-core。小型部署最低支持 1 vCPU / 1 GiB RAM，Compose 不设置固定 CPU 或内存上限；更大实例按账号数量、Xray 节点和实际负载扩容。
 
 运行 `bash scripts/install.sh` 即可构建并启动。应用密钥首次启动自动生成于 `data/.app_secret_key`（权限 0600）；首次管理员设置码在 `data/.admin_setup_token`，安装脚本会显示，使用后删除。管理员在网页登录页自行设置至少 12 位密码。现有管理员不受影响。
 
 新增或重新登录 Telegram 账号时选择是否启用 TeleBox。启用时在账号管理输入专属 API ID/Hash；关闭时如要免填，可在服务器私有 `.env` 设置 `TG_MANAGE_TG_API_ID/HASH`。旧版 `SIGNPULSE_TG_API_*`、`TG_API_*` 仍可读取。授权后的凭据按账号加密保存在 `data/sessions/accounts.json`，不会出现在账号列表 API。旧账号若缺少专属凭据，需要重新登录。网页全局 Telegram API 配置和 AI 模型配置均不再使用。
+
+机场订阅 URL 在面板「设置 → 机场订阅」配置，不能通过普通环境变量或账号的旧 SOCKS5 字段设置。支持 HTTPS 公开目标；订阅凭据、生成的 Xray 配置和账户线路状态保存在 `/data`，须和账号会话一起备份。节点与直连切换规则、检测周期及升级注意事项见 [Docker 部署指南](../deploy/docker.md#机场订阅与-xray)。
 
 ## 可选配置
 

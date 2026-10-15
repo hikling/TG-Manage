@@ -8,9 +8,14 @@ import {
   getGlobalSettings,
   getRuntimeStatus,
   getMemoryStats,
+  getProxySubscriptions,
+  saveProxySubscriptions,
+  refreshProxySubscriptions,
 } from '../lib/api'
 import { getAuthToken } from '../lib/api/core'
 import type { RuntimeStatus, MemoryStatsResponse } from '../lib/api'
+import type { ProxySubscriptionSettings, ProxySubscriptionUpdate } from '../lib/api/settings'
+import type { SubscriptionDraft } from '../components/settings/ProxySubscriptionsSettings.vue'
 import { useI18n } from './useI18n'
 import { useToast } from './useToast'
 import { useConfirm } from './useConfirm'
@@ -78,6 +83,14 @@ export function useSettingsPage() {
 
   const runtimeStatus = ref<RuntimeStatus | null>(null)
   const memoryStats = ref<MemoryStatsResponse | null>(null)
+  const subscriptions = ref<ProxySubscriptionSettings | null>(null)
+  const subscriptionDraft = ref<SubscriptionDraft>({
+    primaryUrl: '', fallbackUrl: '', clearPrimary: false, clearFallback: false, latencyThresholdMs: 800,
+  })
+  const subscriptionBaseline = ref<string | null>(null)
+  const subscriptionError = ref('')
+  const subscriptionLoading = ref(false)
+  const subscriptionRefreshing = ref(false)
   const pageLoading = ref(true)
   /** 全局设置加载失败标记：失败时展示错误态与重试，而非默认空表单 */
   const loadFailed = ref(false)
@@ -121,15 +134,17 @@ export function useSettingsPage() {
   const snapSectionFor = (section: SettingsSection) =>
     currentSectionSnaps()[section]
 
+  const subscriptionSnapshot = () => JSON.stringify(subscriptionDraft.value)
+  const subscriptionDirty = computed(() => subscriptionBaseline.value !== null && subscriptionBaseline.value !== subscriptionSnapshot())
   const isDirty = computed(() =>
-    isAnySectionDirty(sectionBaseline.value, currentSectionSnaps()),
+    isAnySectionDirty(sectionBaseline.value, currentSectionSnaps()) || subscriptionDirty.value,
   )
 
   const dirtyLabels = computed(() =>
-    dirtySectionLabels(sectionBaseline.value, currentSectionSnaps(), {
+    [...dirtySectionLabels(sectionBaseline.value, currentSectionSnaps(), {
       general: t('settings.general'),
       bot: t('settings.botNotify'),
-    }),
+    }), ...(subscriptionDirty.value ? [t('settings.subscriptions.title')] : [])],
   )
 
   const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -170,7 +185,7 @@ export function useSettingsPage() {
     saveSettings,
     runKeepaliveNow,
     saveBotSettings,
-    saveAllSettings,
+    saveAllSettings: saveGlobalSections,
     testBot,
     testBotConnection,
   } = useSettingsSave({
@@ -179,6 +194,85 @@ export function useSettingsPage() {
     markSectionClean,
     afterBotTokenSaved,
   })
+
+  const applySubscriptionSettings = (value: ProxySubscriptionSettings) => {
+    subscriptions.value = value
+    // URLs never come back from GET/PUT; an empty input always means "keep".
+    subscriptionDraft.value = {
+      primaryUrl: '', fallbackUrl: '', clearPrimary: false, clearFallback: false,
+      latencyThresholdMs: value.latency_threshold_ms,
+    }
+    subscriptionBaseline.value = subscriptionSnapshot()
+    subscriptionError.value = ''
+  }
+
+  const loadSubscriptions = async () => {
+    const token = getAuthToken()
+    if (!token) return
+    try {
+      const result = await getProxySubscriptions(token)
+      if (!disposed) applySubscriptionSettings(result)
+    } catch (error: unknown) {
+      if (!disposed) subscriptionError.value = resolveApiErrorMessage(error, 'settings.subscriptions.loadFailed')
+    }
+  }
+
+  const saveSubscriptions = async (): Promise<boolean> => {
+    const token = getAuthToken()
+    if (!token || !subscriptions.value || subscriptionLoading.value || !subscriptionDirty.value) return false
+    const draft = subscriptionDraft.value
+    const update: ProxySubscriptionUpdate = {}
+    if (draft.clearPrimary) update.primary_url = null
+    else if (draft.primaryUrl.trim()) update.primary_url = draft.primaryUrl.trim()
+    if (draft.clearFallback) update.fallback_url = null
+    else if (draft.fallbackUrl.trim()) update.fallback_url = draft.fallbackUrl.trim()
+    if (draft.latencyThresholdMs !== subscriptions.value.latency_threshold_ms) {
+      if (typeof draft.latencyThresholdMs !== 'number' || !Number.isInteger(draft.latencyThresholdMs)) {
+        subscriptionError.value = t('settings.subscriptions.invalidThreshold')
+        return false
+      }
+      update.latency_threshold_ms = draft.latencyThresholdMs
+    }
+    subscriptionLoading.value = true
+    subscriptionError.value = ''
+    try {
+      const result = await saveProxySubscriptions(token, update)
+      if (!disposed) {
+        applySubscriptionSettings(result)
+        toast.success(t('settings.subscriptions.saved'), { messageKey: 'settings.subscriptions.saved' })
+      }
+      return true
+    } catch (error: unknown) {
+      if (!disposed) subscriptionError.value = resolveApiErrorMessage(error, 'settings.subscriptions.saveFailed')
+      return false
+    } finally {
+      subscriptionLoading.value = false
+    }
+  }
+
+  const refreshSubscriptions = async () => {
+    const token = getAuthToken()
+    if (!token || subscriptionRefreshing.value || subscriptionDirty.value) return
+    subscriptionRefreshing.value = true
+    subscriptionError.value = ''
+    try {
+      const result = await refreshProxySubscriptions(token)
+      if (!disposed) {
+        applySubscriptionSettings(result)
+        toast.success(t('settings.subscriptions.refreshed'), { messageKey: 'settings.subscriptions.refreshed' })
+      }
+    } catch (error: unknown) {
+      if (!disposed) subscriptionError.value = resolveApiErrorMessage(error, 'settings.subscriptions.refreshFailed')
+    } finally {
+      subscriptionRefreshing.value = false
+    }
+  }
+
+  const saveAllSettings = async () => {
+    // Each endpoint owns its section; a failed save retains that section's dirty state.
+    if (isAnySectionDirty(sectionBaseline.value, currentSectionSnaps())) await saveGlobalSections()
+    if (subscriptionDirty.value) await saveSubscriptions()
+  }
 
   const loadAllSettings = async () => {
     const token = getAuthToken()
@@ -197,11 +291,12 @@ export function useSettingsPage() {
 
 
       // 运行信息互不依赖，并行请求可以减少设置页首屏等待；单项失败仍然降级。
-      const [runtimeResult, memoryResult, versionResult] =
+      const [runtimeResult, memoryResult, versionResult, subscriptionResult] =
         await Promise.allSettled([
           getRuntimeStatus(token),
           getMemoryStats(token),
           loadVersion(token),
+          getProxySubscriptions(token),
         ])
       if (runtimeResult.status === 'fulfilled') {
         runtimeStatus.value = runtimeResult.value
@@ -215,6 +310,11 @@ export function useSettingsPage() {
       }
       if (versionResult.status === 'rejected') {
         devLog.error('Failed to load app version', versionResult.reason)
+      }
+      if (subscriptionResult.status === 'fulfilled') {
+        applySubscriptionSettings(subscriptionResult.value)
+      } else {
+        subscriptionError.value = resolveApiErrorMessage(subscriptionResult.reason, 'settings.subscriptions.loadFailed')
       }
       if (disposed) return // 加载期间已卸载：不再标记干净或注册监听
       markAllClean()
@@ -265,6 +365,15 @@ export function useSettingsPage() {
     loading,
     runtimeStatus,
     memoryStats,
+    subscriptions,
+    subscriptionDraft,
+    subscriptionDirty,
+    subscriptionError,
+    subscriptionLoading,
+    subscriptionRefreshing,
+    loadSubscriptions,
+    saveSubscriptions,
+    refreshSubscriptions,
     botTestLoading,
     botConnectionLoading,
     pageLoading,

@@ -12,10 +12,19 @@ from tests.test_api import _auth, _login, api_client, db  # noqa: F401
 
 def test_panel_routes_require_auth(api_client, db):  # noqa: F811
     for path in (
-        "/api/communications/proxies", "/api/communications/a/dialogs",
+        "/api/config/settings/proxy-subscriptions", "/api/communications/a/dialogs",
         "/api/telebox",
     ):
         assert api_client.get(path).status_code in {401, 403}
+
+
+def test_manual_proxy_endpoints_are_removed(api_client, db):  # noqa: F811
+    token = _login(api_client)
+    headers = _auth(token)
+    assert api_client.get("/api/communications/proxies", headers=headers).status_code == 404
+    assert api_client.put(
+        "/api/communications/example/proxy", json={"proxy": "socks5://localhost:1080"}, headers=headers,
+    ).status_code in {404, 405}
 
 
 def test_invalid_chat_input_never_calls_telegram(api_client, db):  # noqa: F811

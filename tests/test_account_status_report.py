@@ -32,30 +32,29 @@ def report_env(monkeypatch):
     monkeypatch.setattr(report, "send_telegram_bot_message", send)
     monkeypatch.setattr(report, "set_account_status", persist)
     monkeypatch.setattr(report, "INTER_DELAY_SECONDS", 0)
-    monkeypatch.setattr(report, "check_account_proxy", AsyncMock(return_value={"proxy_status": "unconfigured"}))
+    monkeypatch.setattr(report, "account_route_status", Mock(return_value={"route_mode": "direct", "route_status": "healthy"}))
     return config, service, send, persist
 
 
 @pytest.mark.asyncio
-async def test_daily_proxy_health_is_reported_independently_for_every_account(report_env, monkeypatch):
+async def test_daily_report_projects_saved_routes_without_node_probes(report_env, monkeypatch):
     _, service, send, persist = report_env
     service.list_accounts.return_value = [{"name": name} for name in ["direct", "good", "bad", "changed"]]
-    check_proxy = AsyncMock(side_effect=[
-        {"proxy_status": "unconfigured"}, {"proxy_status": "healthy"},
-        {"proxy_status": "error", "proxy_status_code": "PROXY_AUTH_FAILED"},
-        {"proxy_status": "pending"},
+    route_status = Mock(side_effect=[
+        {"route_mode": "direct", "route_status": "healthy", "exit_ip": "198.51.100.1"},
+        {"route_mode": "primary", "route_status": "healthy", "exit_ip": "198.51.100.2"},
+        {"route_mode": "fallback", "route_status": "error"},
+        {"route_mode": "setup_required", "route_status": "pending"},
     ])
-    monkeypatch.setattr(report, "check_account_proxy", check_proxy)
+    monkeypatch.setattr(report, "account_route_status", route_status)
     result = await report.AccountStatusReportService().run()
     assert result["ok"] == 4 and result["fail"] == 0
-    assert check_proxy.await_args_list == [
-        call(name, timeout_seconds=8.0) for name in ["direct", "good", "bad", "changed"]
-    ]
+    assert route_status.call_args_list == [call(name) for name in ["direct", "good", "bad", "changed"]]
     rows = send.await_args.kwargs["text"].splitlines()
-    assert "🟢 direct — 账户正常" in rows
-    assert "🟢 good — 账户正常 · SOCKS5 正常" in rows
-    assert "🔴 bad — 账户正常 · SOCKS5 异常" in rows
-    assert "🔴 changed — 账户正常 · SOCKS5 待检测" in rows
+    assert "🟢 direct — 账户正常 · 直连 · 198.51.100.1" in rows
+    assert "🟢 good — 账户正常 · 主订阅 · 198.51.100.2" in rows
+    assert "🔴 bad — 账户正常 · 兜底订阅 · IP 未知" in rows
+    assert "🔴 changed — 账户正常 · 待配置订阅 · IP 未知" in rows
     persist.assert_not_called()
 
 
@@ -63,10 +62,10 @@ async def test_daily_proxy_health_is_reported_independently_for_every_account(re
 async def test_combined_midnight_report_uses_one_icon_for_three_health_dimensions(report_env):
     _, _, send, _ = report_env
     rows = [
-        {"account_name": "quiet", "ok": True, "proxy_status": "healthy"},
-        {"account_name": "notice", "ok": True, "proxy_status": "healthy"},
-        {"account_name": "proxy-bad", "ok": True, "proxy_status": "error"},
-        {"account_name": "read-bad", "ok": True, "proxy_status": "unconfigured"},
+        {"account_name": "quiet", "ok": True, "route_mode": "primary", "route_status": "healthy"},
+        {"account_name": "notice", "ok": True, "route_mode": "primary", "route_status": "healthy"},
+        {"account_name": "proxy-bad", "ok": True, "route_mode": "fallback", "route_status": "error"},
+        {"account_name": "read-bad", "ok": True, "route_mode": "direct", "route_status": "healthy"},
     ]
     sent = await report._send_report(rows, {
         "quiet": "empty", "notice": "messages", "proxy-bad": "empty", "read-bad": "failed",
@@ -74,21 +73,21 @@ async def test_combined_midnight_report_uses_one_icon_for_three_health_dimension
     assert sent == 1
     text = send.await_args.kwargs["text"]
     assert "总计 4 · 正常 1 · 异常 3" in text
-    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in text
-    assert "🔴 notice — 账户正常 · SOCKS5 正常 · 有官方消息，详见单独推送" in text
-    assert "🔴 proxy-bad — 账户正常 · SOCKS5 异常 · 官方消息无新消息" in text
-    assert "🔴 read-bad — 账户正常 · 官方消息检测异常" in text
+    assert "🟢 quiet — 账户正常 · 主订阅 · IP 未知 · 官方消息无新消息" in text
+    assert "🔴 notice — 账户正常 · 主订阅 · IP 未知 · 有官方消息，详见单独推送" in text
+    assert "🔴 proxy-bad — 账户正常 · 兜底订阅 · IP 未知 · 官方消息无新消息" in text
+    assert "🔴 read-bad — 账户正常 · 直连 · IP 未知 · 官方消息检测异常" in text
     assert text.count("🟢") == 1 and text.count("🔴") == 3
 
 
 @pytest.mark.asyncio
-async def test_daily_proxy_check_runs_even_after_account_failure(report_env, monkeypatch):
+async def test_daily_route_projection_runs_even_after_account_failure(report_env, monkeypatch):
     _, service, _, _ = report_env
     service.check_account_status.side_effect = RuntimeError("account failed")
-    check_proxy = AsyncMock(return_value={"proxy_status": "healthy"})
-    monkeypatch.setattr(report, "check_account_proxy", check_proxy)
+    route_status = Mock(return_value={"route_mode": "primary", "route_status": "healthy"})
+    monkeypatch.setattr(report, "account_route_status", route_status)
     assert (await report.AccountStatusReportService().run())["fail"] == 1
-    check_proxy.assert_awaited_once_with("alpha", timeout_seconds=8.0)
+    route_status.assert_called_once_with("alpha")
 
 
 @pytest.mark.asyncio

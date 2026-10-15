@@ -291,7 +291,7 @@ async def test_job_invokes_report_and_contains_sanitized_failures(
 async def test_midnight_sends_one_combined_summary_after_official_scan(
     scheduler_env, scheduler_clock, monkeypatch, official_run,
 ):
-    rows = [{"account_name": "quiet", "ok": True, "proxy_status": "healthy"}]
+    rows = [{"account_name": "quiet", "ok": True, "route_mode": "primary", "route_status": "healthy"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send_combined = AsyncMock(return_value=1)
     monkeypatch.setattr(
@@ -309,7 +309,7 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
     from backend.services.account_status_report import report_chunks
 
-    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in report_chunks(
+    assert "🟢 quiet — 账户正常 · 主订阅 · IP 未知 · 官方消息无新消息" in report_chunks(
         rows, {"quiet": "empty"},
     )[0]
 
@@ -318,7 +318,7 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
 async def test_partial_midnight_summary_is_reported_as_incomplete(
     scheduler_env, scheduler_clock, monkeypatch, official_run, cleanup_run,
 ):
-    rows = [{"account_name": "quiet", "ok": True, "proxy_status": "unconfigured"}]
+    rows = [{"account_name": "quiet", "ok": True, "route_mode": "direct", "route_status": "healthy"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send_combined = AsyncMock(return_value=1)
     monkeypatch.setattr(
@@ -447,7 +447,7 @@ async def test_manual_report_runs_full_workflow_outside_midnight(
     scheduler_env, scheduler_clock, monkeypatch, official_run, cleanup_run,
 ):
     scheduler_clock[0] = datetime(2026, 10, 13, 6, 34, 12, tzinfo=timezone.utc)
-    rows = [{"account_name": "alpha", "ok": True, "proxy_status": "healthy"}]
+    rows = [{"account_name": "alpha", "ok": True, "route_mode": "primary", "route_status": "healthy"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send = AsyncMock(return_value=1)
     target = ("token", "123", None)

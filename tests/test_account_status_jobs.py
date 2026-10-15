@@ -15,7 +15,7 @@ def _reset_store(tmp_path: Path, monkeypatch):
     store = BackgroundJobStore(tmp_path / "jobs")
     monkeypatch.setattr(jobs_mod, "_store", store)
     monkeypatch.setattr(jobs_mod, "get_account_status_job_store", lambda: store)
-    monkeypatch.setattr(jobs_mod, "check_account_proxy", AsyncMock(return_value={"proxy_status": "unconfigured"}))
+    monkeypatch.setattr(jobs_mod, "account_route_status", lambda _name: {"route_mode": "direct", "route_status": "healthy"})
     yield
     jobs_mod._store = None
 
@@ -53,7 +53,7 @@ async def test_run_status_check_updates_progress_and_results(tmp_path: Path):
     assert len(job["results"]) == 2
     # 过程中应已写入 results（最终态仍保留）
     assert job["results"][0]["account_name"] == "a"
-    assert [c.args[0] for c in jobs_mod.check_account_proxy.await_args_list] == ["a", "b"]
+    assert all(item["route_mode"] == "direct" for item in job["results"])
 
 
 def test_start_rejects_when_already_running(monkeypatch):
@@ -99,7 +99,7 @@ async def test_canceled_batch_releases_unprocessed_reservations():
     with patch("backend.services.telegram.get_telegram_service") as mock_get:
         await jobs_mod._run_status_check(job_id, ["first", "second"], 5.0, reservation)
     mock_get.return_value.check_account_status.assert_not_called()
-    jobs_mod.check_account_proxy.assert_not_awaited()
+    assert store.get_job(job_id)["results"] == []
     account_check_gate.reserve(["first", "second"]).release()
 
 

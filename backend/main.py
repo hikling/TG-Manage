@@ -415,6 +415,28 @@ async def on_startup() -> None:
     Base.metadata.create_all(bind=get_engine())
     with get_session_local()() as db:
         prepare_admin_setup(db)
+    from backend.services.account_routes import get_route_service
+
+    route_service = get_route_service()
+    async def _reconnect_telebox_routes(changed_accounts: set[str]) -> None:
+        from backend.services.telebox import get_telebox_service
+
+        for account_name in changed_accounts:
+            try:
+                await get_telebox_service().refresh_account_proxy(account_name)
+            except Exception as exc:
+                logging.getLogger("backend.startup").warning(
+                    "TeleBox route reconnect failed account=%s (%s)",
+                    account_name, type(exc).__name__,
+                )
+
+    route_service.register_change_callback(_reconnect_telebox_routes)
+    try:
+        await route_service.startup()
+    except Exception as exc:
+        logging.getLogger("backend.startup").error(
+            "Xray route startup failed (%s)", type(exc).__name__,
+        )
     await init_scheduler(sync_on_startup=False)
     from backend.services.official_code_bot import run_code_bot
     app.state.code_bot_task = create_logged_task(
@@ -574,6 +596,12 @@ async def on_shutdown() -> None:
             await memory_task
 
     shutdown_scheduler()
+    try:
+        from backend.services.account_routes import get_route_service
+
+        await get_route_service().shutdown()
+    except Exception as exc:
+        log.warning("Xray route shutdown failed (%s)", type(exc).__name__)
 
     # 释放推送通知的共享 HTTP 连接池
     try:

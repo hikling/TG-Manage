@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import (
     APIRouter,
@@ -65,6 +65,65 @@ class GlobalSettingsResponse(BaseModel):
     appearance_accent_color: str = "#3d6fa8"
     hero_position_x: float = 50.0
     hero_position_y: float = 50.0
+
+
+class SubscriptionSourceStatus(BaseModel):
+    configured: bool = False
+    status: str = "unconfigured"
+    last_refreshed_at: Optional[str] = None
+    usable_count: int = 0
+    unsupported_count: int = 0
+    label: Optional[str] = None
+
+
+class ProxySubscriptionsResponse(BaseModel):
+    primary: SubscriptionSourceStatus = Field(default_factory=SubscriptionSourceStatus)
+    fallback: SubscriptionSourceStatus = Field(default_factory=SubscriptionSourceStatus)
+    latency_threshold_ms: int = 800
+    route_mode: Literal["primary", "fallback", "direct", "setup_required", "mixed"] = "setup_required"
+
+
+class ProxySubscriptionsUpdate(BaseModel):
+    primary_url: Optional[str] = None
+    fallback_url: Optional[str] = None
+    latency_threshold_ms: Optional[int] = Field(default=None, ge=100, le=10000)
+
+
+@router.get("/settings/proxy-subscriptions", response_model=ProxySubscriptionsResponse)
+async def get_proxy_subscriptions(current_user: User = Depends(get_current_user)):
+    from backend.services.account_routes import get_route_service
+
+    return await get_route_service().get_subscription_settings()
+
+
+@router.put("/settings/proxy-subscriptions", response_model=ProxySubscriptionsResponse)
+async def put_proxy_subscriptions(
+    request: ProxySubscriptionsUpdate, current_user: User = Depends(get_current_user),
+):
+    from backend.services.account_routes import get_route_service
+
+    fields_set = getattr(request, "model_fields_set", None) or getattr(request, "__fields_set__", set())
+    changes = {name: getattr(request, name) for name in fields_set}
+    try:
+        await get_route_service().update_subscription_settings(changes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="INVALID_SUBSCRIPTION_SETTINGS") from None
+    except Exception as exc:
+        logger.warning("Subscription settings update failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="SUBSCRIPTION_UPDATE_FAILED") from None
+    return await get_route_service().get_subscription_settings()
+
+
+@router.post("/settings/proxy-subscriptions/refresh", response_model=ProxySubscriptionsResponse)
+async def refresh_proxy_subscriptions(current_user: User = Depends(get_current_user)):
+    from backend.services.account_routes import get_route_service
+
+    try:
+        await get_route_service().refresh_subscriptions()
+    except Exception as exc:
+        logger.warning("Subscription refresh failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=502, detail="SUBSCRIPTION_REFRESH_FAILED") from None
+    return await get_route_service().get_subscription_settings()
 
 
 @router.get("/settings", response_model=GlobalSettingsResponse)
@@ -202,7 +261,7 @@ async def test_bot_connection(current_user: User = Depends(get_current_user)):
 async def test_bot_notification(
     current_user: User = Depends(get_current_user),
 ):
-    """Explicitly start the full status, SOCKS5 and official-message report."""
+    """Explicitly start the full account-status and official-message report."""
     try:
         from backend.services.bot_test_report_jobs import start_bot_test_report_job
 

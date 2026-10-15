@@ -16,7 +16,7 @@ from backend.services.account_check_gate import (
     AccountCheckReservation,
     account_check_gate,
 )
-from backend.services.account_proxy_status import check_account_proxy
+from backend.services.account_routes import account_route_status
 from backend.services.background_job import BackgroundJobStore
 from backend.utils.names import validate_storage_name
 from tg_manage.utils import clamp
@@ -132,7 +132,7 @@ async def _run_status_check(
                     "code": "STATUS_CHECK_FAILED",
                 }
             if not store.is_cancel_requested(job_id):
-                item = {**item, **await check_account_proxy(name, timeout_seconds=timeout_seconds)}
+                item = {**item, **account_route_status(name)}
             if reservation is not None:
                 reservation.finish(name, success=bool(item.get("ok")))
             results.append(item)

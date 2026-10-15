@@ -48,17 +48,17 @@ async def test_worker_admission_counts_running_and_starting_accounts(monkeypatch
 
 def test_telebox_worker_credentials_does_not_construct_pyrogram_client(monkeypatch):
     monkeypatch.setattr(telebox, "get_account_api_credentials", lambda account: (12345, "a" * 32))
-    monkeypatch.setattr(telebox, "get_account_profile", lambda account: {
-        "proxy": "socks5://alice:secret@example.com:1080",
+    monkeypatch.setattr(telebox, "resolve_account_route", lambda account: {
+        "scheme": "socks5", "hostname": "127.0.0.1", "port": 1080,
     })
     monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
         _build_account_client=lambda *args, **kwargs: pytest.fail("unexpected Client construction")))
     credentials, secrets = telebox.TeleBoxService._worker_credentials("one")
     assert credentials == {"api_id": 12345, "api_hash": "a" * 32, "proxy": {
-        "ip": "example.com", "port": 1080, "socksType": 5,
-        "username": "alice", "password": "secret",
+        "ip": "127.0.0.1", "port": 1080, "socksType": 5,
+        "username": None, "password": None,
     }}
-    assert secrets == ["a" * 32, "secret"]
+    assert secrets == ["a" * 32]
 
 
 @pytest.mark.asyncio

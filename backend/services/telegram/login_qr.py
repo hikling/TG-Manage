@@ -8,6 +8,7 @@ import secrets
 import time
 from typing import Any, Dict, Optional
 
+from backend.services.account_routes import RouteSetupRequired, resolve_account_route
 from backend.services.telegram.login_phone import _discard_login_client
 from backend.services.telegram.pending_session import (
     cleanup_pending_session,
@@ -20,7 +21,6 @@ from backend.services.telegram.sessions import (
     _remove_login_session,
 )
 from backend.utils.account_locks import get_account_lock
-from backend.utils.proxy import require_proxy_dict
 from backend.utils.tg_session import (
     get_global_semaphore,
     get_session_mode,
@@ -337,7 +337,7 @@ class TelegramQrLoginMixin:
                 return _PASSWORD_REQUIRED
             await self._apply_migrate_auth(client, data)
             await self._persist_client_session(
-                client, data.get("account_name"), data.get("proxy")
+                client, data.get("account_name")
             )
         except SessionPasswordNeeded:
             data["status"] = "password_required"
@@ -405,7 +405,7 @@ class TelegramQrLoginMixin:
 
         await self._apply_migrate_auth(client, data)
         await self._persist_client_session(
-            client, data.get("account_name"), data.get("proxy")
+            client, data.get("account_name")
         )
 
         self._log_qr_state(login_id, "success", data)
@@ -455,11 +455,10 @@ class TelegramQrLoginMixin:
 
 
     async def start_qr_login(
-        self, account_name: str, proxy: Optional[str] = None,
+        self, account_name: str,
         api_id: int = None, api_hash: str = None,
     ) -> Dict[str, Any]:
 
-        proxy_dict = require_proxy_dict(proxy)
         account_name = self._normalize_account_name(account_name)
 
         from pyrogram import Client, handlers, raw
@@ -525,6 +524,7 @@ class TelegramQrLoginMixin:
 
         pending_path = None
         try:
+            proxy_dict = resolve_account_route(account_name)
             pending_path = new_pending_session_path(self.session_dir, account_name) if session_mode == "file" else None
             # QR 登录依赖 UpdateLoginToken，必须启用 updates。
             client = Client(
@@ -532,6 +532,10 @@ class TelegramQrLoginMixin:
                 api_id=api_id, api_hash=api_hash, proxy=proxy_dict,
                 in_memory=session_mode == "string", no_updates=False,
             )
+        except RouteSetupRequired:
+            cleanup_pending_session(pending_path)
+            _release_account_lock()
+            raise
         except Exception:
             cleanup_pending_session(pending_path)
             _release_account_lock()
@@ -573,7 +577,6 @@ class TelegramQrLoginMixin:
 
             session_data = {
                 "account_name": account_name,
-                "proxy": proxy,
                 "client": client,
                 "token": token_bytes,
                 "expires_ts": expires_ts,
