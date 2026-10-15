@@ -309,7 +309,7 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
     from backend.services.account_status_report import report_chunks
 
-    assert "🟢 quiet — 账户正常 · 主订阅 · IP 未知 · 官方消息无新消息" in report_chunks(
+    assert "🟢 quiet — 账户正常 · 主订阅 · 无官方新消息" in report_chunks(
         rows, {"quiet": "empty"},
     )[0]
 

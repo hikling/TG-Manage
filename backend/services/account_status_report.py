@@ -99,13 +99,14 @@ def report_chunks(
             notes.append("账户正常")
         route_label = {
             "primary": "主订阅", "fallback": "兜底订阅",
-            "direct": "直连", "setup_required": "待配置订阅",
+            "direct": "直出", "setup_required": "待配置订阅",
         }.get(result.get("route_mode"), "路由待确认")
-        exit_ip = result.get("exit_ip") or "IP 未知"
-        notes.append(f"{route_label} · {exit_ip}")
+        notes.append(route_label)
+        if official_status is None:
+            notes.append(result.get("exit_ip") or "IP 未知")
         if official_status is not None:
             official = official_status.get(result["account_name"])
-            notes.append({"empty": "官方消息无新消息", "messages": "有官方消息，详见单独推送"}.get(
+            notes.append({"empty": "无官方新消息", "messages": "有官方新消息"}.get(
                 official, "官方消息检测异常"))
         row = f"{'🟢' if healthy(result) else '🔴'} {name} — {' · '.join(notes)}"
         lines.append(row)
