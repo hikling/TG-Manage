@@ -34,6 +34,12 @@ describe('account-list-map', () => {
     )
     expect(checking.status).toBe('empty')
     expect(checking.message).toBe('检测中')
+    const failedProbe = mapAccountInfoToUiItem(
+      { name: 'c', status: 'checking', status_code: 'TIMEOUT', status_message: 'Request timed out' } as AccountInfo,
+      labels,
+    )
+    expect(failedProbe.status).toBe('error')
+    expect(failedProbe.message).toBe('Request timed out')
   })
 
   it('filters by name remark message', () => {

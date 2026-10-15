@@ -105,6 +105,9 @@ export function useAccountBatchCheck(options: {
       .filter((item) => item && !item.ok && item.account_name)
       .map((item) => item.account_name)
     await options.loadAccounts()
+    // A list request may have started before the last job result was saved.
+    // The completed check response remains authoritative for this page.
+    applyLiveResults(job.results)
     const summary = job.summary || {}
     const ok = Number(summary.ok ?? job.progress?.ok ?? 0)
     const failed = Number(summary.fail ?? job.progress?.fail ?? 0)
@@ -204,7 +207,10 @@ export function useAccountBatchCheck(options: {
     try {
       const res = await checkAccountsStatus(token, { account_names: [name], refresh_avatar: true })
       options.invalidateAvatars(res.results.filter(item => item.avatar_refreshed).map(item => item.account_name))
+      batchResultMap.value = {}
+      applyLiveResults(res.results)
       await options.loadAccounts()
+      applyLiveResults(res.results)
       if (res.results.some(item => item.avatar_refreshed)) await options.loadAvatarForAccount(name)
       const result = res.results?.[0]
       if (result) {
@@ -274,7 +280,9 @@ export function useAccountBatchCheck(options: {
       lastBatchFailedNames.value = res.results
         .filter((item) => !item.ok && item.account_name)
         .map((item) => item.account_name)
+      applyLiveResults(res.results)
       await options.loadAccounts()
+      applyLiveResults(res.results)
       const ok = res.results.filter((item) => item.ok).length
       const failed = res.results.length - ok
       if (failed === 0) {

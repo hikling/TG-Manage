@@ -31,8 +31,10 @@ export function mapAccountInfoToUiItem(
     uiStatus = 'error'
     message = acc.status_message || ''
   } else if (acc.status === 'checking') {
-    uiStatus = 'empty'
-    message = labels.checking
+    // A completed probe can report a transport failure with status=checking.
+    // That is an abnormal result, not an in-progress healthy account.
+    uiStatus = acc.status_code ? 'error' : 'empty'
+    message = acc.status_code ? (acc.status_message || labels.checking) : labels.checking
   } else if (
     acc.status_message?.includes('流量') ||
     acc.status_message?.includes('额度')

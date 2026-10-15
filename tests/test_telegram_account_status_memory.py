@@ -72,6 +72,29 @@ async def test_status_probe_releases_client_on_all_outcomes(tmp_path, monkeypatc
             assert result["username"] == "sample_user"
         assert client.active == 0
     assert client.enters == client.exits == iterations
+    assert status_write.call_count == iterations
+    last = status_write.call_args.kwargs
+    assert last["status"] == ("connected" if behavior == "ok" else "checking")
+    assert last["code"] == {"ok": "OK", "error": "CONNECTION_ERROR", "timeout": "TIMEOUT"}[behavior]
+
+
+@pytest.mark.asyncio
+async def test_removed_account_is_not_recreated_by_status_result(tmp_path, monkeypatch):
+    class RemovedDuringProbe(_Service):
+        calls = 0
+
+        def account_exists(self, _name):
+            self.calls += 1
+            return self.calls == 1
+
+    monkeypatch.setattr("tg_manage.core.get_client", lambda *_args, **_kwargs: _Client())
+    monkeypatch.setattr(accounts_mod, "get_session_mode", lambda: "file")
+    monkeypatch.setattr(accounts_mod, "get_account_profile", lambda _name: {})
+    status_write = Mock()
+    monkeypatch.setattr(accounts_mod, "set_account_status", status_write)
+    result = await RemovedDuringProbe(tmp_path).check_account_status("sample")
+    assert result["ok"] is True
+    status_write.assert_not_called()
 
 
 @pytest.mark.asyncio

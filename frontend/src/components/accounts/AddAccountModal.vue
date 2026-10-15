@@ -66,10 +66,11 @@ const deliveryNoticeFor = (deliveryType?: string | null, nextType?: string | nul
   switch (deliveryType) {
     case 'app': notice = t('addAccount.codeDeliveryApp'); break
     case 'sms':
-    case 'firebase_sms':
     case 'sms_phrase':
     case 'sms_word':
-    case 'fragment_sms': notice = t('addAccount.codeDeliverySms'); break
+      notice = t('addAccount.codeDeliverySms'); break
+    case 'firebase_sms': notice = t('addAccount.codeDeliveryFirebase'); break
+    case 'fragment_sms': notice = t('addAccount.codeDeliveryFragment'); break
     case 'call':
     case 'missed_call':
     case 'flash_call': notice = t('addAccount.codeDeliveryCall'); break
@@ -77,7 +78,10 @@ const deliveryNoticeFor = (deliveryType?: string | null, nextType?: string | nul
     case 'setup_email_required': notice = t('addAccount.codeDeliveryEmailSetup'); break
     default: notice = t('addAccount.codeDeliveryUnknown')
   }
-  return `${notice} ${t(nextType ? 'addAccount.codeResendAvailable' : 'addAccount.codeResendUnavailable')}`
+  const fallback = nextType === 'sms' || nextType === 'sms_phrase' || nextType === 'sms_word'
+    ? 'addAccount.codeResendSms'
+    : nextType ? 'addAccount.codeResendAvailable' : 'addAccount.codeResendUnavailable'
+  return `${notice} ${t(fallback)}`
 }
 watch(locale, () => {
   error.value = ''
