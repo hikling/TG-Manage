@@ -51,7 +51,7 @@ async def test_daily_report_projects_saved_routes_without_node_probes(report_env
     assert result["ok"] == 4 and result["fail"] == 0
     assert route_status.call_args_list == [call(name) for name in ["direct", "good", "bad", "changed"]]
     rows = send.await_args.kwargs["text"].splitlines()
-    assert "🟢 direct — 账户正常 · 直连 · 198.51.100.1" in rows
+    assert "🟢 direct — 账户正常 · 直出 · 198.51.100.1" in rows
     assert "🟢 good — 账户正常 · 主订阅 · 198.51.100.2" in rows
     assert "🔴 bad — 账户正常 · 兜底订阅 · IP 未知" in rows
     assert "🔴 changed — 账户正常 · 待配置订阅 · IP 未知" in rows
@@ -59,11 +59,11 @@ async def test_daily_report_projects_saved_routes_without_node_probes(report_env
 
 
 @pytest.mark.asyncio
-async def test_combined_midnight_report_uses_one_icon_for_three_health_dimensions(report_env):
+async def test_combined_midnight_report_shows_route_and_new_official_messages(report_env):
     _, _, send, _ = report_env
     rows = [
-        {"account_name": "quiet", "ok": True, "route_mode": "primary", "route_status": "healthy"},
-        {"account_name": "notice", "ok": True, "route_mode": "primary", "route_status": "healthy"},
+        {"account_name": "quiet", "ok": True, "route_mode": "primary", "route_status": "healthy", "exit_ip": "198.51.100.1"},
+        {"account_name": "notice", "ok": True, "route_mode": "primary", "route_status": "healthy", "exit_ip": "198.51.100.2"},
         {"account_name": "proxy-bad", "ok": True, "route_mode": "fallback", "route_status": "error"},
         {"account_name": "read-bad", "ok": True, "route_mode": "direct", "route_status": "healthy"},
     ]
@@ -73,10 +73,11 @@ async def test_combined_midnight_report_uses_one_icon_for_three_health_dimension
     assert sent == 1
     text = send.await_args.kwargs["text"]
     assert "总计 4 · 正常 1 · 异常 3" in text
-    assert "🟢 quiet — 账户正常 · 主订阅 · IP 未知 · 官方消息无新消息" in text
-    assert "🔴 notice — 账户正常 · 主订阅 · IP 未知 · 有官方消息，详见单独推送" in text
-    assert "🔴 proxy-bad — 账户正常 · 兜底订阅 · IP 未知 · 官方消息无新消息" in text
-    assert "🔴 read-bad — 账户正常 · 直连 · IP 未知 · 官方消息检测异常" in text
+    assert "🟢 quiet — 账户正常 · 主订阅 · 无官方新消息" in text
+    assert "🔴 notice — 账户正常 · 主订阅 · 有官方新消息" in text
+    assert "🔴 proxy-bad — 账户正常 · 兜底订阅 · 无官方新消息" in text
+    assert "🔴 read-bad — 账户正常 · 直出 · 官方消息检测异常" in text
+    assert "198.51.100.1" not in text and "198.51.100.2" not in text
     assert text.count("🟢") == 1 and text.count("🔴") == 3
 
 
