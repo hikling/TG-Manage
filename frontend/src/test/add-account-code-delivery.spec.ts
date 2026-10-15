@@ -41,6 +41,7 @@ describe('phone login delivery guidance', () => {
     })
     await wrapper.get('#add-account-name').setValue('one')
     await wrapper.get('#add-account-phone').setValue('+12345678900')
+    await wrapper.get('input[name="preferred-code-source"][value="app"]').setValue()
     await wrapper.get('button.ui-btn-secondary').trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toContain(expected)
@@ -68,11 +69,13 @@ describe('phone login delivery guidance', () => {
     })
     await wrapper.get('#add-account-name').setValue('one')
     await wrapper.get('#add-account-phone').setValue('+12345678900')
+    await wrapper.get('input[name="preferred-code-source"][value="sms"]').setValue()
     const button = wrapper.get('button.ui-btn-secondary')
     vi.useFakeTimers()
     await button.trigger('click')
     await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toContain('短信作为下一种方式')
+    expect(wrapper.get('[role="status"]').text()).toContain('未按所选方式投递')
     await vi.advanceTimersByTimeAsync(75_000)
     await button.trigger('click')
     await flushPromises()
@@ -85,5 +88,70 @@ describe('phone login delivery guidance', () => {
     expect(mocks.cancelAccountLogin).toHaveBeenCalledWith('token', {
       account_name: 'one', phone_number: '+12345678900', phone_code_hash: 'hash-2',
     })
+  })
+
+  it('requires one exclusive preference before requesting a code', async () => {
+    mocks.startAccountLogin.mockResolvedValue({
+      account_name: 'one', phone_number: '+12345678900', phone_code_hash: 'hash',
+      delivery_type: 'app', retry_after: 60,
+    })
+    const wrapper = mount(AddAccountModal, {
+      props: { isOpen: true },
+      global: { plugins: [i18n], stubs: { Modal: { template: '<div><slot /><slot name="footer" /></div>' } } },
+    })
+    await wrapper.get('#add-account-name').setValue('one')
+    await wrapper.get('#add-account-phone').setValue('+12345678900')
+    const button = wrapper.get('button.ui-btn-secondary')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(mocks.startAccountLogin).not.toHaveBeenCalled()
+
+    const sms = wrapper.get('input[name="preferred-code-source"][value="sms"]')
+    const app = wrapper.get('input[name="preferred-code-source"][value="app"]')
+    await sms.setValue()
+    expect((sms.element as HTMLInputElement).checked).toBe(true)
+    await app.setValue()
+    expect((sms.element as HTMLInputElement).checked).toBe(false)
+    expect((app.element as HTMLInputElement).checked).toBe(true)
+    expect(button.attributes('disabled')).toBeUndefined()
+    await button.trigger('click')
+    await flushPromises()
+    expect(mocks.startAccountLogin).toHaveBeenCalledTimes(1)
+    expect((app.element as HTMLInputElement).disabled).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('reports when Telegram sends SMS despite app preference', async () => {
+    mocks.startAccountLogin.mockResolvedValue({
+      account_name: 'one', phone_number: '+12345678900', phone_code_hash: 'hash',
+      delivery_type: 'sms', retry_after: 60,
+    })
+    const wrapper = mount(AddAccountModal, {
+      props: { isOpen: true },
+      global: { plugins: [i18n], stubs: { Modal: { template: '<div><slot /><slot name="footer" /></div>' } } },
+    })
+    await wrapper.get('#add-account-name').setValue('one')
+    await wrapper.get('#add-account-phone').setValue('+12345678900')
+    await wrapper.get('input[name="preferred-code-source"][value="app"]').setValue()
+    await wrapper.get('button.ui-btn-secondary').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toContain('请查看该手机号的短信')
+    expect(wrapper.get('[role="status"]').text()).toContain('未按所选方式投递')
+    wrapper.unmount()
+  })
+
+  it('clears the preference after switching away from phone login', async () => {
+    const wrapper = mount(AddAccountModal, {
+      props: { isOpen: true },
+      global: { plugins: [i18n], stubs: { Modal: { template: '<div><slot /><slot name="footer" /></div>' } } },
+    })
+    await wrapper.get('input[name="preferred-code-source"][value="sms"]').setValue()
+    const methods = wrapper.findAll('button.ui-segment-btn')
+    await methods[1]!.trigger('click')
+    await flushPromises()
+    await methods[0]!.trigger('click')
+    await flushPromises()
+    expect((wrapper.get('input[name="preferred-code-source"][value="sms"]').element as HTMLInputElement).checked).toBe(false)
+    expect((wrapper.get('input[name="preferred-code-source"][value="app"]').element as HTMLInputElement).checked).toBe(false)
+    wrapper.unmount()
   })
 })
