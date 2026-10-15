@@ -1,11 +1,12 @@
 /**
  * 设置页：通用配置与通知的分块保存。
  */
-import { ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import {
   saveGlobalSettings,
   runDeviceKeepalive,
   testBotNotification,
+  getBotTestReportJob,
 } from '../lib/api'
 import { withToken } from '../lib/api/core'
 import type { SettingsSection } from '../lib/settings-form'
@@ -30,6 +31,8 @@ export function useSettingsSave(options: {
   const saveAllLoading = ref(false)
   const botTestLoading = ref(false)
   const keepaliveLoading = ref(false)
+  let disposed = false
+  if (getCurrentScope()) onScopeDispose(() => { disposed = true })
 
   const saveSettings = async () => {
     return withToken(async (token) => {
@@ -109,13 +112,31 @@ export function useSettingsSave(options: {
 
   const testBot = async () => {
     return withToken(async (token) => {
+      if (botTestLoading.value) return
       botTestLoading.value = true
       try {
         const res = await testBotNotification(token)
-        if (res.success) notifySuccess('settings.botTestSuccess')
-        else notifyError(resolveApiErrorMessage(res.message, 'settings.testFailed'))
+        if (!res.success) {
+          notifyError(resolveApiErrorMessage(res.message, 'settings.testFailed'))
+          return
+        }
+        if (!res.job_id) throw new Error('Missing report job ID')
+        notifySuccess('settings.botTestStarted')
+        while (!disposed) {
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+          if (disposed) break
+          const job = await getBotTestReportJob(token, res.job_id)
+          if (job.status === 'completed') {
+            notifySuccess('settings.botTestSuccess')
+            break
+          }
+          if (job.status === 'failed' || job.status === 'canceled') {
+            notifyError(resolveApiErrorMessage(job.error, 'settings.testFailed'))
+            break
+          }
+        }
       } catch (e: unknown) {
-        notifyError(resolveApiErrorMessage(e, 'settings.testFailed'))
+        if (!disposed) notifyError(resolveApiErrorMessage(e, 'settings.testFailed'))
       } finally {
         botTestLoading.value = false
       }

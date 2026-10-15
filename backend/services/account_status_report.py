@@ -1,10 +1,9 @@
-"""Fresh midnight account checks and bounded Telegram Bot status reports."""
+"""Fresh account checks and bounded Telegram Bot status reports."""
 from __future__ import annotations
 
 import asyncio
 import logging
 import time
-from pathlib import Path
 from typing import Any
 
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
@@ -12,7 +11,6 @@ from backend.services.account_proxy_status import check_account_proxy
 from backend.services.config import get_config_service
 from backend.services.push_notifications import _bot_config, send_telegram_bot_message
 from backend.services.telegram import get_telegram_service
-from backend.utils.atomic_io import read_json_safe, write_json_atomic
 from backend.utils.tg_session import set_account_status
 from backend.utils.time import utc_now_iso_z
 
@@ -20,13 +18,6 @@ logger = logging.getLogger("backend.account_status_report")
 PROBE_TIMEOUT_SECONDS = 8.0
 INTER_DELAY_SECONDS = 0.15
 MAX_MESSAGE_UNITS = 3500
-LATEST_REPORT_FILENAME = "latest_midnight_report.json"
-
-
-class MidnightReportReplayError(Exception):
-    """A safe, user-facing replay precondition failure."""
-
-
 def _failure_reason(result: dict[str, Any]) -> str:
     if result.get("status") == "not_found" or result.get("code") == "ACCOUNT_NOT_FOUND":
         return "账户已移除"
@@ -81,6 +72,7 @@ def _enabled_target() -> tuple[str, str, int | None] | None:
 
 def report_chunks(
     results: list[dict[str, Any]], official_status: dict[str, str] | None = None,
+    *, title: str | None = None,
 ) -> list[str]:
     def healthy(result: dict[str, Any]) -> bool:
         return (
@@ -91,7 +83,7 @@ def report_chunks(
 
     ok_count = sum(healthy(result) for result in results)
     lines = [
-        "零点账户状态与官方消息日报" if official_status is not None else "账户状态日报（零点检测）",
+        title or ("零点账户状态与官方消息日报" if official_status is not None else "账户状态日报（零点检测）"),
         f"总计 {len(results)} · 正常 {ok_count} · 异常 {len(results) - ok_count}",
         "",
     ]
@@ -121,61 +113,16 @@ def report_chunks(
     return _message_chunks(lines)
 
 
-def _latest_report_path() -> Path:
-    return get_config_service().workdir / LATEST_REPORT_FILENAME
-
-
-def save_latest_midnight_report(chunks: list[str]) -> None:
-    """Keep only a fully delivered summary, without Bot credentials."""
-    if not chunks:
-        raise ValueError("Empty midnight summary")
-    write_json_atomic(_latest_report_path(), {"version": 1, "chunks": chunks})
-
-
-def latest_midnight_report_chunks() -> list[str] | None:
-    saved = read_json_safe(_latest_report_path())
-    if not isinstance(saved, dict) or saved.get("version") != 1:
-        return None
-    chunks = saved.get("chunks")
-    if not isinstance(chunks, list) or not chunks:
-        return None
-    if not all(
-        isinstance(chunk, str)
-        and chunk
-        and len(chunk.encode("utf-16-le")) // 2 <= MAX_MESSAGE_UNITS
-        for chunk in chunks
-    ):
-        return None
-    return chunks
-
-
-async def replay_latest_midnight_report() -> int:
-    chunks = latest_midnight_report_chunks()
-    if chunks is None:
-        raise MidnightReportReplayError("暂无已完成的零点日报，请在下一次零点检测后重试")
-    target = _configured_target()
-    if target is None:
-        raise MidnightReportReplayError("未配置 Bot Token 或 Chat ID")
-    sent = 0
-    for chunk in chunks:
-        if _configured_target() != target:
-            raise MidnightReportReplayError("Bot 配置已变更，请重新点击测试发送")
-        await send_telegram_bot_message(
-            bot_token=target[0], chat_id=target[1], message_thread_id=target[2], text=chunk,
-        )
-        sent += 1
-    return sent
-
-
 async def _send_report(
     results: list[dict[str, Any]], official_status: dict[str, str] | None = None,
+    *, title: str | None = None,
 ) -> int:
     target = _enabled_target()
     if target is None:
         return 0
 
     sent = 0
-    for text in report_chunks(results, official_status):
+    for text in report_chunks(results, official_status, title=title):
         # Unlike event notifications, this explicitly scheduled report ignores
         # quiet hours. Stop if credentials/target/topic change or are disabled.
         if _enabled_target() != target:

@@ -55,9 +55,6 @@ class TestAdvancedSettingsApi:
 
 class TestBotTestApi:
     def test_bot_test_requires_config(self, client, authenticated_admin):
-        from backend.services.account_status_report import save_latest_midnight_report
-
-        save_latest_midnight_report(["零点账户状态与官方消息日报\n🟢 alpha — 账户正常"])
         # 清空 token/chat
         client.post(
             "/api/config/settings",
@@ -70,11 +67,7 @@ class TestBotTestApi:
         assert body["success"] is False
         assert "配置" in body["message"] or "Token" in body["message"] or "token" in body["message"].lower()
 
-    def test_bot_test_success(self, client, authenticated_admin):
-        from backend.services.account_status_report import save_latest_midnight_report
-
-        chunks = ["零点账户状态与官方消息日报\n🟢 alpha — 账户正常", "🔴 beta — 账户异常"]
-        save_latest_midnight_report(chunks)
+    def test_bot_test_starts_background_check_without_midnight_snapshot(self, client, authenticated_admin):
         client.post(
             "/api/config/settings",
             json={
@@ -85,43 +78,34 @@ class TestBotTestApi:
             headers=_auth_headers(),
         )
         with patch(
-            "backend.services.account_status_report.send_telegram_bot_message",
-            new_callable=AsyncMock,
-        ) as m, patch(
-            "backend.services.account_status_report.get_telegram_service",
-            side_effect=AssertionError("Bot test must not read accounts"),
-        ), patch(
-            "backend.services.official_message_report.get_official_message_report_service",
-            side_effect=AssertionError("Bot test must not read official history"),
-        ), patch(
-            "backend.services.account_status_report.check_account_proxy",
-            side_effect=AssertionError("Bot test must not probe SOCKS5"),
-        ):
+            "backend.services.bot_test_report_jobs.start_bot_test_report_job",
+            return_value={"job_id": "abc123"},
+        ) as start:
             resp = client.post("/api/config/bot/test", headers=_auth_headers())
         assert resp.status_code == 200
         assert resp.json()["success"] is True
-        assert m.await_count == 2
-        assert [call.kwargs["text"] for call in m.await_args_list] == chunks
-        assert all(call.kwargs["chat_id"] == "999" for call in m.await_args_list)
+        assert resp.json()["job_id"] == "abc123"
+        start.assert_called_once_with()
 
-    def test_bot_test_without_completed_midnight_report_does_not_send(self, client, authenticated_admin):
-        client.post(
-            "/api/config/settings",
-            json={
-                "telegram_bot_token": "123:ABC",
-                "telegram_bot_chat_id": "999",
-            },
-            headers=_auth_headers(),
-        )
+    def test_bot_test_busy_returns_failure(self, client, authenticated_admin):
         with patch(
-            "backend.services.account_status_report.send_telegram_bot_message",
-            new_callable=AsyncMock,
-        ) as m:
+            "backend.services.bot_test_report_jobs.start_bot_test_report_job",
+            side_effect=ValueError("账户日报检测正在运行，请等待完成"),
+        ):
             resp = client.post("/api/config/bot/test", headers=_auth_headers())
         assert resp.status_code == 200
         assert resp.json()["success"] is False
-        assert "零点日报" in resp.json()["message"]
-        m.assert_not_awaited()
+        assert "正在运行" in resp.json()["message"]
+
+    def test_bot_test_job_can_be_polled(self, client, authenticated_admin):
+        with patch(
+            "backend.services.bot_test_report_jobs.get_bot_test_report_job",
+            return_value={"status": "completed", "summary": {"checked": 2}, "error": None},
+        ):
+            resp = client.get("/api/config/bot/test-jobs/abc123", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "completed"
+        assert resp.json()["summary"]["checked"] == 2
 
 
 class TestQuietHours:
