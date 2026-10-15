@@ -64,7 +64,7 @@ docker compose start app
 | 所有账号凭据失效 | `data/.app_secret_key` 是否仍是原文件，以及完整备份是否正确恢复。 |
 | 单个账号需重新登录 | Telegram 会话状态、账号 API 凭据与当前订阅线路；线路失败本身不应清除授权。 |
 | 账号显示待配置 | 在设置中保存并刷新至少一个 HTTPS 机场订阅；旧 SOCKS5 地址不再作为线路。 |
-| 账号显示直连 | 查看主/兜底订阅可用节点及最近两次健康检测；节点恢复后会自动回切。 |
+| 账号显示直连 | 查看主/兜底订阅的空闲健康节点及最近两次健康检测；节点不足时，多出的账号也会直连，节点恢复后会自动回切。 |
 | Xray 构建或启动失败 | 核对镜像构建时官方资产 SHA-256 校验、`/usr/local/bin/xray version` 和 `/data` 写权限；不要在运行容器中覆盖二进制文件。 |
-| TeleBox 启动失败 | 账号卡片的 TeleBox 状态与日志、容器内存、插件依赖。 |
+| TeleBox 启动失败 | 账号卡片的 TeleBox 状态与错误提示、`docker compose logs --tail=200 app`、容器内存和插件依赖。 |
 | `/readyz` 返回错误 | `docker compose logs --tail=200 app`、数据目录权限和磁盘空间。 |

@@ -14,7 +14,7 @@
   <tr>
     <td valign="top" width="50%">
       <h3>👥 Account management</h3>
-      <p>Sign in by code or QR, check status, refresh avatars on demand, and set per-account proxies. Single and batch checks share a 45-second interval after each successful account check.</p>
+      <p>Sign in by code or QR. A card check reads only that account's Telegram, TeleBox, and exit IP status; a manual batch check also removes orphaned account and TeleBox data on the server. Each account has an exclusive Xray node: free primary nodes are used first, then fallback nodes, with excess accounts using direct access. IP location shows the country, public IP, and current route source.</p>
     </td>
     <td valign="top" width="50%">
       <h3>💬 Chat center</h3>
@@ -34,7 +34,7 @@
   <tr>
     <td valign="top" width="50%">
       <h3>🔌 Integrated TeleBox</h3>
-      <p>Each enabled account gets a separate Telegram session and runtime directory, with status and logs on its account card. Start, stop, or log out from the same card; the pinned upstream revision is recorded in <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>.</p>
+      <p>Each enabled account gets a separate Telegram session and runtime directory. Its card shows status and controls to start, stop, or log out. Redacted process errors go to the server log; the panel no longer caches per-account runtime logs. The pinned upstream revision is recorded in <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>.</p>
     </td>
     <td valign="top" width="50%">
       <h3>🔐 Separate session boundary</h3>
@@ -70,14 +70,6 @@ Click an image to view the full screenshot.
     <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage chat center page"></a></td>
   </tr>
   <tr>
-    <th>System settings</th>
-    <th>Logs</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/系统设置.png"><img src="docs/public/screenshots/系统设置.png" width="100%" alt="TG Manage system settings page"></a></td>
-    <td align="center"><a href="docs/public/screenshots/查看日志.png"><img src="docs/public/screenshots/查看日志.png" width="100%" alt="TG Manage log viewer page"></a></td>
-  </tr>
-  <tr>
     <th colspan="2">Bot verification codes</th>
   </tr>
   <tr>
@@ -106,8 +98,9 @@ The installer builds from this repository, starts the service, and prints a one-
 ## 🧭 First use
 
 1. **🔐 Set up the admin:** Enter the one-time setup token; existing installations keep their current login. Enable panel TOTP if possible.
-2. **➕ Add an account:** Choose code or QR login in Account Management. An ordinary account may omit API ID/Hash; supply account-specific credentials when enabling TeleBox, and complete 2FA if prompted.
-3. **🗂️ Work on demand:** Check an account to refresh its status and avatar, manage its separate TeleBox process, and enable chat from inside the Chat Center when needed.
+2. **🌐 Configure subscriptions:** In Settings, save an HTTPS primary subscription and optionally a fallback, then refresh them. Account networking remains in setup-required mode until the first subscription is configured. Each healthy node serves one account; accounts beyond the available primary and fallback nodes explicitly use direct access. See the [Xray and subscription deployment notes](docs/deploy/docker.md#机场订阅与-xray).
+3. **➕ Add an account:** Choose code or QR login in Account Management. An ordinary account may omit API ID/Hash; supply account-specific credentials when enabling TeleBox, and complete 2FA if prompted.
+4. **🗂️ Work on demand:** A card check reads that account's status, TeleBox, and IP; a manual batch check also cleans orphaned server data. The daily 00:00 job checks all accounts and the prior 24 hours of official messages, then sends the configured Bot report. Enable chat inside the Chat Center when needed.
 
 TeleBox manages its own commands and plugins. System plugins are bundled; community plugins are published in [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins). See the bundled [`telebox/README.md`](telebox/README.md) for details.
 
