@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
@@ -184,36 +183,6 @@ def _bot_config(settings: Dict[str, Any]) -> tuple[str, str, Optional[int]]:
     return token, chat_id, thread_id
 
 
-def is_in_quiet_hours(
-    settings: Dict[str, Any], now: Optional[datetime] = None
-) -> bool:
-    """判断当前是否处于通知静默时段（支持跨午夜，兼容 HH:MM 与 HH:MM:SS）。"""
-    if not settings.get("telegram_bot_quiet_hours_enabled"):
-        return False
-    from backend.utils.time_window import parse_hhmm, resolve_tz
-
-    start_t = parse_hhmm(settings.get("telegram_bot_quiet_hours_start") or "23:00")
-    end_t = parse_hhmm(settings.get("telegram_bot_quiet_hours_end") or "07:00")
-    if start_t is None or end_t is None:
-        return False
-    start_m = start_t.hour * 60 + start_t.minute
-    end_m = end_t.hour * 60 + end_t.minute
-    if start_m == end_m:
-        return False
-
-    tz_name = str(settings.get("timezone") or "UTC")
-    tz = resolve_tz(tz_name)
-    current = now or datetime.now(tz)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=tz)
-    else:
-        current = current.astimezone(tz)
-    minutes = current.hour * 60 + current.minute
-    if start_m < end_m:
-        return start_m <= minutes < end_m
-    return minutes >= start_m or minutes < end_m
-
-
 async def send_telegram_bot_message(
     *,
     bot_token: str,
@@ -221,6 +190,7 @@ async def send_telegram_bot_message(
     text: str,
     message_thread_id: Optional[int] = None,
     parse_mode: Optional[str] = None,
+    verify_response: bool = False,
 ) -> None:
     payload: Dict[str, Any] = {
         "chat_id": chat_id,
@@ -241,6 +211,13 @@ async def send_telegram_bot_message(
             client = _get_shared_http_client()
             response = await client.post(url, json=payload)
             response.raise_for_status()
+            if verify_response:
+                try:
+                    result = response.json()
+                except (TypeError, ValueError):
+                    raise TelegramBotDeliveryError("Telegram Bot API 未返回有效确认") from None
+                if not isinstance(result, dict) or result.get("ok") is not True:
+                    raise TelegramBotDeliveryError("Telegram Bot API 未确认测试消息")
             return
         except (httpx.RequestError, httpx.HTTPStatusError) as exc:
             if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500:
@@ -289,11 +266,6 @@ async def _http_post_retry_once(
 
 
 async def send_keyword_push(settings: Dict[str, Any], payload: Dict[str, Any]) -> None:
-    # 与失败/成功/账号失效/登录/备份通知一致：静默时段内跳过关键词命中推送，
-    # 避免高频命中通道在夜间打扰；跳过时留 debug 日志便于排障
-    if is_in_quiet_hours(settings):
-        logger.debug("关键词命中推送处于静默时段，跳过推送")
-        return
     channel = (settings.get("keyword_monitor_push_channel") or "telegram").strip()
     title = str(payload.get("title") or "TG Manage 关键词命中")
     body = str(payload.get("body") or "")
@@ -393,8 +365,6 @@ async def send_login_notification(
         return
     if not settings.get("telegram_bot_login_notify_enabled"):
         return
-    if is_in_quiet_hours(settings):
-        return
 
     bot_token, chat_id, thread_id = _bot_config(settings)
     if not bot_token or not chat_id:
@@ -491,9 +461,6 @@ async def dispatch_matrix_notification(
     footer: str = "",
 ) -> None:
     """统一向外部 Webhook 矩阵（企业微信、飞书、钉钉、Discord）分发通知。"""
-    if is_in_quiet_hours(settings):
-        return
-
     md_lines = []
     for label, val in fields:
         if val:

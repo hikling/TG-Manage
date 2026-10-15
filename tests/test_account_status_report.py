@@ -174,18 +174,15 @@ async def test_missing_or_disabled_bot_still_checks_accounts(report_env, overrid
 
 
 @pytest.mark.asyncio
-async def test_explicit_midnight_report_bypasses_quiet_hours(report_env, monkeypatch):
+async def test_explicit_midnight_report_sends_with_legacy_quiet_settings(report_env):
     config, _, send, _ = report_env
     config.update({
         "telegram_bot_quiet_hours_enabled": True,
         "telegram_bot_quiet_hours_start": "23:00",
         "telegram_bot_quiet_hours_end": "07:00",
     })
-    quiet_check = Mock(return_value=True)
-    monkeypatch.setattr("backend.services.push_notifications.is_in_quiet_hours", quiet_check)
     await report.AccountStatusReportService().run()
     send.assert_awaited_once()
-    quiet_check.assert_not_called()
 
 
 @pytest.mark.asyncio

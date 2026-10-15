@@ -15,6 +15,7 @@ const { toastSpy, confirmMock, api } = vi.hoisted(() => ({
     saveGlobalSettings: vi.fn(),
     runDeviceKeepalive: vi.fn(),
     testBotNotification: vi.fn(),
+    testBotConnection: vi.fn(),
     getBotTestReportJob: vi.fn(),
   },
 }))
@@ -123,6 +124,26 @@ describe('useSettingsSave', () => {
     await pending
     expect(toastSpy.error).toHaveBeenCalledWith('检测未完整完成')
     vi.useRealTimers()
+  })
+
+  it('connection test sends only a lightweight message', async () => {
+    api.testBotConnection.mockResolvedValue({ success: true, message: 'ok' })
+    const { save } = setup()
+    await save.testBotConnection()
+    expect(api.testBotConnection).toHaveBeenCalledWith('tok')
+    expect(api.testBotNotification).not.toHaveBeenCalled()
+    expect(api.getBotTestReportJob).not.toHaveBeenCalled()
+    expect(toastSpy.success).toHaveBeenCalledWith('settings.botConnectionSuccess', {
+      messageKey: 'settings.botConnectionSuccess', messageParams: undefined,
+    })
+    expect(save.botConnectionLoading.value).toBe(false)
+  })
+
+  it('connection test reports Bot API refusal', async () => {
+    api.testBotConnection.mockResolvedValue({ success: false, message: 'rejected' })
+    const { save } = setup()
+    await save.testBotConnection()
+    expect(toastSpy.error).toHaveBeenCalledWith('rejected')
   })
 
   it('runKeepaliveNow formats result', async () => {

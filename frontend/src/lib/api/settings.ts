@@ -61,9 +61,6 @@ export interface GlobalSettings {
   telegram_bot_login_notify_enabled?: boolean;
   telegram_bot_code_enabled?: boolean;
   telegram_bot_code_status?: string;
-  telegram_bot_quiet_hours_enabled?: boolean;
-  telegram_bot_quiet_hours_start?: string | null;
-  telegram_bot_quiet_hours_end?: string | null;
   /** GET 不回传明文；写入时仅非空时更新 */
   telegram_bot_token?: string | null;
   telegram_bot_token_set?: boolean;
@@ -91,6 +88,11 @@ export const saveGlobalSettings = async (token: string, settings: GlobalSettings
 
 export const testBotNotification = (token: string) =>
   request<{ success: boolean; message: string; job_id: string | null }>("/config/bot/test", {
+    method: "POST",
+  }, token);
+
+export const testBotConnection = (token: string) =>
+  request<{ success: boolean; message: string }>("/config/bot/test-connection", {
     method: "POST",
   }, token);
 

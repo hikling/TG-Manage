@@ -1,15 +1,14 @@
-"""扩展设置、Bot 测试与静默时段测试。"""
+"""扩展设置与 Bot 测试。"""
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
-from zoneinfo import ZoneInfo
 
 import pytest
 
 from backend.core.auth import create_access_token
-from backend.services.push_notifications import is_in_quiet_hours
+from backend.services.config_mixins import normalize_global_settings
 
 
 def _auth_headers() -> dict:
@@ -21,18 +20,20 @@ def _auth_headers() -> dict:
 
 
 class TestAdvancedSettingsApi:
+    def test_retired_quiet_settings_are_removed_from_saved_data(self):
+        assert normalize_global_settings({
+            "telegram_bot_notify_enabled": True,
+            "telegram_bot_quiet_hours_enabled": True,
+            "telegram_bot_quiet_hours_start": "23:00",
+            "telegram_bot_quiet_hours_end": "07:00",
+        }) == {"telegram_bot_notify_enabled": True}
+
     def test_get_settings_includes_advanced_keys(self, client, authenticated_admin):
         resp = client.get("/api/config/settings", headers=_auth_headers())
         assert resp.status_code == 200
         body = resp.json()
-        for key in (
-            "telegram_bot_quiet_hours_enabled",
-            "telegram_bot_quiet_hours_start",
-            "telegram_bot_quiet_hours_end",
-            "telegram_bot_token_set",
-        ):
-            assert key in body, f"missing key {key}"
-        for key in ("auto_backup_enabled", "webdav_url", "webdav_password"):
+        assert "telegram_bot_token_set" in body
+        for key in ("auto_backup_enabled", "webdav_url", "webdav_password", "telegram_bot_quiet_hours_enabled"):
             assert key not in body
 
     def test_legacy_task_settings_are_not_saved(self, client, authenticated_admin):
@@ -42,6 +43,7 @@ class TestAdvancedSettingsApi:
                 "sign_interval": 45,
                 "sign_task_execution_timeout": 240,
                 "ai_vision_timeout": 20,
+                "telegram_bot_quiet_hours_enabled": True,
             },
             headers=_auth_headers(),
         )
@@ -51,6 +53,7 @@ class TestAdvancedSettingsApi:
         assert "sign_task_execution_timeout" not in got
         assert "ai_vision_timeout" not in got
         assert "telegram_bot_task_success_enabled" not in got
+        assert "telegram_bot_quiet_hours_enabled" not in got
 
 
 class TestBotTestApi:
@@ -107,67 +110,55 @@ class TestBotTestApi:
         assert resp.json()["status"] == "completed"
         assert resp.json()["summary"]["checked"] == 2
 
+    def test_connection_uses_saved_bot_without_account_checks(self, client, authenticated_admin):
+        client.post(
+            "/api/config/settings",
+            json={
+                "telegram_bot_notify_enabled": False,
+                "telegram_bot_token": "123:ABC",
+                "telegram_bot_chat_id": "999",
+                "telegram_bot_message_thread_id": 7,
+            },
+            headers=_auth_headers(),
+        )
+        with patch(
+            "backend.services.push_notifications.send_telegram_bot_message",
+            new_callable=AsyncMock,
+        ) as send, patch(
+            "backend.services.bot_test_report_jobs.start_bot_test_report_job"
+        ) as full_report:
+            resp = client.post("/api/config/bot/test-connection", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert resp.json()["job_id"] is None
+        send.assert_awaited_once_with(
+            bot_token="123:ABC",
+            chat_id="999",
+            message_thread_id=7,
+            text="✅ TG Manage 机器人连接测试成功",
+            verify_response=True,
+        )
+        full_report.assert_not_called()
 
-class TestQuietHours:
-    @pytest.mark.parametrize(
-        ("start", "end", "current"),
-        [
-            ("24:00", "07:00", datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))),
-            ("23:60", "07:00", datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))),
-            ("23:00", "07:60", datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))),
-            ("23:00", "24:00", datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))),
-            ("-1:00", "07:00", datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))),
-            ("23:00:99", "07:00", datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))),
-            ("23:00:anything", "07:00", datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))),
-            ("23:", "07:00", datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))),
-            ("23:00", "07", datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))),
-        ],
-    )
-    def test_invalid_clock_values_fall_back_to_not_quiet(self, start, end, current):
-        cfg = {
-            "telegram_bot_quiet_hours_enabled": True,
-            "telegram_bot_quiet_hours_start": start,
-            "telegram_bot_quiet_hours_end": end,
-            "timezone": "UTC",
-        }
-        assert not is_in_quiet_hours(cfg, current)
+    def test_connection_requires_saved_credentials(self, client, authenticated_admin):
+        resp = client.post("/api/config/bot/test-connection", headers=_auth_headers())
+        assert resp.status_code == 200
+        assert resp.json()["success"] is False
 
-    def test_quiet_hours_overnight(self):
-        cfg = {
-            "telegram_bot_quiet_hours_enabled": True,
-            "telegram_bot_quiet_hours_start": "23:00",
-            "telegram_bot_quiet_hours_end": "07:00",
-            "timezone": "UTC",
-        }
-        assert is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))
+    def test_connection_does_not_expose_transport_errors(self, client, authenticated_admin):
+        client.post(
+            "/api/config/settings",
+            json={"telegram_bot_token": "123:ABC", "telegram_bot_chat_id": "999"},
+            headers=_auth_headers(),
         )
-        assert is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 6, 0, tzinfo=ZoneInfo("UTC"))
-        )
-        assert not is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 12, 0, tzinfo=ZoneInfo("UTC"))
-        )
-
-    def test_quiet_hours_disabled(self):
-        cfg = {"telegram_bot_quiet_hours_enabled": False}
-        assert not is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 23, 30, tzinfo=ZoneInfo("UTC"))
-        )
-
-    def test_quiet_hours_same_day_window(self):
-        cfg = {
-            "telegram_bot_quiet_hours_enabled": True,
-            "telegram_bot_quiet_hours_start": "12:00",
-            "telegram_bot_quiet_hours_end": "14:00",
-            "timezone": "UTC",
-        }
-        assert is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 13, 0, tzinfo=ZoneInfo("UTC"))
-        )
-        assert not is_in_quiet_hours(
-            cfg, datetime(2026, 7, 18, 11, 0, tzinfo=ZoneInfo("UTC"))
-        )
+        with patch(
+            "backend.services.push_notifications.send_telegram_bot_message",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("123:ABC"),
+        ):
+            resp = client.post("/api/config/bot/test-connection", headers=_auth_headers())
+        assert resp.json()["success"] is False
+        assert "123:ABC" not in resp.json()["message"]
 
 
 @pytest.mark.asyncio
@@ -189,8 +180,8 @@ async def test_server_chan_channel():
 
 
 @pytest.mark.asyncio
-async def test_keyword_push_respects_quiet_hours():
-    """关键词命中推送与其余通知一致：静默时段内跳过，不触发任何通道。"""
+async def test_legacy_quiet_settings_do_not_suppress_keyword_push():
+    """Existing installations may still have the retired keys on disk."""
     from backend.services.push_notifications import send_keyword_push
 
     cfg = {
@@ -205,42 +196,7 @@ async def test_keyword_push_respects_quiet_hours():
         "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
     ) as m:
         await send_keyword_push(cfg, {"title": "hit", "body": "body"})
-        m.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_keyword_push_outside_quiet_hours():
-    """静默时段外关键词推送正常发送；窗口内跳过（注入判定结果，避免依赖运行时刻）。"""
-    from backend.services.push_notifications import send_keyword_push
-
-    cfg = {
-        "keyword_monitor_push_channel": "server_chan",
-        "keyword_monitor_server_chan_send_key": "SCT_TEST",
-        "telegram_bot_quiet_hours_enabled": True,
-        "telegram_bot_quiet_hours_start": "00:00",
-        "telegram_bot_quiet_hours_end": "12:00",
-        "timezone": "UTC",
-    }
-    # 窗口外：静默判定返回 False，推送应发送
-    with patch(
-        "backend.services.push_notifications.is_in_quiet_hours",
-        return_value=False,
-    ), patch(
-        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
-    ) as m:
-        m.return_value = {"code": 0}
-        await send_keyword_push(cfg, {"title": "hit", "body": "body"})
-        m.assert_awaited()
-
-    # 窗口内：静默判定返回 True，推送应跳过
-    with patch(
-        "backend.services.push_notifications.is_in_quiet_hours",
-        return_value=True,
-    ), patch(
-        "tg_manage.notification.server_chan.sc_send", new_callable=AsyncMock
-    ) as m:
-        await send_keyword_push(cfg, {"title": "hit", "body": "body"})
-        m.assert_not_awaited()
+        m.assert_awaited_once()
 
 
 def test_global_settings_includes_timezone(client, authenticated_admin):

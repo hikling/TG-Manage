@@ -15,9 +15,6 @@ const settingsState = (): SettingsFormState => ({
   botEnabled: false,
   botLoginNotify: false,
   botCodeEnabled: false,
-  quietEnabled: false,
-  quietStart: '23:00',
-  quietEnd: '07:00',
   botToken: '',
   botChatId: '',
   botThreadId: '',
@@ -148,5 +145,20 @@ describe('设置页拆分组件契约', () => {
     } finally {
       i18n.global.locale.value = previousLocale
     }
+  })
+
+  it('BotNotifySettings separates full report from connection test', async () => {
+    const wrapper = mount(BotNotifySettings, {
+      props: { modelValue: settingsState(), reveal: { botToken: false } },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.text()).not.toContain('静默时段')
+    expect(wrapper.find('#bot-quiet-start').exists()).toBe(false)
+    const buttons = wrapper.findAll('button.ui-btn-secondary')
+    expect(buttons).toHaveLength(2)
+    await buttons[0].trigger('click')
+    await buttons[1].trigger('click')
+    expect(wrapper.emitted('test')).toHaveLength(1)
+    expect(wrapper.emitted('test-connection')).toHaveLength(1)
   })
 })

@@ -6,6 +6,7 @@ import {
   saveGlobalSettings,
   runDeviceKeepalive,
   testBotNotification,
+  testBotConnection as testBotConnectionRequest,
   getBotTestReportJob,
 } from '../lib/api'
 import { withToken } from '../lib/api/core'
@@ -30,6 +31,7 @@ export function useSettingsSave(options: {
   const botLoading = ref(false)
   const saveAllLoading = ref(false)
   const botTestLoading = ref(false)
+  const botConnectionLoading = ref(false)
   const keepaliveLoading = ref(false)
   let disposed = false
   if (getCurrentScope()) onScopeDispose(() => { disposed = true })
@@ -143,16 +145,34 @@ export function useSettingsSave(options: {
     })
   }
 
+  const testBotConnection = async () => {
+    return withToken(async (token) => {
+      if (botConnectionLoading.value) return
+      botConnectionLoading.value = true
+      try {
+        const res = await testBotConnectionRequest(token)
+        if (res.success) notifySuccess('settings.botConnectionSuccess')
+        else notifyError(resolveApiErrorMessage(res.message, 'settings.botConnectionFailed'))
+      } catch (e: unknown) {
+        notifyError(resolveApiErrorMessage(e, 'settings.botConnectionFailed'))
+      } finally {
+        botConnectionLoading.value = false
+      }
+    })
+  }
+
   return {
     loading,
     botLoading,
     saveAllLoading,
     botTestLoading,
+    botConnectionLoading,
     keepaliveLoading,
     saveSettings,
     runKeepaliveNow,
     saveBotSettings,
     saveAllSettings,
     testBot,
+    testBotConnection,
   }
 }

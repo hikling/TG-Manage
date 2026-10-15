@@ -37,9 +37,6 @@ class GlobalSettingsRequest(BaseModel):
     telegram_bot_notify_enabled: Optional[bool] = None
     telegram_bot_login_notify_enabled: Optional[bool] = None
     telegram_bot_code_enabled: Optional[bool] = None
-    telegram_bot_quiet_hours_enabled: Optional[bool] = None
-    telegram_bot_quiet_hours_start: Optional[str] = None
-    telegram_bot_quiet_hours_end: Optional[str] = None
     telegram_bot_token: Optional[str] = None
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
@@ -60,9 +57,6 @@ class GlobalSettingsResponse(BaseModel):
     telegram_bot_login_notify_enabled: bool = False
     telegram_bot_code_enabled: bool = False
     telegram_bot_code_status: str = "未启用"
-    telegram_bot_quiet_hours_enabled: bool = False
-    telegram_bot_quiet_hours_start: Optional[str] = "23:00"
-    telegram_bot_quiet_hours_end: Optional[str] = "07:00"
     telegram_bot_token: Optional[str] = None
     telegram_bot_token_set: bool = False
     telegram_bot_chat_id: Optional[str] = None
@@ -175,6 +169,33 @@ class BotTestResponse(BaseModel):
     success: bool
     message: str
     job_id: Optional[str] = None
+
+
+@router.post("/bot/test-connection", response_model=BotTestResponse)
+async def test_bot_connection(current_user: User = Depends(get_current_user)):
+    """Send one test message using saved Bot settings, without checking accounts."""
+    from backend.services.push_notifications import (
+        TelegramBotDeliveryError,
+        _bot_config,
+        send_telegram_bot_message,
+    )
+
+    try:
+        token, chat_id, thread_id = _bot_config(get_config_service().get_global_settings())
+        if not token or not chat_id:
+            return BotTestResponse(success=False, message="请先保存机器人 Token 和目标 ID")
+        await send_telegram_bot_message(
+            bot_token=token,
+            chat_id=chat_id,
+            message_thread_id=thread_id,
+            text="✅ TG Manage 机器人连接测试成功",
+            verify_response=True,
+        )
+        return BotTestResponse(success=True, message="机器人连接测试成功")
+    except TelegramBotDeliveryError as exc:
+        return BotTestResponse(success=False, message=str(exc))
+    except Exception as exc:
+        return BotTestResponse(success=False, message=f"机器人连接测试失败: {type(exc).__name__}")
 
 
 @router.post("/bot/test", response_model=BotTestResponse)

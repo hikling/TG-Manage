@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Telegram Bot 通知区块：botToken / chatId / threadId / 通知开关 / 免打扰时段。
+ * Telegram Bot 通知区块：配置、完整检测和连接测试。
  * 父组件 Settings.vue 持有 settings 状态与 revealSecrets，通过 v-model 同步并触发保存/测试。
  */
 import { Bot, Eye, EyeOff } from 'lucide-vue-next'
@@ -22,6 +22,7 @@ const props = defineProps<{
   botLoading?: boolean
   /** 测试 Bot 中 */
   botTestLoading?: boolean
+  botConnectionLoading?: boolean
   codeStatus?: string
 }>()
 
@@ -29,6 +30,7 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: SettingsFormState): void
   (e: 'save'): void
   (e: 'test'): void
+  (e: 'test-connection'): void
   (e: 'toggle-reveal', key: 'botToken'): void
 }>()
 
@@ -129,40 +131,19 @@ const isPrivateTarget = (value: string) => {
         <p v-if="modelValue.botCodeEnabled && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
         <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-gray-500 dark:text-gray-400" role="status">{{ t('settings.privateCodeStatus', { status: botStatusLabel() }) }}</p>
       </div>
-      <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-3">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <label class="text-xs text-gray-600 dark:text-gray-300 block">{{ t('settings.quietHours') }}</label>
-            <p class="text-[10px] text-gray-500 mt-1">{{ t('settings.quietHoursDesc') }}</p>
+      <div class="pt-2 space-y-3">
+        <button type="button" class="ui-btn-primary w-full py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="space-y-1.5">
+            <button type="button" class="ui-btn-secondary w-full py-2.5" :disabled="botTestLoading" @click="emit('test')">{{ botTestLoading ? t('settings.testing') : t('settings.testBot') }}</button>
+            <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotHint') }}</p>
           </div>
-          <button
-            type="button"
-            class="ui-switch"
-            role="switch"
-            :aria-label="t('settings.quietHours')"
-            :aria-checked="modelValue.quietEnabled"
-            :class="modelValue.quietEnabled ? 'ui-switch-on' : ''"
-            @click="update('quietEnabled', !modelValue.quietEnabled)"
-          >
-            <span class="ui-switch-knob" />
-          </button>
-        </div>
-        <div class="grid grid-cols-2 gap-2" v-if="modelValue.quietEnabled">
-          <div class="space-y-1">
-            <label class="text-[10px] text-gray-500" for="bot-quiet-start">{{ t('settings.quietStart') }}</label>
-            <input id="bot-quiet-start" :value="modelValue.quietStart" @input="onStringInput('quietStart', $event)" type="text" placeholder="23:00" class="ui-input" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[10px] text-gray-500" for="bot-quiet-end">{{ t('settings.quietEnd') }}</label>
-            <input id="bot-quiet-end" :value="modelValue.quietEnd" @input="onStringInput('quietEnd', $event)" type="text" placeholder="07:00" class="ui-input" />
+          <div class="space-y-1.5">
+            <button type="button" class="ui-btn-secondary w-full py-2.5" :disabled="botConnectionLoading" @click="emit('test-connection')">{{ botConnectionLoading ? t('settings.testingConnection') : t('settings.testBotConnection') }}</button>
+            <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotConnectionHint') }}</p>
           </div>
         </div>
       </div>
-      <div class="pt-2 flex flex-col sm:flex-row gap-2">
-        <button type="button" class="ui-btn-primary flex-1 py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
-        <button type="button" class="ui-btn-secondary flex-1 py-2.5" :disabled="botTestLoading" @click="emit('test')">{{ botTestLoading ? t('settings.testing') : t('settings.testBot') }}</button>
-      </div>
-      <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotHint') }}</p>
     </div>
   </section>
 </template>
