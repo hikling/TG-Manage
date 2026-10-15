@@ -681,8 +681,6 @@
     "colCategory": "Failure category"
   },
   "settings": {
-    "botTestStarted": "Full check started; results will be sent when ready",
-    "botTestSuccess": "Full check and Bot delivery completed",
     "privateBotStatus": {
       "disabled": "Disabled",
       "waitingLock": "Disabled or waiting for the scheduler lock",
@@ -839,9 +837,6 @@
     "aiVisionReasoningEffortDefault": "Default (not set)",
     "aiVisionReasoningEffortNone": "none (disable thinking)",
     "aiVisionReasoningEffortHint": "Some models do not support disabling thinking or setting it to none; keep the default for unsupported models",
-    "testBot": "Check all and send",
-    "testBotHint": "Check all account status, node routes, and Telegram official messages from the past 24 hours, then send the report. Uses saved Bot settings.",
-    "testing": "Checking and sending…",
     "testBotConnection": "Test Bot connection",
     "testBotConnectionHint": "Send one test message using the saved token and target ID; no account checks.",
     "testingConnection": "Testing connection…",

@@ -68,6 +68,7 @@ describe('useAccountBatchCheck (job poll)', () => {
     const searchQuery = ref('')
     const loadAccounts = vi.fn(async () => {})
     const loadAvatarForAccount = vi.fn(async () => {})
+    const updateTeleBoxState = vi.fn()
     const harness = mountComposable(() =>
       useAccountBatchCheck({
         accounts,
@@ -76,19 +77,28 @@ describe('useAccountBatchCheck (job poll)', () => {
         loadAccounts,
         invalidateAvatars: vi.fn(),
         loadAvatarForAccount,
+        updateTeleBoxState,
       }),
     )
-    return { ...harness, accounts, searchQuery, loadAccounts, loadAvatarForAccount }
+    return { ...harness, accounts, searchQuery, loadAccounts, loadAvatarForAccount, updateTeleBoxState }
   }
 
-  it('single account batch uses sync check API', async () => {
-    api.checkAccountsStatus.mockResolvedValue({
+  it('single account batch still starts the explicit reconciliation job', async () => {
+    api.startAccountStatusCheckJob.mockResolvedValue({
+      job_id: 'single', status: 'running', progress: { done: 0, total: 1 }, results: [],
+    })
+    api.getAccountStatusCheckJob.mockResolvedValue({
+      job_id: 'single', status: 'completed', progress: { done: 1, total: 1 },
+      summary: { ok: 1, fail: 0 },
       results: [{ account_name: 'only', ok: true, status: 'connected', message: 'ok' }],
     })
     const { result, loadAccounts, loadAvatarForAccount, unmount } = setup(['only'])
     await result.handleBatchCheck()
-    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['only'], timeout_seconds: 8 })
-    expect(api.startAccountStatusCheckJob).not.toHaveBeenCalled()
+    expect(api.startAccountStatusCheckJob).toHaveBeenCalledWith('tok', {
+      account_names: ['only'], timeout_seconds: 8,
+      inspect_resources: true, reconcile_orphans: true,
+    })
+    expect(api.checkAccountsStatus).not.toHaveBeenCalled()
     expect(loadAvatarForAccount).not.toHaveBeenCalled()
     expect(loadAccounts).toHaveBeenCalled()
     expect(toastSpy.success).toHaveBeenCalled()
@@ -189,7 +199,10 @@ describe('useAccountBatchCheck (job poll)', () => {
       }),
     )
     await result.handleCheck('a1')
-    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'], refresh_avatar: true })
+    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', {
+      account_names: ['a1'], refresh_avatar: true, inspect_resources: true,
+    })
+    expect(loadAccounts).not.toHaveBeenCalled()
     expect(loadAvatarForAccount).not.toHaveBeenCalled()
     expect(toastSpy.error).toHaveBeenCalled()
     expect(accounts.value[0]?.status).toBe('error')
@@ -204,9 +217,29 @@ describe('useAccountBatchCheck (job poll)', () => {
     })
     const { result, loadAvatarForAccount, unmount } = setup(['a1', 'a2'])
     await result.handleCheck('a1')
-    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'], refresh_avatar: true })
+    expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', {
+      account_names: ['a1'], refresh_avatar: true, inspect_resources: true,
+    })
     expect(loadAvatarForAccount).toHaveBeenCalledTimes(1)
     expect(loadAvatarForAccount).toHaveBeenCalledWith('a1')
+    unmount()
+  })
+
+  it('card check applies IP and TeleBox only to the clicked card', async () => {
+    const telebox = { account: 'a1', status: 'running', enabled: true, authorized: true }
+    api.checkAccountsStatus.mockResolvedValue({
+      results: [{
+        account_name: 'a1', ok: true, status: 'connected', route_mode: 'primary',
+        exit_ip: '8.8.8.8', exit_country: 'US', telebox,
+      }],
+    })
+    const { result, accounts, updateTeleBoxState, loadAccounts, unmount } = setup(['a1', 'a2'])
+    await result.handleCheck('a1')
+    expect(accounts.value[0]?.raw).toMatchObject({ exit_ip: '8.8.8.8', exit_country: 'US' })
+    expect(accounts.value[1]?.raw?.exit_ip).toBeUndefined()
+    expect(updateTeleBoxState).toHaveBeenCalledOnce()
+    expect(updateTeleBoxState).toHaveBeenCalledWith(telebox)
+    expect(loadAccounts).not.toHaveBeenCalled()
     unmount()
   })
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from typing import Any, Dict, List, Optional
 
 from backend.core.config import get_settings
@@ -89,6 +90,8 @@ async def _run_status_check(
     names: List[str],
     timeout_seconds: float,
     reservation: AccountCheckReservation | None = None,
+    inspect_resources: bool = False,
+    reconcile_orphans: bool = False,
 ) -> None:
     from backend.services.telegram import get_telegram_service
 
@@ -97,6 +100,7 @@ async def _run_status_check(
     results: List[Dict[str, Any]] = []
     ok_count = 0
     fail_count = 0
+    ip_fresh_after = time.monotonic()
 
     store.append_log(
         job_id,
@@ -105,6 +109,16 @@ async def _run_status_check(
     )
 
     try:
+        if reconcile_orphans and not store.is_cancel_requested(job_id):
+            from backend.services.account_data_cleanup import (
+                reconcile_orphan_account_data,
+            )
+
+            cleaned = await reconcile_orphan_account_data()
+            store.append_log(job_id, "info", "账户与 TeleBox 孤立数据对账完成")
+            job = store.jobs.get(job_id)
+            if job is not None:
+                job["cleanup"] = cleaned
         for idx, name in enumerate(names):
             if store.is_cancel_requested(job_id):
                 store.append_log(job_id, "info", "检测已取消")
@@ -132,7 +146,16 @@ async def _run_status_check(
                     "code": "STATUS_CHECK_FAILED",
                 }
             if not store.is_cancel_requested(job_id):
-                item = {**item, **account_route_status(name)}
+                if inspect_resources:
+                    from backend.services.account_manual_checks import (
+                        inspect_account_resources,
+                    )
+
+                    item = {**item, **(await inspect_account_resources(
+                        name, fresh_after=ip_fresh_after,
+                    ))}
+                else:
+                    item = {**item, **account_route_status(name)}
             if reservation is not None:
                 reservation.finish(name, success=bool(item.get("ok")))
             results.append(item)
@@ -181,6 +204,8 @@ def start_account_status_check_job(
     *,
     account_names: Optional[List[str]] = None,
     timeout_seconds: float = DEFAULT_TIMEOUT,
+    inspect_resources: bool = False,
+    reconcile_orphans: bool = False,
 ) -> Dict[str, Any]:
     """创建并启动批量状态检测 Job，立即返回 job 视图。"""
     names = _normalize_names(account_names)
@@ -204,6 +229,8 @@ def start_account_status_check_job(
                 payload={
                     "account_names": names,
                     "timeout_seconds": timeout,
+                    "inspect_resources": inspect_resources,
+                    "reconcile_orphans": reconcile_orphans,
                 },
                 progress={"total": len(names), "done": 0, "ok": 0, "fail": 0},
             )
@@ -211,7 +238,11 @@ def start_account_status_check_job(
 
             async def _runner() -> None:
                 try:
-                    await _run_status_check(job_id, names, timeout, reservation)
+                    await _run_status_check(
+                        job_id, names, timeout, reservation,
+                        inspect_resources=inspect_resources,
+                        reconcile_orphans=reconcile_orphans,
+                    )
                 except Exception as exc:
                     logger.error("账号状态检测任务 %s 失败（%s）", job_id, type(exc).__name__)
                     store.mark_failed(job_id, "status check job failed")

@@ -514,9 +514,16 @@ async def check_accounts_status(
                             item["avatar_refresh_error"] = True
                 except Exception as exc:
                     item = build_status_check_error_item(name, exc)
-                from backend.services.account_routes import account_route_status
+                if request.inspect_resources:
+                    from backend.services.account_manual_checks import (
+                        inspect_account_resources,
+                    )
 
-                item = {**item, **account_route_status(name)}
+                    item = {**item, **(await inspect_account_resources(name))}
+                else:
+                    from backend.services.account_routes import account_route_status
+
+                    item = {**item, **account_route_status(name)}
                 result = AccountStatusItem(**item)
                 reservation.finish(name, success=bool(result.ok))
                 results.append(result)
@@ -554,6 +561,8 @@ async def start_account_status_check_job(
         return start_account_status_check_job(
             account_names=request.account_names,
             timeout_seconds=request.timeout_seconds,
+            inspect_resources=request.inspect_resources,
+            reconcile_orphans=request.reconcile_orphans,
         )
     except AccountCheckBusy as exc:
         raise HTTPException(

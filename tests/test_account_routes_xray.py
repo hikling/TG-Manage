@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -205,6 +206,37 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(calls, 1)
         self.assertIsNone(self.service.account_route_status("one")["exit_ip"])
         self.assertEqual(self.service.account_route_status("two")["exit_ip"], "8.8.8.8")
+
+    async def test_manual_batch_reuses_one_fresh_ip_probe_for_shared_route(self):
+        self.service._secret["ever_configured"] = True
+        self.service._record_sample(self.service._key(self.primary), 90)
+        self.service._reconcile()
+        calls = 0
+
+        class GeoClient:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+            async def get(self, _url):
+                nonlocal calls
+                calls += 1
+                return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {
+                    "ip": "8.8.8.8", "country": "US", "region": "California", "success": True,
+                })
+
+        started = time.monotonic()
+        with patch("backend.services.account_routes.httpx.AsyncClient", GeoClient):
+            one = await self.service.refresh_account_exit("one", fresh_after=started)
+            two = await self.service.refresh_account_exit("two", fresh_after=started)
+        self.assertEqual(calls, 1)
+        self.assertEqual(one["exit_ip"], "8.8.8.8")
+        self.assertEqual(two["exit_ip"], "8.8.8.8")
 
     async def test_failed_refresh_preserves_working_nodes_and_redacts_url(self):
         self.service._secret["ever_configured"] = True

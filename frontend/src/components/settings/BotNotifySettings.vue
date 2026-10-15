@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Telegram Bot 通知区块：配置、完整检测和连接测试。
+ * Telegram Bot 通知区块：配置和连接测试。
  * 父组件 Settings.vue 持有 settings 状态与 revealSecrets，通过 v-model 同步并触发保存/测试。
  */
 import { Bot, Eye, EyeOff } from 'lucide-vue-next'
@@ -20,8 +20,6 @@ const props = defineProps<{
   reveal: Pick<RevealSecrets, 'botToken'>
   /** 保存中 */
   botLoading?: boolean
-  /** 测试 Bot 中 */
-  botTestLoading?: boolean
   botConnectionLoading?: boolean
   codeStatus?: string
 }>()
@@ -29,7 +27,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: SettingsFormState): void
   (e: 'save'): void
-  (e: 'test'): void
   (e: 'test-connection'): void
   (e: 'toggle-reveal', key: 'botToken'): void
 }>()
@@ -133,11 +130,7 @@ const isPrivateTarget = (value: string) => {
       </div>
       <div class="pt-2 space-y-3">
         <button type="button" class="ui-btn-primary w-full py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div class="space-y-1.5">
-            <button type="button" class="ui-btn-secondary w-full py-2.5" :disabled="botTestLoading" @click="emit('test')">{{ botTestLoading ? t('settings.testing') : t('settings.testBot') }}</button>
-            <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotHint') }}</p>
-          </div>
+        <div>
           <div class="space-y-1.5">
             <button type="button" class="ui-btn-secondary w-full py-2.5" :disabled="botConnectionLoading" @click="emit('test-connection')">{{ botConnectionLoading ? t('settings.testingConnection') : t('settings.testBotConnection') }}</button>
             <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotConnectionHint') }}</p>

@@ -106,6 +106,8 @@ export interface AccountStatusCheckRequest {
   account_names?: string[];
   timeout_seconds?: number;
   refresh_avatar?: boolean;
+  inspect_resources?: boolean;
+  reconcile_orphans?: boolean;
 }
 
 export interface AccountStatusItem {
@@ -119,6 +121,17 @@ export interface AccountStatusItem {
   user_id?: number;
   avatar_refreshed?: boolean;
   avatar_refresh_error?: boolean;
+  route_mode?: AccountInfo['route_mode'];
+  route_status?: string | null;
+  node_label?: string | null;
+  latency_ms?: number | null;
+  route_checked_at?: string | null;
+  exit_ip?: string | null;
+  exit_country?: string | null;
+  exit_region?: string | null;
+  exit_checked_at?: string | null;
+  shared_node?: boolean;
+  telebox?: { account: string; status: string; enabled: boolean; authorized: boolean; message?: string } | null;
 }
 
 export interface AccountStatusCheckResponse {

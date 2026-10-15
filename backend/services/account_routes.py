@@ -550,14 +550,25 @@ class AccountRouteService:
             self._geo_tasks.add(task)
             task.add_done_callback(self._geo_tasks.discard)
 
-    async def _verify_exit(self, account: str) -> None:
+    async def refresh_account_exit(
+        self, account: str, *, fresh_after: float | None = None,
+    ) -> dict[str, Any]:
+        """Refresh one account's exit IP without probing node health or Telegram."""
+        await self._verify_exit(account, force=fresh_after is None, fresh_after=fresh_after)
+        return self.account_route_status(account)
+
+    async def _verify_exit(
+        self, account: str, *, force: bool = False, fresh_after: float | None = None,
+    ) -> None:
         entry = self._state["assignments"].get(account)
         if not entry or entry["mode"] == "setup_required":
             return
         key, generation = entry.get("key"), entry.get("generation")
         cache_key = key or "direct"
         cached = self._geo_cache.get(cache_key)
-        if cached and time.monotonic() - cached[0] < (GEO_TTL_SECONDS if cached[1].get("ip") else 300):
+        if (not force and cached
+                and (fresh_after is None or cached[0] >= fresh_after)
+                and time.monotonic() - cached[0] < (GEO_TTL_SECONDS if cached[1].get("ip") else 300)):
             geo = cached[1]
         else:
             port = self.runtime.port_for(key, entry.get("runtime_generation")) if key else None
@@ -624,6 +635,12 @@ def resolve_account_route(account_name: str) -> dict[str, Any] | None:
 
 def account_route_status(account_name: str) -> dict[str, Any]:
     return get_route_service().account_route_status(account_name)
+
+
+async def refresh_account_exit(
+    account_name: str, *, fresh_after: float | None = None,
+) -> dict[str, Any]:
+    return await get_route_service().refresh_account_exit(account_name, fresh_after=fresh_after)
 
 
 def rename_account_route(old_name: str, new_name: str) -> None:

@@ -355,6 +355,23 @@ class TestStatusCheckJobs:
         assert resp.status_code == 201
         assert resp.json()["job_id"] == "job_1"
 
+    def test_manual_batch_flags_reach_job_only_on_request(self, api_client, db):  # noqa: F811
+        token = _login(api_client)
+        with patch(
+            "backend.services.account_status_jobs.start_account_status_check_job",
+            return_value={"job_id": "manual", "status": "running"},
+        ) as start:
+            resp = api_client.post(
+                "/api/accounts/status/check-jobs",
+                json={"account_names": ["a1"], "inspect_resources": True, "reconcile_orphans": True},
+                headers=_auth(token),
+            )
+        assert resp.status_code == 201
+        start.assert_called_once_with(
+            account_names=["a1"], timeout_seconds=8.0,
+            inspect_resources=True, reconcile_orphans=True,
+        )
+
     def test_start_job_value_error_400(self, api_client, db, monkeypatch):  # noqa: F811
         token = _login(api_client)
 

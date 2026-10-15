@@ -56,6 +56,48 @@ async def test_run_status_check_updates_progress_and_results(tmp_path: Path):
     assert all(item["route_mode"] == "direct" for item in job["results"])
 
 
+@pytest.mark.asyncio
+async def test_explicit_batch_reconciles_then_inspects_only_requested_names(monkeypatch):
+    store = jobs_mod.get_account_status_job_store()
+    created = store.create_job(kind=jobs_mod.KIND, progress={"total": 2, "done": 0})
+    cleanup = AsyncMock(return_value={"telebox": 1, "metadata": 1})
+    inspect = AsyncMock(side_effect=lambda name, **_kwargs: {
+        "route_mode": "direct", "exit_ip": "8.8.8.8",
+        "telebox": {"account": name, "status": "stopped", "enabled": False, "authorized": False},
+    })
+    monkeypatch.setattr("backend.services.account_data_cleanup.reconcile_orphan_account_data", cleanup)
+    monkeypatch.setattr("backend.services.account_manual_checks.inspect_account_resources", inspect)
+    with patch("backend.services.telegram.get_telegram_service") as get_service:
+        get_service.return_value.check_account_status = AsyncMock(side_effect=lambda name, **_kwargs: {
+            "account_name": name, "ok": True, "status": "connected",
+        })
+        with patch.object(jobs_mod, "INTER_DELAY_SECONDS", 0):
+            await jobs_mod._run_status_check(
+                created["job_id"], ["alice", "bob"], 5.0,
+                inspect_resources=True, reconcile_orphans=True,
+            )
+    cleanup.assert_awaited_once_with()
+    assert [call.args[0] for call in inspect.await_args_list] == ["alice", "bob"]
+    assert store.get_job(created["job_id"])["cleanup"]["telebox"] == 1
+
+
+@pytest.mark.asyncio
+async def test_plain_status_job_never_reconciles_or_inspects(monkeypatch):
+    store = jobs_mod.get_account_status_job_store()
+    created = store.create_job(kind=jobs_mod.KIND, progress={"total": 1, "done": 0})
+    cleanup = AsyncMock()
+    inspect = AsyncMock()
+    monkeypatch.setattr("backend.services.account_data_cleanup.reconcile_orphan_account_data", cleanup)
+    monkeypatch.setattr("backend.services.account_manual_checks.inspect_account_resources", inspect)
+    with patch("backend.services.telegram.get_telegram_service") as get_service:
+        get_service.return_value.check_account_status = AsyncMock(return_value={
+            "account_name": "alice", "ok": True, "status": "connected",
+        })
+        await jobs_mod._run_status_check(created["job_id"], ["alice"], 5.0)
+    cleanup.assert_not_awaited()
+    inspect.assert_not_awaited()
+
+
 def test_start_rejects_when_already_running(monkeypatch):
     store = jobs_mod.get_account_status_job_store()
     store.create_job(kind=jobs_mod.KIND, progress={"total": 1, "done": 0})

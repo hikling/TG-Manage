@@ -201,6 +201,15 @@ class AccountStatusCheckRequest(BaseModel):
     account_names: Optional[list[str]] = None
     timeout_seconds: float = 6.0
     refresh_avatar: bool = False
+    inspect_resources: bool = False
+
+
+class TeleBoxCheckItem(BaseModel):
+    account: str
+    status: str
+    enabled: bool
+    authorized: bool
+    message: str = ""
 
 
 class AccountStatusItem(BaseModel):
@@ -226,6 +235,7 @@ class AccountStatusItem(BaseModel):
     user_id: Optional[int] = None
     avatar_refreshed: bool = False
     avatar_refresh_error: bool = False
+    telebox: Optional[TeleBoxCheckItem] = None
 
 
 class AccountStatusCheckResponse(BaseModel):
@@ -284,5 +294,7 @@ class AccountStatusJobStartRequest(BaseModel):
 
     account_names: Optional[list[str]] = None
     timeout_seconds: float = 8.0
+    inspect_resources: bool = False
+    reconcile_orphans: bool = False
 
 
