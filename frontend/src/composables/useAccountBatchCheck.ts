@@ -25,6 +25,7 @@ export function useAccountBatchCheck(options: {
   loadAccounts: () => Promise<void>
   invalidateAvatars: (names: string[]) => void
   loadAvatarForAccount: (name: string) => Promise<void>
+  updateTeleBoxState?: (state: NonNullable<AccountStatusItem['telebox']>) => void
 }) {
   const { t } = useI18n()
   const toast = useToast()
@@ -61,12 +62,20 @@ export function useAccountBatchCheck(options: {
     for (const item of results) {
       if (!item?.account_name) continue
       map[item.account_name] = item
+      if (item.telebox) options.updateTeleBoxState?.(item.telebox)
     }
     batchResultMap.value = map
 
     for (const acc of options.accounts.value) {
       const r = map[acc.name]
       if (!r) continue
+      if (acc.raw) {
+        for (const key of ['route_mode', 'route_status', 'node_label', 'latency_ms',
+          'route_checked_at', 'exit_ip', 'exit_country', 'exit_region',
+          'exit_checked_at', 'shared_node'] as const) {
+          if (key in r) (acc.raw as unknown as Record<string, unknown>)[key] = r[key]
+        }
+      }
       if (r.ok) {
         acc.status = 'active'
         acc.message = ''
@@ -200,11 +209,11 @@ export function useAccountBatchCheck(options: {
     const token = getAuthToken()
     checkingAccount.value = name
     try {
-      const res = await checkAccountsStatus(token, { account_names: [name], refresh_avatar: true })
+      const res = await checkAccountsStatus(token, {
+        account_names: [name], refresh_avatar: true, inspect_resources: true,
+      })
       options.invalidateAvatars(res.results.filter(item => item.avatar_refreshed).map(item => item.account_name))
       batchResultMap.value = {}
-      applyLiveResults(res.results)
-      await options.loadAccounts()
       applyLiveResults(res.results)
       if (res.results.some(item => item.avatar_refreshed)) await options.loadAvatarForAccount(name)
       const result = res.results?.[0]
@@ -238,6 +247,8 @@ export function useAccountBatchCheck(options: {
       scopedHint?: string
       /** 同步结果失败 toast 是否带失败账号预览 */
       withFailedPreview?: boolean
+      inspectResources?: boolean
+      reconcileOrphans?: boolean
     },
   ) => {
     const token = getAuthToken()
@@ -253,10 +264,12 @@ export function useAccountBatchCheck(options: {
     lastLiveRefreshDone = 0
     clearBatchPoll()
     try {
-      if (names.length >= 2) {
+      if (names.length >= 2 || opts.reconcileOrphans) {
         const job = await startAccountStatusCheckJob(token, {
           account_names: names,
           timeout_seconds: 8,
+          inspect_resources: opts.inspectResources,
+          reconcile_orphans: opts.reconcileOrphans,
         })
         batchJob.value = job
         const progressDesc = t('accounts.batchCheckProgress', {
@@ -271,7 +284,9 @@ export function useAccountBatchCheck(options: {
         return
       }
 
-      const res = await checkAccountsStatus(token, { account_names: names, timeout_seconds: 8 })
+      const res = await checkAccountsStatus(token, {
+        account_names: names, timeout_seconds: 8, inspect_resources: opts.inspectResources,
+      })
       lastBatchFailedNames.value = res.results
         .filter((item) => !item.ok && item.account_name)
         .map((item) => item.account_name)
@@ -331,6 +346,8 @@ export function useAccountBatchCheck(options: {
       startedKey: 'accounts.batchCheckStarted',
       scopedHint,
       withFailedPreview: true,
+      inspectResources: true,
+      reconcileOrphans: true,
     })
   }
 
@@ -353,6 +370,7 @@ export function useAccountBatchCheck(options: {
     await runStatusCheck(names, {
       emptyTargetKey: 'accounts.batchCheckNoFailed',
       startedKey: 'accounts.batchRecheckStarted',
+      inspectResources: true,
     })
   }
 

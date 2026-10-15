@@ -227,7 +227,6 @@ async def run_device_keepalive(current_user: User = Depends(get_current_user)):
 class BotTestResponse(BaseModel):
     success: bool
     message: str
-    job_id: Optional[str] = None
 
 
 @router.post("/bot/test-connection", response_model=BotTestResponse)
@@ -257,34 +256,5 @@ async def test_bot_connection(current_user: User = Depends(get_current_user)):
         return BotTestResponse(success=False, message=f"机器人连接测试失败: {type(exc).__name__}")
 
 
-@router.post("/bot/test", response_model=BotTestResponse)
-async def test_bot_notification(
-    current_user: User = Depends(get_current_user),
-):
-    """Explicitly start the full account-status and official-message report."""
-    try:
-        from backend.services.bot_test_report_jobs import start_bot_test_report_job
-
-        job = start_bot_test_report_job()
-        return BotTestResponse(success=True, message="检测已开始，完成后发送到目标 ID", job_id=job["job_id"])
-    except ValueError as e:
-        return BotTestResponse(success=False, message=str(e))
-    except Exception as e:
-        # Do not expose Bot credentials or transport details.
-        err = type(e).__name__
-        return BotTestResponse(success=False, message=f"启动检测失败: {err}")
-
-
-@router.get("/bot/test-jobs/{job_id}")
-def get_bot_test_notification_job(
-    job_id: str,
-    current_user: User = Depends(get_current_user),
-):
-    from backend.services.bot_test_report_jobs import get_bot_test_report_job
-
-    job = get_bot_test_report_job(job_id)
-    if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="JOB_NOT_FOUND")
-    return {"job_id": job_id, "status": job["status"], "summary": job["summary"], "error": job["error"]}
 
 

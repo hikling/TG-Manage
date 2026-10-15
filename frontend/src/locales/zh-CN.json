@@ -681,8 +681,6 @@
     "colCategory": "失败分类"
   },
   "settings": {
-    "botTestStarted": "已开始完整检测，完成后自动发送",
-    "botTestSuccess": "完整检测及机器人推送已完成",
     "privateBotStatus": {
       "disabled": "未启用",
       "waitingLock": "未启用或当前实例未取得调度锁",
@@ -839,9 +837,6 @@
     "aiVisionReasoningEffortDefault": "默认（不设置）",
     "aiVisionReasoningEffortNone": "none（关闭思考）",
     "aiVisionReasoningEffortHint": "部分模型不支持关闭思考或将思考度设为 none；不支持的模型请保持默认",
-    "testBot": "完整检测并推送",
-    "testBotHint": "检测全部账户状态、节点路由和过去 24 小时的 Telegram 官方消息，完成后推送。使用已保存的机器人配置。",
-    "testing": "检测并发送中…",
     "testBotConnection": "测试机器人连接",
     "testBotConnectionHint": "仅发送一条测试消息，验证已保存的 Token 和目标 ID；不检测账户。",
     "testingConnection": "正在测试连接…",

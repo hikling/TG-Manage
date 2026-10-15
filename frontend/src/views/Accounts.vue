@@ -393,6 +393,9 @@ const {
   loadAccounts,
   invalidateAvatars,
   loadAvatarForAccount,
+  updateTeleBoxState: (state) => {
+    teleboxStates.value = { ...teleboxStates.value, [state.account]: state }
+  },
 })
 
 const openEdit = (acc: AccountUiItem) => {

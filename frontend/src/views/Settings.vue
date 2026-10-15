@@ -22,7 +22,6 @@ const {
   loadSubscriptions,
   saveSubscriptions,
   refreshSubscriptions,
-  botTestLoading,
   botConnectionLoading,
   pageLoading,
   loadFailed,
@@ -42,7 +41,6 @@ const {
   runKeepaliveNow,
   saveBotSettings,
   saveAllSettings,
-  testBot,
   testBotConnection,
   handleCheckUpdate,
   toggleReveal,
@@ -108,10 +106,8 @@ const {
             :code-status="botCodeStatus"
             :reveal="{ botToken: revealSecrets.botToken }"
             :bot-loading="botLoading"
-            :bot-test-loading="botTestLoading"
             :bot-connection-loading="botConnectionLoading"
             @save="saveBotSettings"
-            @test="testBot"
             @test-connection="testBotConnection"
             @toggle-reveal="toggleReveal"
           />

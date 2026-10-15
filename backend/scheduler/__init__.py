@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
@@ -108,11 +107,8 @@ async def _job_account_status_report() -> None:
         _midnight_workflow_running = False
 
 
-async def _run_combined_report(
-    now: datetime, *, manual: bool = False,
-    expected_target: tuple[str, str, int | None] | None = None,
-) -> dict[str, int | bool]:
-    """Run one fixed 24-hour window for both midnight and explicit manual use."""
+async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
+    """Run the scheduled midnight report for its fixed preceding 24 hours."""
     logger = logging.getLogger("backend.scheduler")
     end = now.astimezone(datetime_timezone.utc)
     start = end - timedelta(hours=24)
@@ -121,19 +117,6 @@ async def _run_combined_report(
     official_result = None
     status_failed = False
     official_failed = False
-    cleanup_failed = False
-    if manual:
-        # This is an explicit full-check action. The midnight job must never
-        # perform destructive orphan reconciliation on a schedule.
-        try:
-            from backend.services.account_data_cleanup import (
-                reconcile_orphan_account_data,
-            )
-
-            await reconcile_orphan_account_data()
-        except Exception as exc:
-            cleanup_failed = True
-            logger.error("手动全面检测账户数据同步失败（%s）", type(exc).__name__)
     try:
         from backend.services.account_status_report import (
             get_account_status_report_service,
@@ -146,11 +129,6 @@ async def _run_combined_report(
     except Exception as exc:
         status_failed = True
         logger.error("账户状态日报失败（%s）", type(exc).__name__)
-    if expected_target is not None:
-        from backend.services.account_status_report import _enabled_target
-
-        if _enabled_target() != expected_target:
-            return {"success": False, "checked": len(status_rows or []), "messages_sent": 0}
     try:
         from backend.services.official_message_report import (
             get_official_message_report_service,
@@ -173,15 +151,6 @@ async def _run_combined_report(
         logger.error("官方消息日报失败（%s）", type(exc).__name__)
     sent = 0
     expected_chunks = 0
-    if expected_target is not None:
-        from backend.services.account_status_report import _enabled_target
-
-        if _enabled_target() != expected_target:
-            return {
-                "success": False,
-                "checked": len(status_rows or []),
-                "messages_sent": int((official_result or {}).get("messages_sent") or 0),
-            }
     if status_rows is not None:
         try:
             from backend.services.account_status_report import (
@@ -189,55 +158,15 @@ async def _run_combined_report(
                 report_chunks,
             )
             combined_official_status = official_status or {}
-            if manual:
-                title = "账户状态与官方消息即时检测报告"
-                expected_chunks = len(report_chunks(status_rows, combined_official_status, title=title))
-                sent = await _send_report(status_rows, combined_official_status, title=title)
-            else:
-                expected_chunks = len(report_chunks(status_rows, combined_official_status))
-                sent = await _send_report(status_rows, combined_official_status)
+            expected_chunks = len(report_chunks(status_rows, combined_official_status))
+            sent = await _send_report(status_rows, combined_official_status)
         except Exception as exc:
             logger.error("合并日报发送失败（%s）", type(exc).__name__)
     return {
-        "success": not cleanup_failed and not status_failed and not official_failed and sent == expected_chunks,
+        "success": not status_failed and not official_failed and sent == expected_chunks,
         "checked": len(status_rows or []),
         "messages_sent": sent + int((official_result or {}).get("messages_sent") or 0),
     }
-
-
-def start_manual_account_report(
-    expected_target: tuple[str, str, int | None],
-) -> asyncio.Task[dict[str, int | bool]] | None:
-    """Explicit button action; reserve the same single-flight gate before yielding."""
-    global _midnight_workflow_running
-    if _midnight_workflow_running:
-        return None
-    timezone = _resolve_scheduler_timezone() or (
-        scheduler.timezone if scheduler is not None else None
-    )
-    now = datetime.now(timezone).astimezone(timezone)
-    _midnight_workflow_running = True
-
-    async def run() -> dict[str, int | bool]:
-        global _midnight_workflow_running
-        try:
-            return await _run_combined_report(now, manual=True, expected_target=expected_target)
-        finally:
-            _midnight_workflow_running = False
-
-    try:
-        task = asyncio.create_task(run(), name="manual-account-official-report")
-
-        def release_if_cancelled(done: asyncio.Task) -> None:
-            global _midnight_workflow_running
-            if done.cancelled():
-                _midnight_workflow_running = False
-
-        task.add_done_callback(release_if_cancelled)
-        return task
-    except Exception:
-        _midnight_workflow_running = False
-        raise
 
 
 def _sync_account_status_report_job() -> None:

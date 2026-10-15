@@ -122,20 +122,10 @@ export const refreshProxySubscriptions = (token: string) =>
     method: 'POST',
   }, token, MEDIUM_TIMEOUT_MS);
 
-export const testBotNotification = (token: string) =>
-  request<{ success: boolean; message: string; job_id: string | null }>("/config/bot/test", {
-    method: "POST",
-  }, token);
-
 export const testBotConnection = (token: string) =>
   request<{ success: boolean; message: string }>("/config/bot/test-connection", {
     method: "POST",
   }, token);
-
-export const getBotTestReportJob = (token: string, jobId: string) =>
-  request<{ job_id: string; status: string; summary: Record<string, unknown>; error: string | null }>(
-    `/config/bot/test-jobs/${encodeURIComponent(jobId)}`, {}, token,
-  );
 
 export interface DeviceKeepaliveRunResult {
   success: boolean;

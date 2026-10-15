@@ -147,7 +147,7 @@ describe('设置页拆分组件契约', () => {
     }
   })
 
-  it('BotNotifySettings separates full report from connection test', async () => {
+  it('BotNotifySettings only offers saving and the connection test', async () => {
     const wrapper = mount(BotNotifySettings, {
       props: { modelValue: settingsState(), reveal: { botToken: false } },
       global: { plugins: [i18n] },
@@ -155,10 +155,9 @@ describe('设置页拆分组件契约', () => {
     expect(wrapper.text()).not.toContain('静默时段')
     expect(wrapper.find('#bot-quiet-start').exists()).toBe(false)
     const buttons = wrapper.findAll('button.ui-btn-secondary')
-    expect(buttons).toHaveLength(2)
+    expect(buttons).toHaveLength(1)
     await buttons[0].trigger('click')
-    await buttons[1].trigger('click')
-    expect(wrapper.emitted('test')).toHaveLength(1)
+    expect(wrapper.emitted('test')).toBeUndefined()
     expect(wrapper.emitted('test-connection')).toHaveLength(1)
   })
 })
