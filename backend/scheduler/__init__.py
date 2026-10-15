@@ -118,6 +118,19 @@ async def _run_combined_report(
     official_result = None
     status_failed = False
     official_failed = False
+    cleanup_failed = False
+    if manual:
+        # This is an explicit full-check action. The midnight job must never
+        # perform destructive orphan reconciliation on a schedule.
+        try:
+            from backend.services.account_data_cleanup import (
+                reconcile_orphan_account_data,
+            )
+
+            await reconcile_orphan_account_data()
+        except Exception as exc:
+            cleanup_failed = True
+            logger.error("手动全面检测账户数据同步失败（%s）", type(exc).__name__)
     try:
         from backend.services.account_status_report import (
             get_account_status_report_service,
@@ -183,7 +196,7 @@ async def _run_combined_report(
         except Exception as exc:
             logger.error("合并日报发送失败（%s）", type(exc).__name__)
     return {
-        "success": not status_failed and not official_failed and sent == expected_chunks,
+        "success": not cleanup_failed and not status_failed and not official_failed and sent == expected_chunks,
         "checked": len(status_rows or []),
         "messages_sent": sent + int((official_result or {}).get("messages_sent") or 0),
     }

@@ -98,6 +98,27 @@ async def test_removed_account_is_not_recreated_by_status_result(tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_probe_reuses_identity_from_client_enter(tmp_path, monkeypatch):
+    class AuthenticatedClient(_Client):
+        async def __aenter__(self):
+            await super().__aenter__()
+            self.me = SimpleNamespace(id=456, username="already_verified")
+            return self
+
+        async def get_me(self):
+            raise AssertionError("status probe must not repeat get_me")
+
+    monkeypatch.setattr("tg_manage.core.get_client", lambda *_args, **_kwargs: AuthenticatedClient())
+    monkeypatch.setattr(accounts_mod, "get_session_mode", lambda: "file")
+    monkeypatch.setattr(accounts_mod, "get_account_profile", lambda _name: {})
+    monkeypatch.setattr(accounts_mod, "set_account_status", Mock())
+
+    result = await _Service(tmp_path).check_account_status("sample")
+    assert result["ok"] is True
+    assert result["username"] == "already_verified"
+
+
+@pytest.mark.asyncio
 async def test_avatar_download_closes_in_memory_media_buffer(tmp_path, monkeypatch):
     data = io.BytesIO(b"\xff\xd8\xffavatar")
 

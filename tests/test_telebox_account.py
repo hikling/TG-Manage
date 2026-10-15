@@ -1,6 +1,7 @@
 """TeleBox account session isolation and lifecycle."""
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import deque
 from types import SimpleNamespace
@@ -19,6 +20,143 @@ def test_node_heap_limit_for_multi_account_host(monkeypatch):
     for value, expected in [("96", 96), ("8", 64), ("999", 512), ("bad", 128)]:
         monkeypatch.setenv("TELEBOX_NODE_HEAP_MB", value)
         assert telebox.node_heap_limit_mb() == expected
+
+
+def test_total_telebox_worker_limit_is_bounded(monkeypatch):
+    monkeypatch.delenv("TELEBOX_MAX_WORKERS", raising=False)
+    assert telebox.max_workers() == 2
+    for value, expected in [("1", 1), ("0", 1), ("99", 8), ("bad", 2)]:
+        monkeypatch.setenv("TELEBOX_MAX_WORKERS", value)
+        assert telebox.max_workers() == expected
+
+
+@pytest.mark.asyncio
+async def test_worker_admission_counts_running_and_starting_accounts(monkeypatch, tmp_path):
+    monkeypatch.setenv("TELEBOX_MAX_WORKERS", "2")
+    service = telebox.TeleBoxService(root=tmp_path)
+    service.workers["one"] = {"process": SimpleNamespace(returncode=None)}
+    await service._reserve_worker_slot("two")
+    with pytest.raises(ValueError, match="并发上限"):
+        await service._reserve_worker_slot("three")
+    await service._release_worker_slot("two")
+    await service._reserve_worker_slot("three")
+    await service._release_worker_slot("three")
+    service.workers["one"]["process"].returncode = 0
+    await service._reserve_worker_slot("four")
+    await service._release_worker_slot("four")
+
+
+def test_telebox_worker_credentials_does_not_construct_pyrogram_client(monkeypatch):
+    monkeypatch.setattr(telebox, "get_account_api_credentials", lambda account: (12345, "a" * 32))
+    monkeypatch.setattr(telebox, "get_account_profile", lambda account: {
+        "proxy": "socks5://alice:secret@example.com:1080",
+    })
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        _build_account_client=lambda *args, **kwargs: pytest.fail("unexpected Client construction")))
+    credentials, secrets = telebox.TeleBoxService._worker_credentials("one")
+    assert credentials == {"api_id": 12345, "api_hash": "a" * 32, "proxy": {
+        "ip": "example.com", "port": 1080, "socksType": 5,
+        "username": "alice", "password": "secret",
+    }}
+    assert secrets == ["a" * 32, "secret"]
+
+
+@pytest.mark.asyncio
+async def test_purge_deleted_account_removes_only_its_telebox_data(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service._marker("deleted", True)
+    service._marker("live", True)
+    (service.directory("deleted") / "config.json").write_text('{"session":"private"}')
+    (service.directory("live") / "config.json").write_text('{"session":"keep"}')
+    service.logs["deleted"] = deque([{"message": "old"}])
+    service.secrets["deleted"] = ["sensitive"]
+    stop = AsyncMock()
+    monkeypatch.setattr(service, "_terminate_worker", stop)
+
+    assert await service.purge_account_data("deleted") is True
+    stop.assert_awaited_once_with("deleted")
+    assert not service.directory("deleted").exists()
+    assert (service.directory("live") / "config.json").is_file()
+    assert "deleted" not in service.logs and "deleted" not in service.secrets
+    assert "deleted" not in service.locks
+    assert await service.purge_account_data("deleted") is False
+
+
+@pytest.mark.asyncio
+async def test_purge_preserves_recreated_same_name_account(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service._marker("recreated", True)
+    stop = AsyncMock()
+    monkeypatch.setattr(service, "_terminate_worker", stop)
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        account_exists=lambda name: name == "recreated"))
+
+    assert await service.purge_account_data("recreated") is False
+    assert service.directory("recreated").is_dir()
+    stop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_exact_purge_accepts_missing_marker_but_rejects_mismatch(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    monkeypatch.setattr(service, "_terminate_worker", AsyncMock())
+    missing = service.directory("missing")
+    missing.mkdir()
+    (missing / "config.json").write_text("partial")
+    assert await service.purge_account_data("missing") is True
+
+    service._marker("one", True)
+    marker = service.directory("one") / "panel-state.json"
+    marker.write_text('{"account":"other","enabled":true}')
+    with pytest.raises(ValueError, match="标记与目录不匹配"):
+        await service.purge_account_data("one")
+    assert service.directory("one").exists()
+
+
+@pytest.mark.asyncio
+async def test_exact_purge_refuses_linked_directory_or_marker(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service._marker("one", True)
+    directory = service.directory("one")
+    monkeypatch.setattr(service, "_terminate_worker", AsyncMock())
+    monkeypatch.setattr(service, "_is_link", lambda path: path == directory)
+    with pytest.raises(ValueError, match="不是普通目录"):
+        await service.purge_account_data("one")
+    assert directory.exists()
+    monkeypatch.setattr(service, "_is_link", lambda path: path == directory / "panel-state.json")
+    with pytest.raises(ValueError, match="标记不能是链接"):
+        await service.purge_account_data("one")
+    assert directory.exists()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_removes_only_marked_orphans(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    for name in ("live", "newly-added", "orphan", "broken", "unknown", " spaced "):
+        service._marker(name, True)
+    (service.directory("broken") / "panel-state.json").write_text("invalid JSON")
+    (service.directory("unknown") / "panel-state.json").unlink()
+    monkeypatch.setattr(service, "_terminate_worker", AsyncMock())
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        account_exists=lambda name: name == "newly-added"))
+
+    assert await service.reconcile_orphan_data({"live"}) == ["orphan"]
+    for name in ("live", "newly-added", "broken", "unknown", " spaced "):
+        assert service.directory(name).exists()
+    assert not service.directory("orphan").exists()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_rejects_incomplete_inventory(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service._marker("orphan", True)
+    with pytest.raises(ValueError, match="完整账户清单"):
+        await service.reconcile_orphan_data([])
+    monkeypatch.setattr(telebox, "get_telegram_service", lambda: SimpleNamespace(
+        account_exists=lambda name: (_ for _ in ()).throw(OSError("store unavailable"))))
+    with pytest.raises(OSError, match="store unavailable"):
+        await service.reconcile_orphan_data(set())
+    assert service.directory("orphan").exists()
 
 
 def test_deleted_account_releases_worker_and_secret_references(tmp_path):
@@ -92,6 +230,27 @@ def test_worker_passes_telebox_settings_without_panel_secrets(tmp_path, monkeypa
     assert env["HOME"] == str(tmp_path / "home")
     assert env["NODE_PATH"] == str(tmp_path / "plugins/node_modules")
     assert "APP_SECRET_KEY" not in env
+
+
+def test_telebox_marker_write_never_reuses_predictable_temporary_file(tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    service._marker("one", True)
+    fixed_temp = service.directory("one") / "panel-state.tmp"
+    fixed_temp.write_text("do-not-touch")
+    service._marker("one", False)
+    assert fixed_temp.read_text() == "do-not-touch"
+    assert json.loads((service.directory("one") / "panel-state.json").read_text()) == {
+        "account": "one", "enabled": False,
+    }
+
+
+def test_prepare_refuses_linked_account_directory(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    directory = service.directory("one")
+    monkeypatch.setattr(service, "_is_link", lambda path: path == directory)
+    with pytest.raises(ValueError, match="不能是链接"):
+        service._prepare("one")
+    assert not directory.exists()
 
 
 def test_login_credentials_choose_account_server_legacy_and_builtin(monkeypatch, tmp_path):
@@ -189,6 +348,38 @@ async def test_plugin_action_error_keeps_line_across_stderr_chunks(tmp_path):
     assert [(entry["level"], entry["message"]) for entry in service.logs["one"]] == [
         ("info", "[KITT] match ok"), ("error", "[KITT] action error: missing dep")
     ]
+
+
+@pytest.mark.asyncio
+async def test_stdout_drains_after_bad_lines_and_bounds_authorization_tasks(monkeypatch, tmp_path):
+    service = telebox.TeleBoxService(root=tmp_path)
+    stream = SimpleNamespace(readline=AsyncMock(side_effect=[
+        ValueError("Separator is not found, and chunk exceed the limit"),
+        b"[]\n",
+        b'{"event":"login_token","token":"one"}\n',
+        b'{"event":"login_token","token":"two"}\n',
+        b'{"event":"state","status":"running"}\n',
+        b"",
+    ]))
+    waiting = asyncio.Event()
+    accepted = []
+
+    async def accept(account, worker, token):
+        accepted.append(token)
+        await waiting.wait()
+
+    monkeypatch.setattr(service, "_accept", accept)
+    worker = {"process": SimpleNamespace(stdout=stream), "tasks": set(),
+              "pending": {}, "status": "starting"}
+    await service._stdout("one", worker)
+    await asyncio.sleep(0)
+    assert worker["status"] == "running"
+    assert accepted == ["one"]
+    assert len(worker["tasks"]) == 1
+    assert any("单行过长" in entry["message"] for entry in service.logs["one"])
+    assert any("非对象数据" in entry["message"] for entry in service.logs["one"])
+    waiting.set()
+    await asyncio.gather(*worker["tasks"])
 
 
 @pytest.mark.asyncio

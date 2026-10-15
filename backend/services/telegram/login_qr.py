@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import contextlib
 import logging
 import secrets
 import time
@@ -13,12 +12,12 @@ from backend.services.telegram.login_phone import _discard_login_client
 from backend.services.telegram.pending_session import (
     cleanup_pending_session,
     new_pending_session_path,
-    promote_pending_session,
 )
 from backend.services.telegram.sessions import (
     _cleanup_expired_login_sessions,
     _login_sessions,
     _qr_login_sessions,
+    _remove_login_session,
 )
 from backend.utils.account_locks import get_account_lock
 from backend.utils.proxy import require_proxy_dict
@@ -97,39 +96,11 @@ class TelegramQrLoginMixin:
 
 
     async def _cleanup_qr_login(self, login_id: str, preserve_session: bool = False) -> None:
-        data = _qr_login_sessions.pop(login_id, None)
-        if not data:
-            return
-        pending_path = data.get("pending_path")
-        try:
-            expire_task = data.get("expire_task")
-            current_task = asyncio.current_task()
-            if (
-                expire_task is not None
-                and expire_task is not current_task
-                and not expire_task.done()
-            ):
-                expire_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await expire_task
-            client = data.get("client")
-            handler = data.get("handler")
-            if client and handler:
-                try:
-                    client.remove_handler(*handler)
-                except Exception as exc:
-                    logger.warning("QR 登录清理 remove_handler 失败 (login_id=%s): %s", login_id, exc)
-            if client:
-                await _close_qr_client(client)
-            if preserve_session:
-                promote_pending_session(pending_path, self.session_dir, data.get("account_name"))
-        finally:
-            try:
-                cleanup_pending_session(pending_path)
-            finally:
-                lock = data.get("lock")
-                if lock and lock.locked():
-                    lock.release()
+        await _remove_login_session(
+            _qr_login_sessions, login_id,
+            preserve_session=preserve_session,
+            session_dir=self.session_dir,
+        )
 
 
     def _extend_qr_expires(self, data: Dict[str, Any], min_seconds: int = 300) -> None:

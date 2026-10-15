@@ -381,6 +381,29 @@ class TestAccountAPI:
         assert "old_account" in data["message"]
         mock_svc.delete_account.assert_called_once_with("old_account")
 
+    def test_delete_account_cleans_telebox_keepalive_and_avatar(self, api_client, db):
+        token = _login(api_client)
+        mock_svc = _mock_tg_service()
+        telebox = MagicMock()
+        telebox.purge_account_data = AsyncMock(return_value=True)
+        keepalive = MagicMock()
+        avatar_dir = config_module.get_settings().resolve_workdir() / "avatars"
+        avatar_dir.mkdir(parents=True, exist_ok=True)
+        avatar = avatar_dir / "old_account.jpg"
+        avatar.write_bytes(b"cached")
+
+        with (
+            patch("backend.api.routes.accounts.get_telegram_service", return_value=mock_svc),
+            patch("backend.services.telebox.get_telebox_service", return_value=telebox),
+            patch("backend.services.device_keepalive.get_device_keepalive_service", return_value=keepalive),
+        ):
+            resp = api_client.delete("/api/accounts/old_account", headers=_auth(token))
+
+        assert resp.status_code == 200
+        telebox.purge_account_data.assert_awaited_once_with("old_account")
+        keepalive.remove_account_state.assert_called_once_with("old_account")
+        assert not avatar.exists()
+
     def test_delete_account_not_found(self, api_client, db):
         """删除不存在的账号：返回 404"""
 

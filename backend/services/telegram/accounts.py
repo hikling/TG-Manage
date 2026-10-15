@@ -150,7 +150,9 @@ class TelegramAccountsMixin:
                 store[next_key] = next_value
 
 
-    def list_accounts(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+    def list_accounts(
+        self, force_refresh: bool = False, *, strict: bool = False,
+    ) -> List[Dict[str, Any]]:
         """
         获取所有账号列表（基于 session 文件）
 
@@ -215,6 +217,10 @@ class TelegramAccountsMixin:
                         continue
                     if account_name in pending_accounts:
                         continue
+                    # Metadata alone is not a logged-in account. A removed
+                    # session must not linger on the account management page.
+                    if not get_account_session_string(account_name):
+                        continue
                     session_file = self.session_dir / f"{account_name}.session_string"
                     profile = get_account_profile(account_name)
                     session_exists, session_size = _session_file_info(session_file)
@@ -256,6 +262,8 @@ class TelegramAccountsMixin:
             self._accounts_cache_ts = time.monotonic()
             return self._accounts_cache
         except Exception as exc:
+            if strict:
+                raise
             # 扫描失败返回空列表是降级行为，但必须留痕：
             # 否则权限/IO/profile 损坏会表现为账号「凭空消失」且无法排查
             logger.warning("账号列表扫描失败，按空列表返回: %s", exc, exc_info=True)
@@ -502,18 +510,26 @@ class TelegramAccountsMixin:
                 "needs_relogin": True,
             }
 
-        def record_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        async def record_result(result: Dict[str, Any]) -> Dict[str, Any]:
             # A manual check is the latest known state even when a transport
             # failure prevents us from proving whether the session is invalid.
             # Do not recreate metadata if the account was removed mid-probe.
-            if self.account_exists(account_name):
-                set_account_status(
-                    account_name,
-                    status=result["status"],
-                    message=result.get("message") or "",
-                    code=result.get("code"),
-                    needs_relogin=bool(result.get("needs_relogin")),
-                )
+            lock = get_account_lock(account_name)
+            try:
+                await asyncio.wait_for(lock.acquire(), timeout=0.5)
+            except asyncio.TimeoutError:
+                return result
+            try:
+                if self.account_exists(account_name):
+                    set_account_status(
+                        account_name,
+                        status=result["status"],
+                        message=result.get("message") or "",
+                        code=result.get("code"),
+                        needs_relogin=bool(result.get("needs_relogin")),
+                    )
+            finally:
+                lock.release()
             return result
 
 
@@ -527,7 +543,7 @@ class TelegramAccountsMixin:
                 session_mode=session_mode,
             )
             if not session_string:
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "invalid",
@@ -552,10 +568,12 @@ class TelegramAccountsMixin:
                         no_updates=no_updates,
                     )
                     async with client:
-                        return await client.get_me()
+                        # Client.__aenter__ already verifies authorization with
+                        # get_me(). Reuse that result to avoid a second API call.
+                        return getattr(client, "me", None) or await client.get_me()
 
             me = await asyncio.wait_for(probe_account(), timeout=timeout_seconds)
-            return record_result({
+            return await record_result({
                 "account_name": account_name,
                 "ok": True,
                 "status": "connected",
@@ -567,7 +585,7 @@ class TelegramAccountsMixin:
                 "username": getattr(me, "username", None),
             })
         except asyncio.TimeoutError:
-            return record_result({
+            return await record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "checking",
@@ -577,7 +595,7 @@ class TelegramAccountsMixin:
                 "needs_relogin": False,
             })
         except ConnectionError:
-            return record_result({
+            return await record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "checking",
@@ -595,7 +613,7 @@ class TelegramAccountsMixin:
                 or "PERMISSION DENIED" in err_upper
                 or "ATTEMPT TO WRITE A READONLY DATABASE" in err_upper
             ):
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -606,7 +624,7 @@ class TelegramAccountsMixin:
                 })
             # 会话失效判定统一走 is_invalid_session_error，与任务执行路径同集合
             if is_invalid_session_error(e):
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "invalid",
@@ -616,7 +634,7 @@ class TelegramAccountsMixin:
                     "needs_relogin": True,
                 })
             if "FLOOD_WAIT" in err_upper or "TRANSPORT FLOOD" in err_lower:
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -631,7 +649,7 @@ class TelegramAccountsMixin:
                 or "REQUEST TIMED OUT" in err_upper
                 or "REQUEST TIME OUT" in err_upper
             ):
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -646,7 +664,7 @@ class TelegramAccountsMixin:
                 or "CONNECTION RESET" in err_upper
                 or "BROKEN PIPE" in err_upper
             ):
-                return record_result({
+                return await record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -655,7 +673,7 @@ class TelegramAccountsMixin:
                     "checked_at": checked_at,
                     "needs_relogin": False,
                 })
-            return record_result({
+            return await record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "error",
@@ -676,10 +694,23 @@ class TelegramAccountsMixin:
         Returns:
             是否成功删除
         """
-        # 确保释放资源
         account_name = self._normalize_account_name(account_name)
+        from backend.services.telegram.sessions import cleanup_account_login_sessions
+
+        # Pending phone login owns the account lock. Release it before taking
+        # the deletion lock, otherwise an abandoned login can block deletion.
+        await cleanup_account_login_sessions(account_name)
+        async with get_account_lock(account_name):
+            return await self._delete_account_locked(account_name)
+
+    async def _delete_account_locked(self, account_name: str) -> bool:
+        """Delete persistent session data while the account lock is held."""
+        from backend.services.telegram.pending_session import (
+            cleanup_orphan_pending_files,
+        )
         from tg_manage.core import close_client_by_name
 
+        cleanup_orphan_pending_files(self.session_dir, account_name=account_name)
         # 尝试关闭 active client
         try:
             await close_client_by_name(account_name, workdir=self.session_dir)
@@ -731,28 +762,12 @@ class TelegramAccountsMixin:
             if session_string_file.exists():
                 session_string_file.unlink()
 
-            if has_session_string or account_in_store:
-                delete_account_session_string(account_name)
+            # A file-session account can still carry proxy, status and API
+            # credentials in accounts.json; remove that entry as well.
+            delete_account_session_string(account_name)
 
             # 确保 .session_string 残留被清理
             delete_session_string_file(self.session_dir, account_name)
-
-            # 清理该账号的登录中会话：账号删除后残留的登录轮询/QR 会话
-            # 会让重建同名账号时继承旧登录状态
-            from backend.services.telegram.sessions import (
-                _login_sessions,
-                _qr_login_sessions,
-            )
-
-            for store in (_login_sessions, _qr_login_sessions):
-                stale = [
-                    key
-                    for key, value in store.items()
-                    if str((value or {}).get("account_name") or "").strip().lower()
-                    == account_name.lower()
-                ]
-                for key in stale:
-                    store.pop(key, None)
 
             # 更新缓存
             if self._accounts_cache is not None:

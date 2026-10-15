@@ -7,7 +7,9 @@ import os
 import pathlib
 import random
 import sqlite3
+import weakref
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import (
     Union,
@@ -189,13 +191,55 @@ def readable_chat(chat: Chat):
     return f"id: {chat.id}, username: {none_or_dash(chat.username)}, title: {none_or_dash(chat.title)}, type: {type_}, name: {none_or_dash(chat.first_name)}"
 
 
-_CLIENT_INSTANCES: dict[str, "Client"] = {}
+# Do not keep a client alive solely because get_client() constructed it.
+# Active contexts and callers retain their own strong references; dormant
+# instances disappear from this cache once nobody else owns them.
+_CLIENT_INSTANCES: weakref.WeakValueDictionary[str, "Client"] = weakref.WeakValueDictionary()
 
 # reference counts and async locks for shared client lifecycle management
 # Keyed by account name. Use asyncio locks to serialize start/stop operations
 # so multiple coroutines in the same process can safely share one Client.
 _CLIENT_REFS: defaultdict[str, int] = defaultdict(int)
 _CLIENT_ASYNC_LOCKS: dict[str, asyncio.Lock] = {}
+_CLIENT_LOCK_USERS: dict[str, int] = {}
+
+
+@asynccontextmanager
+async def _locked_client_key(key: str):
+    """Keep one lock per key until its holder and every waiter have left."""
+    lock = _CLIENT_ASYNC_LOCKS.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _CLIENT_ASYNC_LOCKS[key] = lock
+    _CLIENT_LOCK_USERS[key] = _CLIENT_LOCK_USERS.get(key, 0) + 1
+    acquired = False
+    try:
+        await lock.acquire()
+        acquired = True
+        yield
+    finally:
+        if acquired:
+            lock.release()
+        remaining = _CLIENT_LOCK_USERS[key] - 1
+        if remaining:
+            _CLIENT_LOCK_USERS[key] = remaining
+        else:
+            _CLIENT_LOCK_USERS.pop(key, None)
+            if _CLIENT_ASYNC_LOCKS.get(key) is lock:
+                _CLIENT_ASYNC_LOCKS.pop(key, None)
+            cached = _CLIENT_INSTANCES.get(key)
+            if (
+                _CLIENT_REFS.get(key, 0) <= 0
+                and cached is not None
+                and (
+                    getattr(cached, "_tg_manage_used", False)
+                    or getattr(cached, "_tg_manage_closed", False)
+                )
+            ):
+                # Keep a stopped instance available to queued entrants until
+                # the last waiter leaves this lock. A fresh replacement made
+                # during a close is kept until it gets its own first use.
+                _CLIENT_INSTANCES.pop(key, None)
 
 
 class Client(BaseClient):
@@ -206,16 +250,21 @@ class Client(BaseClient):
         self._tg_manage_no_updates = kwargs.get("no_updates")
         super().__init__(name, *args, **kwargs)
         self.key = key or str(pathlib.Path(self.workdir).joinpath(self.name).resolve())
+        self._tg_manage_closed = False
+        self._tg_manage_used = False
         if self.in_memory and not self.session_string:
             self.load_session_string()
             self.storage = MemoryStorage(self.name, self.session_string)
 
     async def __aenter__(self):
-        lock = _CLIENT_ASYNC_LOCKS.get(self.key)
-        if lock is None:
-            lock = asyncio.Lock()
-            _CLIENT_ASYNC_LOCKS[self.key] = lock
-        async with lock:
+        async with _locked_client_key(self.key):
+            if getattr(self, "_tg_manage_closed", False):
+                raise ConnectionError("Client instance has been closed")
+            current = _CLIENT_INSTANCES.get(self.key)
+            if current is not None and current is not self:
+                raise ConnectionError("Client instance has been superseded")
+            _CLIENT_INSTANCES[self.key] = self
+            self._tg_manage_used = True
             _CLIENT_REFS[self.key] += 1
             if _CLIENT_REFS[self.key] == 1:
                 # Retry loop for database locks
@@ -290,7 +339,6 @@ class Client(BaseClient):
                         _CLIENT_REFS[self.key] -= 1
                         if _CLIENT_REFS[self.key] <= 0:
                             _CLIENT_REFS.pop(self.key, None)
-                            _CLIENT_INSTANCES.pop(self.key, None)
                             try:
                                 if getattr(self, "is_connected", False):
                                     await self.stop()
@@ -300,10 +348,11 @@ class Client(BaseClient):
             return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        lock = _CLIENT_ASYNC_LOCKS.get(self.key)
-        if lock is None:
-            return
-        async with lock:
+        async with _locked_client_key(self.key):
+            # A forced close already retired this instance and its references.
+            # A newly constructed client may now own the same key.
+            if getattr(self, "_tg_manage_closed", False):
+                return
             _CLIENT_REFS[self.key] -= 1
             if _CLIENT_REFS[self.key] <= 0:
                 _CLIENT_REFS[self.key] = 0
@@ -311,12 +360,9 @@ class Client(BaseClient):
                     await self.stop()
                 except Exception:
                     pass
-                # Remove from cache when no longer in use to prevent memory growth
-                _CLIENT_INSTANCES.pop(self.key, None)
                 _CLIENT_REFS.pop(self.key, None)
-                # 锁保留在字典中：若在此处弹出，退出与下一次进入将持有不同锁对象，
-                # 并发 __aenter__ 会在 stop() 尚未完成时新建锁并 connect()，破坏互斥。
-                # 锁按账号 key 常驻，数量有界且开销极小。
+                # _locked_client_key removes the cache entry and lock only
+                # after all queued users (including canceled waiters) leave.
 
     @property
     def session_string_file(self):
@@ -383,18 +429,19 @@ def get_client(
         ).hexdigest()
         key = f"{key}::proxy:{fingerprint}"
 
-    if key in _CLIENT_INSTANCES:
-        existing = _CLIENT_INSTANCES[key]
+    existing = _CLIENT_INSTANCES.get(key)
+    if existing is not None:
         requested_no_updates = kwargs.get("no_updates")
         existing_no_updates = getattr(existing, "_tg_manage_no_updates", None)
         refs = _CLIENT_REFS.get(key, 0)
-        if (
+        if getattr(existing, "_tg_manage_closed", False) or (
             requested_no_updates is not None
             and existing_no_updates is not None
             and requested_no_updates != existing_no_updates
             and refs <= 0
             and not getattr(existing, "is_connected", False)
         ):
+            existing._tg_manage_closed = True
             _CLIENT_INSTANCES.pop(key, None)
         else:
             return existing
@@ -419,42 +466,29 @@ async def close_client_by_name(name: str, workdir: Union[str, pathlib.Path] = ".
     """
     base_key = str(pathlib.Path(workdir).joinpath(name).resolve())
     keys_to_clean = [
-        k for k in list(_CLIENT_INSTANCES.keys())
+        k for k in set(_CLIENT_INSTANCES) | set(_CLIENT_REFS) | set(_CLIENT_ASYNC_LOCKS)
         if k == base_key or k.startswith(f"{base_key}::")
     ]
     if not keys_to_clean:
         keys_to_clean = [base_key]
 
     for key in keys_to_clean:
-        lock = _CLIENT_ASYNC_LOCKS.get(key)
-        acquired = False
-        if lock:
-            try:
-                # Try to acquire with timeout to serialize cleanup
-                await asyncio.wait_for(lock.acquire(), timeout=5.0)
-                acquired = True
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "Timeout waiting for lock on client key %s, proceeding with forceful cleanup",
-                    key,
-                )
-        try:
-            _CLIENT_REFS[key] = 0
+        async with _locked_client_key(key):
             client = _CLIENT_INSTANCES.get(key)
             if client:
+                # A waiter holding the old object must not reconnect it after
+                # this close, or decrement a replacement client's ref count.
+                client._tg_manage_closed = True
+                _CLIENT_INSTANCES.pop(key, None)
                 try:
                     if getattr(client, "is_connected", False):
                         await client.stop()
                 except Exception as e:
                     logger.warning("停止客户端 %s 失败 (%s)", name, type(e).__name__)
                 finally:
-                    _CLIENT_INSTANCES.pop(key, None)
-            _CLIENT_REFS.pop(key, None)
-        finally:
-            if acquired and lock:
-                lock.release()
-            if key in _CLIENT_ASYNC_LOCKS:
-                _CLIENT_ASYNC_LOCKS.pop(key, None)
+                    _CLIENT_REFS.pop(key, None)
+            else:
+                _CLIENT_REFS.pop(key, None)
 
 
 def get_task_timezone():
