@@ -31,7 +31,6 @@ async function mountLayout() {
       { path: '/dashboard', name: 'dashboard', component: { template: '<div />' } },
       { path: '/accounts', name: 'accounts', component: { template: '<div />' } },
       { path: '/chats', name: 'chats', component: { template: '<div />' } },
-      { path: '/logs', name: 'logs', component: { template: '<div />' } },
       { path: '/settings', name: 'settings', component: { template: '<div />' } },
     ],
   })
@@ -52,6 +51,12 @@ describe('layout responsive navigation', () => {
   afterEach(() => {
     resetBodyScrollLock()
     vi.unstubAllGlobals()
+  })
+
+  it('does not expose the retired runtime logs page', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => mediaQuery()))
+    const wrapper = await mountLayout()
+    expect(wrapper.find('a[href="/logs"]').exists()).toBe(false)
   })
 
   it('keeps the desktop collapse control without a header menu button, and resets after remount', async () => {

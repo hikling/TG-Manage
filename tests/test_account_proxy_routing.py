@@ -552,4 +552,4 @@ async def test_telebox_proxy_restart_failure_is_visible_and_sanitized(store, mon
     await service.refresh_account_proxy("one")
     assert service.status("one")["enabled"] is True
     assert service.status("one")["status"] == "failed"
-    assert "PROXY_PASSWORD" not in str(service.status("one")) + str(service.log_items("one"))
+    assert "PROXY_PASSWORD" not in str(service.status("one"))

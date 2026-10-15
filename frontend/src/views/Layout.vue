@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Users,
   MessagesSquare,
-  Terminal,
   Settings,
   UserCircle,
   Github,
@@ -309,7 +308,6 @@ onUnmounted(() => {
 const viewLoaders: Record<string, () => Promise<unknown>> = {
   dashboard: () => import('../views/Dashboard.vue'),
   accounts: () => import('../views/Accounts.vue'),
-  logs: () => import('../views/Logs.vue'),
   settings: () => import('../views/Settings.vue'),
 }
 
@@ -328,7 +326,6 @@ const navigation = computed(() => [
   { id: 'dashboard', name: 'dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard', color: 'cyan' },
   { id: 'accounts', name: 'accounts', icon: Users, labelKey: 'nav.accounts', color: 'blue' },
   { id: 'chats', name: 'chats', icon: MessagesSquare, labelKey: 'nav.chats', color: 'green' },
-  { id: 'logs', name: 'logs', icon: Terminal, labelKey: 'nav.logs', color: 'slate' },
   { id: 'settings', name: 'settings', icon: Settings, labelKey: 'nav.settings', color: 'teal' },
 ])
 

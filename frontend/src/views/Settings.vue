@@ -33,12 +33,10 @@ const {
   checkLoading,
   versionBanner,
   botLoading,
-  keepaliveLoading,
   saveAllLoading,
   botTokenSet,
   botCodeStatus,
   saveSettings,
-  runKeepaliveNow,
   saveBotSettings,
   saveAllSettings,
   testBotConnection,
@@ -93,9 +91,7 @@ const {
             v-model="settings"
             :timezone-options="timezoneOptions"
             :loading="loading"
-            :keepalive-loading="keepaliveLoading"
             @save="saveSettings"
-            @run-keepalive="runKeepaliveNow"
           />
         </details>
         <details class="settings-accordion">

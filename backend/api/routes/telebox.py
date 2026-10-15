@@ -64,10 +64,3 @@ async def password(account: str, body: PasswordInput):
         raise _error(exc) from None
 
 
-@router.get("/{account}/logs")
-def logs(account: str):
-    try:
-        return get_telebox_service().log_items(account)
-    except ValueError as exc:
-        raise _error(exc) from None
-

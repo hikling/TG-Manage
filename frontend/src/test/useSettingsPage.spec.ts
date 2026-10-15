@@ -28,7 +28,6 @@ const api = vi.hoisted(() => ({
   refreshProxySubscriptions: vi.fn(),
   // save/version dependencies used via nested composables
   saveGlobalSettings: vi.fn(),
-  runDeviceKeepalive: vi.fn(),
   testBotConnection: vi.fn(),
   getAppVersion: vi.fn(),
   checkAppVersion: vi.fn(),

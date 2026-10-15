@@ -13,7 +13,6 @@ const { toastSpy, confirmMock, api } = vi.hoisted(() => ({
   },
   api: {
     saveGlobalSettings: vi.fn(),
-    runDeviceKeepalive: vi.fn(),
     testBotConnection: vi.fn(),
   },
 }))
@@ -108,14 +107,6 @@ describe('useSettingsSave', () => {
     const { save } = setup()
     await save.testBotConnection()
     expect(toastSpy.error).toHaveBeenCalledWith('rejected')
-  })
-
-  it('runKeepaliveNow formats result', async () => {
-    api.runDeviceKeepalive.mockResolvedValue({ kept_alive: 2, checked: 3, failed: 1 })
-    const { save } = setup()
-    await save.runKeepaliveNow()
-    expect(toastSpy.success).toHaveBeenCalled()
-    expect(String(toastSpy.success.mock.calls[0][0])).toContain('2')
   })
 
 })

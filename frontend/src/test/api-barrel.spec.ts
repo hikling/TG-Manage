@@ -21,7 +21,6 @@ describe('api barrel 完整性', () => {
   it('settings API 导出', () => {
     expect(typeof api.changePassword).toBe('function')
     expect(typeof api.getGlobalSettings).toBe('function')
-    expect(typeof api.runDeviceKeepalive).toBe('function')
   })
   it('ops API 导出', () => {
     expect(typeof api.listScheduledJobs).toBe('function')
