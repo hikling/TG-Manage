@@ -502,6 +502,20 @@ class TelegramAccountsMixin:
                 "needs_relogin": True,
             }
 
+        def record_result(result: Dict[str, Any]) -> Dict[str, Any]:
+            # A manual check is the latest known state even when a transport
+            # failure prevents us from proving whether the session is invalid.
+            # Do not recreate metadata if the account was removed mid-probe.
+            if self.account_exists(account_name):
+                set_account_status(
+                    account_name,
+                    status=result["status"],
+                    message=result.get("message") or "",
+                    code=result.get("code"),
+                    needs_relogin=bool(result.get("needs_relogin")),
+                )
+            return result
+
 
         session_mode = get_session_mode()
         session_string = None
@@ -513,14 +527,7 @@ class TelegramAccountsMixin:
                 session_mode=session_mode,
             )
             if not session_string:
-                set_account_status(
-                    account_name,
-                    status="invalid",
-                    message="session_string 不存在或已失效",
-                    code="ACCOUNT_SESSION_INVALID",
-                    needs_relogin=True,
-                )
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "invalid",
@@ -528,7 +535,7 @@ class TelegramAccountsMixin:
                     "code": "ACCOUNT_SESSION_INVALID",
                     "checked_at": checked_at,
                     "needs_relogin": True,
-                }
+                })
             in_memory = True
 
         timeout_seconds = max(1.0, min(float(timeout_seconds or 8.0), 20.0))
@@ -548,14 +555,7 @@ class TelegramAccountsMixin:
                         return await client.get_me()
 
             me = await asyncio.wait_for(probe_account(), timeout=timeout_seconds)
-            set_account_status(
-                account_name,
-                status="connected",
-                message="",
-                code="OK",
-                needs_relogin=False,
-            )
-            return {
+            return record_result({
                 "account_name": account_name,
                 "ok": True,
                 "status": "connected",
@@ -565,9 +565,9 @@ class TelegramAccountsMixin:
                 "needs_relogin": False,
                 "user_id": getattr(me, "id", None),
                 "username": getattr(me, "username", None),
-            }
+            })
         except asyncio.TimeoutError:
-            return {
+            return record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "checking",
@@ -575,9 +575,9 @@ class TelegramAccountsMixin:
                 "code": "TIMEOUT",
                 "checked_at": checked_at,
                 "needs_relogin": False,
-            }
+            })
         except ConnectionError:
-            return {
+            return record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "checking",
@@ -585,7 +585,7 @@ class TelegramAccountsMixin:
                 "code": "CONNECTION_ERROR",
                 "checked_at": checked_at,
                 "needs_relogin": False,
-            }
+            })
         except Exception as e:
             err_text = str(e) or type(e).__name__
             err_upper = err_text.upper()
@@ -595,7 +595,7 @@ class TelegramAccountsMixin:
                 or "PERMISSION DENIED" in err_upper
                 or "ATTEMPT TO WRITE A READONLY DATABASE" in err_upper
             ):
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -603,17 +603,10 @@ class TelegramAccountsMixin:
                     "code": "STORAGE_PERMISSION_DENIED",
                     "checked_at": checked_at,
                     "needs_relogin": False,
-                }
+                })
             # 会话失效判定统一走 is_invalid_session_error，与任务执行路径同集合
             if is_invalid_session_error(e):
-                set_account_status(
-                    account_name,
-                    status="invalid",
-                    message="Telegram 会话已失效，请重新登录",
-                    code="ACCOUNT_SESSION_INVALID",
-                    needs_relogin=True,
-                )
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "invalid",
@@ -621,9 +614,9 @@ class TelegramAccountsMixin:
                     "code": "ACCOUNT_SESSION_INVALID",
                     "checked_at": checked_at,
                     "needs_relogin": True,
-                }
+                })
             if "FLOOD_WAIT" in err_upper or "TRANSPORT FLOOD" in err_lower:
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -631,14 +624,14 @@ class TelegramAccountsMixin:
                     "code": "FLOOD_WAIT",
                     "checked_at": checked_at,
                     "needs_relogin": False,
-                }
+                })
             if (
                 "TIMEOUT" in err_upper
                 or "TIMED OUT" in err_upper
                 or "REQUEST TIMED OUT" in err_upper
                 or "REQUEST TIME OUT" in err_upper
             ):
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -646,14 +639,14 @@ class TelegramAccountsMixin:
                     "code": "TIMEOUT",
                     "checked_at": checked_at,
                     "needs_relogin": False,
-                }
+                })
             if (
                 "CONNECTION" in err_upper
                 or "NETWORK" in err_upper
                 or "CONNECTION RESET" in err_upper
                 or "BROKEN PIPE" in err_upper
             ):
-                return {
+                return record_result({
                     "account_name": account_name,
                     "ok": False,
                     "status": "checking",
@@ -661,8 +654,8 @@ class TelegramAccountsMixin:
                     "code": "CONNECTION_ERROR",
                     "checked_at": checked_at,
                     "needs_relogin": False,
-                }
-            return {
+                })
+            return record_result({
                 "account_name": account_name,
                 "ok": False,
                 "status": "error",
@@ -670,7 +663,7 @@ class TelegramAccountsMixin:
                 "code": type(e).__name__.upper(),
                 "checked_at": checked_at,
                 "needs_relogin": False,
-            }
+            })
 
 
     async def delete_account(self, account_name: str) -> bool:

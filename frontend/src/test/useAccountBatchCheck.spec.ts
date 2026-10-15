@@ -174,11 +174,13 @@ describe('useAccountBatchCheck (job poll)', () => {
 
   it('handleCheck updates single account', async () => {
     api.checkAccountsStatus.mockResolvedValue({
-      results: [{ account_name: 'a1', ok: false, status: 'invalid', message: 'bad' }],
+      results: [{ account_name: 'a1', ok: false, status: 'invalid', message: 'bad', needs_relogin: true,
+        proxy_status: 'error', proxy_status_code: 'PROXY_TIMEOUT' }],
     })
-    const loadAccounts = vi.fn(async () => {})
-    const loadAvatarForAccount = vi.fn(async () => {})
     const accounts = ref([makeAccountUi('a1')])
+    // Simulate an older list response arriving after the explicit check.
+    const loadAccounts = vi.fn(async () => { accounts.value = [makeAccountUi('a1')] })
+    const loadAvatarForAccount = vi.fn(async () => {})
     const { result, unmount } = mountComposable(() =>
       useAccountBatchCheck({
         accounts,
@@ -193,6 +195,9 @@ describe('useAccountBatchCheck (job poll)', () => {
     expect(api.checkAccountsStatus).toHaveBeenCalledWith('tok', { account_names: ['a1'], refresh_avatar: true })
     expect(loadAvatarForAccount).not.toHaveBeenCalled()
     expect(toastSpy.error).toHaveBeenCalled()
+    expect(accounts.value[0]?.status).toBe('error')
+    expect(accounts.value[0]?.raw).toMatchObject({ status: 'invalid', needs_relogin: true,
+      proxy_status: 'error', proxy_status_code: 'PROXY_TIMEOUT' })
     expect(result.checkingAccount.value).toBe('')
     unmount()
   })

@@ -26,6 +26,8 @@ describe('phone login delivery guidance', () => {
   it.each([
     ['app', '其他已登录设备'],
     ['sms', '短信'],
+    ['fragment_sms', 'Fragment'],
+    ['firebase_sms', '仅官方手机客户端支持'],
     ['email_code', '邮箱'],
     [null, '未说明验证码送达方式'],
   ])('shows Telegram-selected channel %s', async (deliveryType, expected) => {
@@ -70,6 +72,7 @@ describe('phone login delivery guidance', () => {
     vi.useFakeTimers()
     await button.trigger('click')
     await flushPromises()
+    expect(wrapper.get('[role="status"]').text()).toContain('短信作为下一种方式')
     await vi.advanceTimersByTimeAsync(75_000)
     await button.trigger('click')
     await flushPromises()
