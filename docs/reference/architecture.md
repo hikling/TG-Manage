@@ -1,17 +1,18 @@
 # 系统架构
 
-TG Manage 由 Vue 3 管理界面、FastAPI API、Telegram 账号服务、每账号独立的 TeleBox Node 运行时，以及持久化数据目录组成。
+TG Manage 由 Vue 3 管理界面、FastAPI API、Telegram 账号服务、Xray 线路运行时、每账号独立的 TeleBox Node 运行时，以及持久化数据目录组成。
 
 ## 请求路径
 
 | 组件 | 职责 |
 | --- | --- |
-| 前端 | 登录、仪表盘、账号与聊天、系统设置中的机器人通知、日志。 |
+| 前端 | 登录、仪表盘、账号与聊天、系统设置中的机器人通知和机场订阅。 |
 | FastAPI | 鉴权、账号和消息 API、私人验证码机器人、TeleBox 进程管理、备份及运维。 |
 | Telegram 账号服务 | 管理主账号的授权、会话、代理和消息操作。 |
+| Xray 线路运行时 | 从主订阅和兜底订阅分配独占节点；节点不足的账号直连，并定期检测健康状态与出口 IP。 |
 | TeleBox | 每个启用账号使用独立的 Node 进程、Telegram 会话和插件目录。 |
 
-主要 API 前缀包括 `/api/auth`、`/api/accounts`、`/api/communications`、`/api/telebox`、`/api/config`、`/api/ops` 和 `/api/logs`。当前版本不运行旧签到、关键词监听或 AI 动作链路。机器人中心接口已移除，但升级不会删除工作目录中的历史机器人登记数据。
+主要 API 前缀包括 `/api/auth`、`/api/accounts`、`/api/communications`、`/api/telebox`、`/api/config` 和 `/api/ops`；旧登录审计接口仍在 `/api/logs`，面板已无 TeleBox 运行日志页面。当前版本不运行旧签到、关键词监听或 AI 动作链路。机器人中心接口已移除，但升级不会删除工作目录中的历史机器人登记数据。
 
 ## 数据与密钥
 

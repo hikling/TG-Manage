@@ -14,7 +14,7 @@
   <tr>
     <td valign="top" width="50%">
       <h3>👥 多账号管理</h3>
-      <p>支持手机验证码或二维码登录，按需检测账号、刷新头像和配置代理。单检与批检共用每个账号成功后 45 秒的检测间隔。</p>
+      <p>支持手机验证码或二维码登录。单卡检测只检查该账号的 Telegram、TeleBox 和出口 IP；手动批量检测还会清理服务器上的孤立账户与 TeleBox 数据。账号独占 Xray 节点，主订阅节点不足时使用兜底订阅，仍不足则直连。IP 定位显示国家、公网 IP 和当前线路来源。</p>
     </td>
     <td valign="top" width="50%">
       <h3>💬 聊天中心</h3>
@@ -34,7 +34,7 @@
   <tr>
     <td valign="top" width="50%">
       <h3>🔌 内置 TeleBox</h3>
-      <p>每个启用的账号使用独立 Telegram 会话和运行目录，可在账号卡片查看状态、日志并启动、停止或退出登录。上游版本见 <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>。</p>
+      <p>每个启用的账号使用独立 Telegram 会话和运行目录，可在账号卡片查看状态并启动、停止或退出登录。进程错误写入脱敏的服务日志，不在面板缓存每账号运行日志。上游版本见 <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>。</p>
     </td>
     <td valign="top" width="50%">
       <h3>🔐 独立会话边界</h3>
@@ -70,14 +70,6 @@
     <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage 聊天中心页面"></a></td>
   </tr>
   <tr>
-    <th>系统设置</th>
-    <th>查看日志</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/系统设置.png"><img src="docs/public/screenshots/系统设置.png" width="100%" alt="TG Manage 系统设置页面"></a></td>
-    <td align="center"><a href="docs/public/screenshots/查看日志.png"><img src="docs/public/screenshots/查看日志.png" width="100%" alt="TG Manage 日志查看页面"></a></td>
-  </tr>
-  <tr>
     <th colspan="2">Bot 获取验证码</th>
   </tr>
   <tr>
@@ -106,9 +98,9 @@ bash scripts/install.sh
 ## 🧭 首次使用
 
 1. **🔐 设置管理员：**使用安装时显示的一次性设置码；已有部署仍用原账号登录，建议启用面板 TOTP。
-2. **🌐 配置订阅：**在「设置 → 机场订阅」填写 HTTPS 主订阅，可选填兜底订阅并刷新。首次配置前账号网络保持「待配置」；节点全部失效后才进入明确标注的直连模式。详见 [Xray 与订阅说明](docs/deploy/docker.md#机场订阅与-xray)。
+2. **🌐 配置订阅：**在「设置 → 机场订阅」填写 HTTPS 主订阅，可选填兜底订阅并刷新。首次配置前账号网络保持「待配置」；每个健康节点只分配给一个账号，节点不足或全部失效时，多出的账号会明确标为直连。详见 [Xray 与订阅说明](docs/deploy/docker.md#机场订阅与-xray)。
 3. **➕ 添加账号：**在「账号管理」选择验证码或二维码登录。普通账号可免填 API ID/Hash；启用 TeleBox 时，请填写该账号的专属 API ID/Hash，并按提示完成二步验证。
-4. **🗂️ 按需使用：**账号卡片可检测状态和刷新头像，也可管理独立的 TeleBox 进程。「聊天中心」打开后再启用聊天；关闭时仅处理官方验证码消息。
+4. **🗂️ 按需使用：**账号卡片只检测当前账户的状态、TeleBox 和 IP；手动批量检测还会清理服务器孤立数据。每日 00:00 自动检测全部账户和过去 24 小时的官方消息，完成后按通知设置推送机器人。「聊天中心」打开后再启用聊天。
 
 TeleBox 的插件和命令由 TeleBox 自身管理。内置系统插件随镜像提供；社区插件见 [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins)，具体使用方式见 [`telebox/README.md`](telebox/README.md)。
 
