@@ -90,9 +90,14 @@ export const saveGlobalSettings = async (token: string, settings: GlobalSettings
 };
 
 export const testBotNotification = (token: string) =>
-  request<{ success: boolean; message: string }>("/config/bot/test", {
+  request<{ success: boolean; message: string; job_id: string | null }>("/config/bot/test", {
     method: "POST",
   }, token);
+
+export const getBotTestReportJob = (token: string, jobId: string) =>
+  request<{ job_id: string; status: string; summary: Record<string, unknown>; error: string | null }>(
+    `/config/bot/test-jobs/${encodeURIComponent(jobId)}`, {}, token,
+  );
 
 export interface DeviceKeepaliveRunResult {
   success: boolean;

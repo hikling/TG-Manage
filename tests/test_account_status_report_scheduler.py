@@ -286,13 +286,11 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     rows = [{"account_name": "quiet", "ok": True, "proxy_status": "healthy"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send_combined = AsyncMock(return_value=1)
-    save_combined = Mock()
     monkeypatch.setattr(
         "backend.services.account_status_report.get_account_status_report_service",
         lambda: SimpleNamespace(run=status_run),
     )
     monkeypatch.setattr("backend.services.account_status_report._send_report", send_combined)
-    monkeypatch.setattr("backend.services.account_status_report.save_latest_midnight_report", save_combined)
     official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
 
     await scheduling._job_account_status_report()
@@ -301,18 +299,20 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     assert official_run.await_args.kwargs["send_normal_summary"] is False
     assert official_run.await_args.kwargs["account_names"] == ["quiet"]
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
-    assert save_combined.call_count == 1
-    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in save_combined.call_args.args[0][0]
+    from backend.services.account_status_report import report_chunks
+
+    assert "🟢 quiet — 账户正常 · SOCKS5 正常 · 官方消息无新消息" in report_chunks(
+        rows, {"quiet": "empty"},
+    )[0]
 
 
 @pytest.mark.asyncio
-async def test_partial_midnight_summary_does_not_replace_saved_report(
+async def test_partial_midnight_summary_is_reported_as_incomplete(
     scheduler_env, scheduler_clock, monkeypatch, official_run,
 ):
     rows = [{"account_name": "quiet", "ok": True, "proxy_status": "unconfigured"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
     send_combined = AsyncMock(return_value=1)
-    save_combined = Mock()
     monkeypatch.setattr(
         "backend.services.account_status_report.get_account_status_report_service",
         lambda: SimpleNamespace(run=status_run),
@@ -322,13 +322,14 @@ async def test_partial_midnight_summary_does_not_replace_saved_report(
         "backend.services.account_status_report.report_chunks",
         Mock(return_value=["第一段", "第二段"]),
     )
-    monkeypatch.setattr("backend.services.account_status_report.save_latest_midnight_report", save_combined)
     official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
 
-    await scheduling._job_account_status_report()
+    result = await scheduling._run_combined_report(
+        datetime(2026, 10, 13, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
 
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
-    save_combined.assert_not_called()
+    assert result["success"] is False
 
 
 def test_sync_report_before_scheduler_exists_is_noop(monkeypatch):
@@ -430,3 +431,75 @@ async def test_dst_window_uses_24_elapsed_hours(
     assert window["end"] - window["start"] == timedelta(hours=24)
     assert window["end"].tzinfo is timezone.utc
     assert window["start"].astimezone(ZoneInfo("America/New_York")).hour in {1, 23}
+
+
+@pytest.mark.asyncio
+async def test_manual_report_runs_full_workflow_outside_midnight(
+    scheduler_env, scheduler_clock, monkeypatch, official_run,
+):
+    scheduler_clock[0] = datetime(2026, 10, 13, 6, 34, 12, tzinfo=timezone.utc)
+    rows = [{"account_name": "alpha", "ok": True, "proxy_status": "healthy"}]
+    status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
+    send = AsyncMock(return_value=1)
+    target = ("token", "123", None)
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status_run),
+    )
+    monkeypatch.setattr("backend.services.account_status_report._enabled_target", lambda: target)
+    monkeypatch.setattr("backend.services.account_status_report._send_report", send)
+    official_run.return_value = {
+        "accounts": 1, "messages_sent": 2, "account_status": {"alpha": "messages"},
+    }
+
+    task = scheduling.start_manual_account_report(target)
+    assert task is not None
+    result = await task
+
+    assert result == {"success": True, "checked": 1, "messages_sent": 3}
+    status_run.assert_awaited_once_with(send_report=False)
+    window = official_run.await_args.kwargs
+    assert window["end"] == scheduler_clock[0]
+    assert window["start"] == scheduler_clock[0] - timedelta(hours=24)
+    assert window["account_names"] == ["alpha"]
+    assert window["send_normal_summary"] is False
+    send.assert_awaited_once_with(
+        rows, {"alpha": "messages"}, title="账户状态与官方消息即时检测报告",
+    )
+    assert not scheduling._midnight_workflow_running
+
+
+@pytest.mark.asyncio
+async def test_manual_report_rejects_overlap_and_target_change(
+    scheduler_env, scheduler_clock, monkeypatch, official_run,
+):
+    entered, finish = asyncio.Event(), asyncio.Event()
+    target = ("token", "123", None)
+    current_target = [target]
+
+    async def blocked_status(**_kwargs):
+        entered.set()
+        await finish.wait()
+        return {"checked": 0, "rows": []}
+
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=blocked_status),
+    )
+    monkeypatch.setattr("backend.services.account_status_report._enabled_target", lambda: current_target[0])
+    task = scheduling.start_manual_account_report(target)
+    assert task is not None
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        assert scheduling.start_manual_account_report(target) is None
+        await scheduling._job_account_status_report()
+        current_target[0] = ("token", "456", None)
+        finish.set()
+        result = await asyncio.wait_for(task, 1)
+        assert result["success"] is False
+        official_run.assert_not_awaited()
+    finally:
+        finish.set()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    assert not scheduling._midnight_workflow_running

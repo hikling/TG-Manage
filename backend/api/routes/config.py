@@ -174,26 +174,37 @@ async def run_device_keepalive(current_user: User = Depends(get_current_user)):
 class BotTestResponse(BaseModel):
     success: bool
     message: str
+    job_id: Optional[str] = None
 
 
 @router.post("/bot/test", response_model=BotTestResponse)
 async def test_bot_notification(
     current_user: User = Depends(get_current_user),
 ):
-    """重发最近一次完整零点日报，不触发任何账户或代理检测。"""
+    """Explicitly start the full status, SOCKS5 and official-message report."""
     try:
-        from backend.services.account_status_report import (
-            MidnightReportReplayError,
-            replay_latest_midnight_report,
-        )
+        from backend.services.bot_test_report_jobs import start_bot_test_report_job
 
-        count = await replay_latest_midnight_report()
-        return BotTestResponse(success=True, message=f"已重发零点日报（{count} 条）")
-    except MidnightReportReplayError as e:
+        job = start_bot_test_report_job()
+        return BotTestResponse(success=True, message="检测已开始，完成后发送到目标 ID", job_id=job["job_id"])
+    except ValueError as e:
         return BotTestResponse(success=False, message=str(e))
     except Exception as e:
-        # 不回传完整异常栈，避免 token/网络细节外泄到前端
+        # Do not expose Bot credentials or transport details.
         err = type(e).__name__
-        return BotTestResponse(success=False, message=f"发送失败: {err}")
+        return BotTestResponse(success=False, message=f"启动检测失败: {err}")
+
+
+@router.get("/bot/test-jobs/{job_id}")
+def get_bot_test_notification_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+):
+    from backend.services.bot_test_report_jobs import get_bot_test_report_job
+
+    job = get_bot_test_report_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="JOB_NOT_FOUND")
+    return {"job_id": job_id, "status": job["status"], "summary": job["summary"], "error": job["error"]}
 
 

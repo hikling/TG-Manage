@@ -680,7 +680,8 @@
     "colCategory": "失败分类"
   },
   "settings": {
-    "botTestSuccess": "最近一次零点日报已重发",
+    "botTestStarted": "已开始完整检测，完成后自动发送",
+    "botTestSuccess": "完整检测及机器人推送已完成",
     "privateBotStatus": {
       "disabled": "未启用",
       "waitingLock": "未启用或当前实例未取得调度锁",
@@ -712,7 +713,7 @@
     "apiKey": "API Key（留空表示不修改）",
     "saveAiConfig": "保存 AI 配置",
     "botNotify": "Telegram 机器人通知",
-    "botNotifySummary": "通知配置与零点日报重发",
+    "botNotifySummary": "通知配置与即时完整检测",
     "botDesc": "设置一个 Bot 接收系统日志与警报。",
     "botToken": "Bot Token",
     "targetChatId": "目标 Chat ID",
@@ -790,8 +791,8 @@
     "aiVisionReasoningEffortNone": "none（关闭思考）",
     "aiVisionReasoningEffortHint": "部分模型不支持关闭思考或将思考度设为 none；不支持的模型请保持默认",
     "testBot": "测试发送",
-    "testBotHint": "重发最近一次完整零点日报到当前目标，不重新检测账户。首次零点日报完成前无法测试。",
-    "testing": "测试中…",
+    "testBotHint": "立即检测全部账户状态、SOCKS5 和过去 24 小时的 Telegram 官方消息，完成后发送到目标 ID。账户较多时可能需要一段时间。",
+    "testing": "检测并发送中…",
     "quietHours": "静默时段",
     "quietHoursDesc": "静默时段内不发送 Bot 通知",
     "quietStart": "开始",

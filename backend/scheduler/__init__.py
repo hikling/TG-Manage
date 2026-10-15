@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
@@ -88,7 +89,6 @@ def create_cron_trigger(cron_str: str, timezone: str = "") -> CronTrigger:
 
 async def _job_account_status_report() -> None:
     global _midnight_workflow_running
-    logger = logging.getLogger("backend.scheduler")
     timezone = _resolve_scheduler_timezone() or (
         scheduler.timezone if scheduler is not None else None
     )
@@ -98,54 +98,130 @@ async def _job_account_status_report() -> None:
         return
     if _midnight_workflow_running:
         return
-    # Capture once before status work. UTC subtraction describes exactly 24
-    # elapsed hours even in timezones with daylight-saving transitions.
-    end = now.replace(second=0, microsecond=0).astimezone(datetime_timezone.utc)
-    start = end - timedelta(hours=24)
     _midnight_workflow_running = True
     try:
-        status_rows = None
-        official_status = None
-        try:
-            from backend.services.account_status_report import (
-                get_account_status_report_service,
-            )
-
-            result = await get_account_status_report_service().run(send_report=False)
-            status_rows = result.get("rows")
-            logger.info("Midnight account status check finished: checked=%s", result.get("checked"))
-        except Exception as exc:
-            logger.error("零点账户状态日报失败（%s）", type(exc).__name__)
-        try:
-            from backend.services.official_message_report import (
-                get_official_message_report_service,
-            )
-
-            result = await get_official_message_report_service().run(
-                start=start, end=end, timezone=now.tzinfo, send_normal_summary=False,
-                account_names=[row["account_name"] for row in status_rows] if status_rows is not None else None,
-            )
-            official_status = result.get("account_status")
-            logger.info("Midnight official message check finished: accounts=%s", result.get("accounts"))
-        except Exception as exc:
-            logger.error("零点官方消息日报失败（%s）", type(exc).__name__)
-        if status_rows is not None:
-            try:
-                from backend.services.account_status_report import (
-                    _send_report,
-                    report_chunks,
-                    save_latest_midnight_report,
-                )
-
-                combined_official_status = official_status or {}
-                sent = await _send_report(status_rows, combined_official_status)
-                chunks = report_chunks(status_rows, combined_official_status)
-                if sent == len(chunks):
-                    save_latest_midnight_report(chunks)
-            except Exception as exc:
-                logger.error("零点合并日报发送失败（%s）", type(exc).__name__)
+        await _run_combined_report(now.replace(second=0, microsecond=0))
     finally:
         _midnight_workflow_running = False
+
+
+async def _run_combined_report(
+    now: datetime, *, manual: bool = False,
+    expected_target: tuple[str, str, int | None] | None = None,
+) -> dict[str, int | bool]:
+    """Run one fixed 24-hour window for both midnight and explicit manual use."""
+    logger = logging.getLogger("backend.scheduler")
+    end = now.astimezone(datetime_timezone.utc)
+    start = end - timedelta(hours=24)
+    status_rows = None
+    official_status = None
+    official_result = None
+    status_failed = False
+    official_failed = False
+    try:
+        from backend.services.account_status_report import (
+            get_account_status_report_service,
+        )
+
+        result = await get_account_status_report_service().run(send_report=False)
+        status_rows = result.get("rows")
+        status_failed = bool(result.get("skipped")) or status_rows is None
+        logger.info("Account status check finished: checked=%s", result.get("checked"))
+    except Exception as exc:
+        status_failed = True
+        logger.error("账户状态日报失败（%s）", type(exc).__name__)
+    if expected_target is not None:
+        from backend.services.account_status_report import _enabled_target
+
+        if _enabled_target() != expected_target:
+            return {"success": False, "checked": len(status_rows or []), "messages_sent": 0}
+    try:
+        from backend.services.official_message_report import (
+            get_official_message_report_service,
+        )
+
+        official_result = await get_official_message_report_service().run(
+            start=start, end=end, timezone=now.tzinfo, send_normal_summary=False,
+            account_names=[row["account_name"] for row in status_rows] if status_rows is not None else None,
+        )
+        official_status = official_result.get("account_status")
+        official_failed = (
+            bool(official_result.get("skipped"))
+            or bool(official_result.get("stopped"))
+            or bool(official_result.get("failed"))
+            or official_status is None
+        )
+        logger.info("Official message check finished: accounts=%s", official_result.get("accounts"))
+    except Exception as exc:
+        official_failed = True
+        logger.error("官方消息日报失败（%s）", type(exc).__name__)
+    sent = 0
+    expected_chunks = 0
+    if expected_target is not None:
+        from backend.services.account_status_report import _enabled_target
+
+        if _enabled_target() != expected_target:
+            return {
+                "success": False,
+                "checked": len(status_rows or []),
+                "messages_sent": int((official_result or {}).get("messages_sent") or 0),
+            }
+    if status_rows is not None:
+        try:
+            from backend.services.account_status_report import (
+                _send_report,
+                report_chunks,
+            )
+            combined_official_status = official_status or {}
+            if manual:
+                title = "账户状态与官方消息即时检测报告"
+                expected_chunks = len(report_chunks(status_rows, combined_official_status, title=title))
+                sent = await _send_report(status_rows, combined_official_status, title=title)
+            else:
+                expected_chunks = len(report_chunks(status_rows, combined_official_status))
+                sent = await _send_report(status_rows, combined_official_status)
+        except Exception as exc:
+            logger.error("合并日报发送失败（%s）", type(exc).__name__)
+    return {
+        "success": not status_failed and not official_failed and sent == expected_chunks,
+        "checked": len(status_rows or []),
+        "messages_sent": sent + int((official_result or {}).get("messages_sent") or 0),
+    }
+
+
+def start_manual_account_report(
+    expected_target: tuple[str, str, int | None],
+) -> asyncio.Task[dict[str, int | bool]] | None:
+    """Explicit button action; reserve the same single-flight gate before yielding."""
+    global _midnight_workflow_running
+    if _midnight_workflow_running:
+        return None
+    timezone = _resolve_scheduler_timezone() or (
+        scheduler.timezone if scheduler is not None else None
+    )
+    now = datetime.now(timezone).astimezone(timezone)
+    _midnight_workflow_running = True
+
+    async def run() -> dict[str, int | bool]:
+        global _midnight_workflow_running
+        try:
+            return await _run_combined_report(now, manual=True, expected_target=expected_target)
+        finally:
+            _midnight_workflow_running = False
+
+    try:
+        task = asyncio.create_task(run(), name="manual-account-official-report")
+
+        def release_if_cancelled(done: asyncio.Task) -> None:
+            global _midnight_workflow_running
+            if done.cancelled():
+                _midnight_workflow_running = False
+
+        task.add_done_callback(release_if_cancelled)
+        return task
+    except Exception:
+        _midnight_workflow_running = False
+        raise
 
 
 def _sync_account_status_report_job() -> None:

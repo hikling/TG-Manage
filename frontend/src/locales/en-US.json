@@ -680,7 +680,8 @@
     "colCategory": "Failure category"
   },
   "settings": {
-    "botTestSuccess": "Latest midnight report resent",
+    "botTestStarted": "Full check started; results will be sent when ready",
+    "botTestSuccess": "Full check and Bot delivery completed",
     "privateBotStatus": {
       "disabled": "Disabled",
       "waitingLock": "Disabled or waiting for the scheduler lock",
@@ -712,7 +713,7 @@
     "apiKey": "API Key (empty to keep unchanged)",
     "saveAiConfig": "Save AI Config",
     "botNotify": "Telegram Bot Notifications",
-    "botNotifySummary": "Notification settings and midnight report replay",
+    "botNotifySummary": "Notification settings and immediate full check",
     "botDesc": "Set up a Bot to receive system logs and alerts.",
     "botToken": "Bot Token",
     "targetChatId": "Target Chat ID",
@@ -790,8 +791,8 @@
     "aiVisionReasoningEffortNone": "none (disable thinking)",
     "aiVisionReasoningEffortHint": "Some models do not support disabling thinking or setting it to none; keep the default for unsupported models",
     "testBot": "Test send",
-    "testBotHint": "Resend the latest complete midnight report to the current target without checking accounts again. Available after the first midnight report.",
-    "testing": "Testing…",
+    "testBotHint": "Check every account, SOCKS5 proxy and Telegram official messages from the past 24 hours now, then send the results to the target ID. This may take some time for many accounts.",
+    "testing": "Checking and sending…",
     "quietHours": "Quiet hours",
     "quietHoursDesc": "Skip bot notifications during quiet hours",
     "quietStart": "Start",
