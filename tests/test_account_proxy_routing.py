@@ -287,7 +287,10 @@ async def test_login_first_connection_uses_only_entered_proxy(store, monkeypatch
         assert result["delivery_type"] == "app"
         assert result["next_type"] == "sms"
         assert result["retry_after"] == 75
+        expiry_task = next(iter(session_store.values()))["expire_task"]
+        assert not expiry_task.done()
         await service.verify_login("one", "+12345678900", "12345", "code-hash")
+        assert expiry_task.cancelled()
         assert tg_session.get_account_proxy("one") == proxy
     else:
         await service._cleanup_qr_login(result["login_id"])

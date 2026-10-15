@@ -21,6 +21,7 @@ def report_env(monkeypatch):
     }
     service = SimpleNamespace(
         list_accounts=Mock(return_value=[{"name": "alpha"}]),
+        account_exists=Mock(return_value=True),
         check_account_status=AsyncMock(return_value={"ok": True, "status": "connected"}),
     )
     config_service = SimpleNamespace(get_global_settings=lambda: dict(config))
@@ -108,7 +109,7 @@ async def test_mixed_fresh_results_icons_and_persisted_failures(report_env, capl
     result = await report.AccountStatusReportService().run()
 
     assert result == {"checked": 5, "ok": 2, "fail": 3, "messages_sent": 1}
-    service.list_accounts.assert_called_once_with(force_refresh=True)
+    service.list_accounts.assert_called_once_with(force_refresh=True, strict=True)
     assert service.check_account_status.await_args_list == [
         call(name, timeout_seconds=8.0, no_updates=True)
         for name in ["alpha", "expired", "slow", "broken", "omega"]
@@ -367,6 +368,29 @@ async def test_delivery_error_is_sanitized_and_keeps_saved_failure(report_env, c
     assert result["fail"] == 1 and result["messages_sent"] == 0
     assert persist.call_args.kwargs["code"] == "CONNECTION_ERROR"
     assert "SECRET" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_removed_account_failure_does_not_restore_metadata(report_env):
+    _, service, _, persist = report_env
+    service.check_account_status.side_effect = RuntimeError("transport unavailable")
+    service.account_exists.return_value = False
+
+    result = await report.AccountStatusReportService().run(send_report=False)
+
+    assert result["fail"] == 1
+    persist.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_account_inventory_error_never_becomes_empty_normal_report(report_env):
+    _, service, send, _ = report_env
+    service.list_accounts.side_effect = OSError("session volume unavailable")
+
+    with pytest.raises(OSError):
+        await report.AccountStatusReportService().run()
+
+    send.assert_not_awaited()
 
 
 @pytest.mark.asyncio

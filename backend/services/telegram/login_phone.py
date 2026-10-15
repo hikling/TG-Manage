@@ -16,9 +16,13 @@ from backend.services.telegram.pending_session import (
     promote_pending_session,
 )
 from backend.services.telegram.sessions import (
+    _begin_login_operation,
     _cleanup_expired_login_sessions,
+    _end_login_operation,
     _login_sessions,
     _qr_login_sessions,
+    _remove_login_session,
+    _start_phone_login_expiry,
 )
 from backend.utils.account_locks import get_account_lock
 from backend.utils.proxy import require_proxy_dict
@@ -56,6 +60,14 @@ async def _discard_login_client(client, session_key: Optional[str], release_lock
 
     各异常分支共用，避免断连/弹会话/放锁三环在新增分支时漏写。
     """
+    if session_key:
+        value = _login_sessions.get(session_key)
+        if value is not None and value.get("client") is client:
+            await _remove_login_session(_login_sessions, session_key, expected=value)
+            return
+        # Another path may already have released this attempt and acquired the
+        # same account lock for a replacement. Never release that new owner.
+        release_lock = None
     try:
         try:
             await asyncio.wait_for(client.disconnect(), timeout=5)
@@ -70,8 +82,6 @@ async def _discard_login_client(client, session_key: Optional[str], release_lock
         try:
             cleanup_pending_session(pending_path)
         finally:
-            if session_key:
-                _login_sessions.pop(session_key, None)
             if release_lock:
                 release_lock()
 
@@ -219,7 +229,7 @@ class TelegramPhoneLoginMixin:
             metadata = _sent_code_metadata(sent_code)
 
             session_key = f"{account_name}_{phone_number}"
-            _login_sessions[session_key] = {
+            session_data = {
                 "client": client,
                 "phone_code_hash": sent_code.phone_code_hash,
                 "phone_number": phone_number,
@@ -233,6 +243,8 @@ class TelegramPhoneLoginMixin:
                 **metadata,
                 "_created_at": time.monotonic(),
             }
+            _login_sessions[session_key] = session_data
+            _start_phone_login_expiry(session_key, session_data)
 
             # 保持连接，避免 session 变化导致验证码失效 (PhoneCodeExpired)
             # 断开连接会导致服务端重新分配 Session ID，从而使之前的 hash 失效
@@ -290,30 +302,37 @@ class TelegramPhoneLoginMixin:
         if elapsed < wait_seconds:
             raise ValueError(f"请等待 {int(wait_seconds - elapsed) + 1} 秒后再重新获取验证码")
 
+        _begin_login_operation(data)
         try:
             async with get_global_semaphore():
-                sent_code = await asyncio.wait_for(
-                    data["client"].resend_code(phone_number, phone_code_hash), timeout=20,
-                )
-        except FloodWait as exc:
-            raise ValueError(f"请求过于频繁，请等待 {exc.value} 秒后重试") from None
-        except asyncio.TimeoutError:
-            data["sent_at"] = time.monotonic()
-            raise ValueError("Telegram 重发请求超时，送达状态未确认；请稍后查看已登录设备") from None
-        if not getattr(sent_code, "phone_code_hash", None):
-            raise ValueError("Telegram 未返回新的验证码会话，请稍后重试")
-        metadata = _sent_code_metadata(sent_code)
-        data.update({
-            "phone_code_hash": sent_code.phone_code_hash,
-            "sent_at": time.monotonic(),
-            **metadata,
-        })
-        return {
-            "phone_code_hash": sent_code.phone_code_hash,
-            "phone_number": phone_number,
-            "account_name": account_name,
-            **metadata,
-        }
+                try:
+                    sent_code = await asyncio.wait_for(
+                        data["client"].resend_code(phone_number, phone_code_hash), timeout=20,
+                    )
+                except FloodWait as exc:
+                    raise ValueError(f"请求过于频繁，请等待 {exc.value} 秒后重试") from None
+                except asyncio.TimeoutError:
+                    data["sent_at"] = time.monotonic()
+                    raise ValueError("Telegram 重发请求超时，送达状态未确认；请稍后查看已登录设备") from None
+                except asyncio.CancelledError:
+                    data["sent_at"] = time.monotonic()
+                    raise
+            if not getattr(sent_code, "phone_code_hash", None):
+                raise ValueError("Telegram 未返回新的验证码会话，请稍后重试")
+            metadata = _sent_code_metadata(sent_code)
+            data.update({
+                "phone_code_hash": sent_code.phone_code_hash,
+                "sent_at": time.monotonic(),
+                **metadata,
+            })
+            return {
+                "phone_code_hash": sent_code.phone_code_hash,
+                "phone_number": phone_number,
+                "account_name": account_name,
+                **metadata,
+            }
+        finally:
+            _end_login_operation(data)
 
 
     async def verify_login(
@@ -367,9 +386,21 @@ class TelegramPhoneLoginMixin:
             if account_lock and account_lock.locked():
                 account_lock.release()
 
+        acquired_here = False
         if account_lock and not account_lock.locked():
             await account_lock.acquire()
+            acquired_here = True
 
+        if _login_sessions.get(session_key) is not session_data:
+            if acquired_here:
+                _release_account_lock()
+            raise ValueError("登录会话已过期，请重新发送验证码")
+        try:
+            _begin_login_operation(session_data)
+        except ValueError:
+            if acquired_here:
+                _release_account_lock()
+            raise
         try:
             async with global_semaphore:
                 # 重新连接 (因为 start_login 中断开了)
@@ -428,6 +459,11 @@ class TelegramPhoneLoginMixin:
                     except PasswordHashInvalid:
                         raise ValueError("2FA 密码错误")
 
+        except asyncio.CancelledError:
+            await _discard_login_client(
+                client, session_key, _release_account_lock, session_data.get("pending_path"),
+            )
+            raise
         except PhoneCodeInvalid:
             # Keep the same Telegram code hash/session for a corrected entry.
             raise ValueError("验证码错误，请检查验证码是否正确")
@@ -455,6 +491,8 @@ class TelegramPhoneLoginMixin:
                 raise ValueError("此账号启用了两步验证，请输入 2FA 密码")
             else:
                 raise ValueError("登录失败，请检查账号代理或网络后重试") from None
+        finally:
+            _end_login_operation(session_data)
 
 
     async def cancel_login(self, account_name: str, phone_number: str, phone_code_hash: str) -> bool:

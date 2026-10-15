@@ -11,6 +11,7 @@ import pytest
 
 import backend.scheduler as scheduling
 from backend.scheduler import instance_lock
+from backend.services import account_data_cleanup
 
 
 @pytest.fixture
@@ -41,6 +42,13 @@ def official_run(monkeypatch):
         "backend.services.official_message_report.get_official_message_report_service",
         lambda: SimpleNamespace(run=run),
     )
+    return run
+
+
+@pytest.fixture(autouse=True)
+def cleanup_run(monkeypatch):
+    run = AsyncMock(return_value={"telebox": 0, "metadata": 0, "keepalive": 0, "avatars": 0})
+    monkeypatch.setattr(account_data_cleanup, "reconcile_orphan_account_data", run)
     return run
 
 
@@ -308,7 +316,7 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
 
 @pytest.mark.asyncio
 async def test_partial_midnight_summary_is_reported_as_incomplete(
-    scheduler_env, scheduler_clock, monkeypatch, official_run,
+    scheduler_env, scheduler_clock, monkeypatch, official_run, cleanup_run,
 ):
     rows = [{"account_name": "quiet", "ok": True, "proxy_status": "unconfigured"}]
     status_run = AsyncMock(return_value={"checked": 1, "rows": rows})
@@ -330,6 +338,7 @@ async def test_partial_midnight_summary_is_reported_as_incomplete(
 
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
     assert result["success"] is False
+    cleanup_run.assert_not_awaited()
 
 
 def test_sync_report_before_scheduler_exists_is_noop(monkeypatch):
@@ -435,7 +444,7 @@ async def test_dst_window_uses_24_elapsed_hours(
 
 @pytest.mark.asyncio
 async def test_manual_report_runs_full_workflow_outside_midnight(
-    scheduler_env, scheduler_clock, monkeypatch, official_run,
+    scheduler_env, scheduler_clock, monkeypatch, official_run, cleanup_run,
 ):
     scheduler_clock[0] = datetime(2026, 10, 13, 6, 34, 12, tzinfo=timezone.utc)
     rows = [{"account_name": "alpha", "ok": True, "proxy_status": "healthy"}]
@@ -457,6 +466,7 @@ async def test_manual_report_runs_full_workflow_outside_midnight(
     result = await task
 
     assert result == {"success": True, "checked": 1, "messages_sent": 3}
+    cleanup_run.assert_awaited_once_with()
     status_run.assert_awaited_once_with(send_report=False)
     window = official_run.await_args.kwargs
     assert window["end"] == scheduler_clock[0]

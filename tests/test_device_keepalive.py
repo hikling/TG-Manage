@@ -131,3 +131,23 @@ class TestRunBehavior:
         assert forced["kept_alive"] == 1
         assert forced["skipped"] == 0
         assert keepalive.tg.check_account_status.await_count == 2
+
+
+def test_deleted_account_state_is_removed_without_touching_other_accounts(keepalive):
+    svc = keepalive.svc
+    svc._save_state_for_cleanup({"accounts": {"old": {"last_ok_at": "x"}, "live": {"last_ok_at": "y"}}})
+
+    assert svc.remove_account_state("old") is True
+    assert svc.prune_account_state({"live"}, account_exists=lambda _name: False) == 0
+    assert svc._load_state_for_cleanup()["accounts"] == {"live": {"last_ok_at": "y"}}
+
+
+def test_corrupt_keepalive_state_is_not_overwritten_during_cleanup(keepalive):
+    svc = keepalive.svc
+    svc.state_file.parent.mkdir(parents=True, exist_ok=True)
+    svc.state_file.write_text("{broken", encoding="utf-8")
+
+    with pytest.raises(json.JSONDecodeError):
+        svc.prune_account_state(set())
+
+    assert svc.state_file.read_text(encoding="utf-8") == "{broken"

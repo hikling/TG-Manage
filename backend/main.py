@@ -550,6 +550,12 @@ async def on_shutdown() -> None:
         with contextlib.suppress(asyncio.CancelledError):
             await code_bot_task
     try:
+        from backend.services.telegram.sessions import cleanup_all_login_sessions
+
+        await cleanup_all_login_sessions()
+    except Exception:
+        log.exception("Pending Telegram login shutdown cleanup failed")
+    try:
         from backend.services.telebox import get_telebox_service
 
         await get_telebox_service().shutdown()

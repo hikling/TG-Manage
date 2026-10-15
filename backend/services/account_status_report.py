@@ -156,7 +156,7 @@ class AccountStatusReportService:
         service = get_telegram_service()
         names = dict.fromkeys(
             str(account.get("name") or "").strip()
-            for account in service.list_accounts(force_refresh=True)
+            for account in service.list_accounts(force_refresh=True, strict=True)
             if str(account.get("name") or "").strip()
         )
         pending = [(name, 0.0) for name in names]
@@ -202,13 +202,21 @@ class AccountStatusReportService:
                         "invalid", "not_found",
                     }:
                         try:
-                            set_account_status(
-                                name,
-                                status=result.get("status") or "error",
-                                message=_failure_reason(result),
-                                code=result.get("code") or "STATUS_CHECK_FAILED",
-                                needs_relogin=bool(result.get("needs_relogin")),
-                            )
+                            from backend.utils.account_locks import get_account_lock
+
+                            lock = get_account_lock(name)
+                            await asyncio.wait_for(lock.acquire(), timeout=0.5)
+                            try:
+                                if service.account_exists(name):
+                                    set_account_status(
+                                        name,
+                                        status=result.get("status") or "error",
+                                        message=_failure_reason(result),
+                                        code=result.get("code") or "STATUS_CHECK_FAILED",
+                                        needs_relogin=bool(result.get("needs_relogin")),
+                                    )
+                            finally:
+                                lock.release()
                         except Exception as exc:
                             logger.warning("保存账户日报状态失败（%s）", type(exc).__name__)
                     result.update(await check_account_proxy(name, timeout_seconds=PROBE_TIMEOUT_SECONDS))

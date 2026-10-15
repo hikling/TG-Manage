@@ -10,10 +10,12 @@ import base64
 import codecs
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
 import signal
+import tempfile
 import uuid
 from collections import deque
 from datetime import datetime, timezone
@@ -23,8 +25,12 @@ from typing import Any
 from backend.core.config import get_settings
 from backend.services.telegram import get_telegram_service
 from backend.utils.account_locks import get_account_lock
+from backend.utils.names import validate_storage_name
+from backend.utils.proxy import require_proxy_dict
+from backend.utils.tg_session import get_account_api_credentials, get_account_profile
 
 SOURCE = Path(__file__).resolve().parents[2] / "telebox"
+logger = logging.getLogger(__name__)
 
 
 def node_heap_limit_mb() -> int:
@@ -34,6 +40,15 @@ def node_heap_limit_mb() -> int:
     except ValueError:
         requested = 128
     return min(512, max(64, requested))
+
+
+def max_workers() -> int:
+    """Bound total Node workers as well as each worker's heap."""
+    try:
+        requested = int(os.getenv("TELEBOX_MAX_WORKERS", "2"))
+    except ValueError:
+        requested = 2
+    return min(8, max(1, requested))
 
 
 def worker_environment(directory: Path) -> dict[str, str]:
@@ -68,6 +83,8 @@ class TeleBoxService:
         self.locks: dict[str, asyncio.Lock] = {}
         self.logs: dict[str, deque] = {}
         self.secrets: dict[str, list[str]] = {}
+        self._admission_lock = asyncio.Lock()
+        self._starting: set[str] = set()
         self.closing = False
 
     def _account(self, account: str) -> str:
@@ -83,9 +100,9 @@ class TeleBoxService:
 
     def rename_account_data(self, old: str, new: str) -> None:
         """Move account-local TeleBox state after TG Manage account rename succeeds."""
-        old_dir, new_dir = self.directory(old), self.directory(new)
-        if old_dir.exists():
-            if new_dir.exists():
+        old_dir, new_dir = self._safe_directory(old, marker_required=False), self.directory(new)
+        if old_dir is not None:
+            if self._is_link(new_dir) or new_dir.exists():
                 raise ValueError("目标账号已有 TeleBox 数据，请先处理冲突")
             old_dir.replace(new_dir)
             marker = new_dir / "panel-state.json"
@@ -104,6 +121,141 @@ class TeleBoxService:
         self.logs.pop(account, None)
         self.secrets.pop(account, None)
 
+    async def _reserve_worker_slot(self, account: str) -> None:
+        async with self._admission_lock:
+            active = {name for name, worker in self.workers.items()
+                      if worker["process"].returncode is None}
+            if len(active | self._starting) >= max_workers():
+                raise ValueError("TeleBox 运行账户已达到并发上限，请先停止其他账户")
+            self._starting.add(account)
+
+    async def _release_worker_slot(self, account: str) -> None:
+        async with self._admission_lock:
+            self._starting.discard(account)
+
+    @staticmethod
+    def _is_link(path: Path) -> bool:
+        return path.is_symlink() or bool(getattr(path, "is_junction", lambda: False)())
+
+    def _safe_directory(self, account: str, *, marker_required: bool) -> Path | None:
+        """Verify ownership before recursively deleting account-local state."""
+        if self._is_link(self.root):
+            raise ValueError("TeleBox 数据根目录不能是链接")
+        directory = self.directory(account)
+        if self._is_link(directory):
+            raise ValueError("TeleBox 账户目录不是普通目录")
+        if not directory.exists():
+            return None
+        if not directory.is_dir():
+            raise ValueError("TeleBox 账户目录不是普通目录")
+        root = self.root.resolve(strict=True)
+        resolved = directory.resolve(strict=True)
+        if (root == self.source.resolve() or resolved.parent != root
+                or directory.name != hashlib.sha256(account.encode()).hexdigest()
+                or resolved == self.source.resolve() or self.source.resolve().is_relative_to(resolved)):
+            raise ValueError("TeleBox 账户目录不在预期位置")
+        marker = directory / "panel-state.json"
+        if self._is_link(marker):
+            raise ValueError("TeleBox 账户标记不能是链接")
+        if not marker.exists():
+            if marker_required:
+                raise ValueError("TeleBox 账户标记缺失")
+        else:
+            try:
+                state = json.loads(marker.read_text())
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise ValueError("TeleBox 账户标记损坏") from exc
+            if not isinstance(state, dict) or state.get("account") != account:
+                raise ValueError("TeleBox 账户标记与目录不匹配")
+        return directory
+
+    def _remove_directory(self, directory: Path) -> None:
+        # TeleBox runs on Linux. Its runtime flock also guards against another
+        # server process starting this account while local data is removed.
+        if os.name != "posix":
+            shutil.rmtree(directory)
+            return
+        import fcntl
+
+        lock_path = directory / "runtime.lock"
+        if self._is_link(lock_path):
+            raise ValueError("TeleBox 进程锁不能是链接")
+        flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(lock_path, flags, 0o600), "r+b") as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise ValueError("TeleBox 账户仍由其他服务进程管理") from exc
+            shutil.rmtree(directory)
+
+    async def purge_account_data(self, account: str) -> bool:
+        """Stop and remove one deleted account's isolated TeleBox directory."""
+        account = validate_storage_name(account, field_name="account_name")
+        lock = self.locks.setdefault(account, asyncio.Lock())
+        stopped = False
+        try:
+            async with lock:
+                # A same-name login may finish after account deletion. Hold
+                # its account lock through the final check and disk removal.
+                async with get_account_lock(account):
+                    if get_telegram_service().account_exists(account):
+                        return False
+                    await self._terminate_worker(account)
+                    stopped = True
+                    if get_telegram_service().account_exists(account):
+                        return False
+                    directory = self._safe_directory(account, marker_required=False)
+                    if directory is None:
+                        return False
+                    self._remove_directory(directory)
+                    return True
+        finally:
+            if stopped:
+                self.forget_account(account)
+
+    async def reconcile_orphan_data(self, live_names: set[str]) -> list[str]:
+        """Purge only marked TeleBox directories outside a trusted fresh inventory."""
+        if not isinstance(live_names, set) or not all(isinstance(name, str) for name in live_names):
+            raise ValueError("TeleBox 清理需要完整账户清单")
+        if self._is_link(self.root):
+            raise ValueError("TeleBox 数据根目录不能是链接")
+        if not self.root.exists():
+            return []
+        if not self.root.is_dir():
+            raise ValueError("TeleBox 数据根目录不是目录")
+        if self.root.resolve(strict=True) == self.source.resolve():
+            raise ValueError("TeleBox 数据根目录不能指向程序文件")
+        removed = []
+        for directory in self.root.iterdir():
+            if not re.fullmatch(r"[0-9a-f]{64}", directory.name):
+                continue
+            if self._is_link(directory) or not directory.is_dir():
+                logger.warning("跳过不可信 TeleBox 目录 %s", directory.name)
+                continue
+            marker = directory / "panel-state.json"
+            if self._is_link(marker) or not marker.is_file():
+                logger.warning("跳过无有效标记的 TeleBox 目录 %s", directory.name)
+                continue
+            try:
+                state = json.loads(marker.read_text())
+                account = state["account"]
+                if (not isinstance(account, str) or not account
+                        or validate_storage_name(account, field_name="account_name") != account
+                        or self.directory(account) != directory):
+                    raise ValueError("marker mismatch")
+            except (OSError, UnicodeError, ValueError, KeyError, TypeError):
+                logger.warning("跳过标记损坏的 TeleBox 目录 %s", directory.name)
+                continue
+            if account in live_names:
+                continue
+            # A login may have completed after the caller built its inventory.
+            # A stale positive cache safely preserves extra data for next time.
+            if get_telegram_service().account_exists(account):
+                continue
+            if await self.purge_account_data(account):
+                removed.append(account)
+        return removed
+
     def _log(self, account: str, message: str, level: str = "info"):
         self.logs.setdefault(account, deque(maxlen=300)).append({
             "time": datetime.now(timezone.utc).isoformat(), "level": level,
@@ -111,22 +263,33 @@ class TeleBoxService:
         })
 
     def _marker(self, account: str, enabled: bool):
-        path = self.directory(account) / "panel-state.json"
+        directory = self.directory(account)
+        if self._is_link(self.root) or self._is_link(directory):
+            raise ValueError("TeleBox 数据目录不能是链接")
+        directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self._safe_directory(account, marker_required=False)
+        path = directory / "panel-state.json"
         self._private_json(path, {"account": account, "enabled": enabled})
 
     @staticmethod
     def _private_json(path: Path, value: Any):
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        temporary = path.with_suffix(".tmp")
-        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w") as handle:
-            json.dump(value, handle)
-        temporary.replace(path)
-        path.chmod(0o600)
+        fd, temporary_name = tempfile.mkstemp(prefix=f"{path.name}.", suffix=".tmp", dir=path.parent)
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "w") as handle:
+                json.dump(value, handle)
+            temporary.replace(path)
+            path.chmod(0o600)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def _prepare(self, account: str) -> Path:
         directory = self.directory(account)
+        if self._is_link(self.root) or self._is_link(directory):
+            raise ValueError("TeleBox 数据目录不能是链接")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._safe_directory(account, marker_required=False)
         directory.chmod(0o700)
         # Core code is image-managed. Refresh it on every start so existing
         # accounts receive fixes too; keep plugins and account data writable
@@ -191,61 +354,83 @@ class TeleBoxService:
         node = shutil.which(os.getenv("TELEBOX_NODE", "node"))
         if not node or not (self.source / "node_modules/teleproto").exists():
             raise ValueError("TeleBox 需要 Node.js 24 和已安装的依赖，请重新构建镜像")
-        directory = self._prepare(account)
-        lock_handle = (directory / "runtime.lock").open("a")
         try:
-            fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            lock_handle.close()
-            raise ValueError("此账号 TeleBox 已由另一个服务进程管理")
-        service = get_telegram_service()
-        try:
-            client, proxy = service._build_account_client(account, no_updates=True)
-        except BaseException:
-            lock_handle.close()
+            await self._reserve_worker_slot(account)
+        except ValueError:
+            self._log(account, "TeleBox 运行账户已达到并发上限", "error")
             raise
-        credentials = {"api_id": client.api_id, "api_hash": client.api_hash}
+        try:
+            directory = self._prepare(account)
+            lock_handle = (directory / "runtime.lock").open("a")
+            try:
+                fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                lock_handle.close()
+                raise ValueError("此账号 TeleBox 已由另一个服务进程管理")
+            try:
+                credentials, secret_values = self._worker_credentials(account)
+            except BaseException:
+                lock_handle.close()
+                raise
+            self.secrets[account] = secret_values
+            # Account-local .env supplies plugin-specific settings.
+            env = worker_environment(directory)
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
+                    "-r", "tsconfig-paths/register", "-r", "./scripts/esbuild-register.cjs",
+                    "./panel/worker.ts", cwd=directory, env=env,
+                    stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    start_new_session=True, limit=65536)
+            except BaseException:
+                lock_handle.close()
+                self.secrets.pop(account, None)
+                raise
+            worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
+            ready = asyncio.get_running_loop().create_future()
+            worker["pending"]["init"] = ready
+            self.workers[account] = worker
+            worker["readers"] = [asyncio.create_task(self._stdout(account, worker)), asyncio.create_task(self._stderr(account, worker)), asyncio.create_task(self._watch(account, worker))]
+            try:
+                self._marker(account, True)
+                await self._send(worker, {"action": "init", "id": "init", **credentials})
+                self._log(account, "TeleBox 正在启动独立账号会话")
+                try:
+                    result = await asyncio.wait_for(asyncio.shield(ready), 3)
+                    if not result.get("ok"):
+                        message = result.get("message") or "TeleBox 启动失败，请查看运行日志"
+                        raise ValueError(redact(message, self.secrets.get(account, [])))
+                except asyncio.TimeoutError:
+                    # QR authorization can legitimately take minutes. The later
+                    # state event and log report the actual outcome.
+                    pass
+                return self.status(account)
+            except BaseException:
+                await self._terminate_worker(account)
+                self.workers.pop(account, None)
+                self.secrets.pop(account, None)
+                raise
+        finally:
+            await self._release_worker_slot(account)
+
+    @staticmethod
+    def _worker_credentials(account: str) -> tuple[dict[str, Any], list[str]]:
+        # Reading saved credentials and route must not cache a disconnected
+        # Pyrogram Client for the independent Node worker.
+        api_id, api_hash = get_account_api_credentials(account)
+        proxy = require_proxy_dict((get_account_profile(account) or {}).get("proxy"))
+        credentials = {"api_id": api_id, "api_hash": api_hash}
+        secrets = [str(api_hash)]
         if proxy:
             scheme = proxy.get("scheme", "socks5")
             if scheme not in ("socks4", "socks5"):
-                lock_handle.close()
                 raise ValueError("TeleBox Telegram 连接需要 SOCKS4/5 代理")
             credentials["proxy"] = {"ip": proxy["hostname"], "port": proxy["port"],
                                     "socksType": 4 if scheme == "socks4" else 5,
                                     "username": proxy.get("username"), "password": proxy.get("password")}
-        self.secrets[account] = [str(credentials["api_hash"])]
-        if proxy and proxy.get("password"):
-            self.secrets[account].append(proxy["password"])
-        # Account-local .env supplies plugin-specific settings.
-        env = worker_environment(directory)
-        try:
-            process = await asyncio.create_subprocess_exec(
-                node, f"--max-old-space-size={node_heap_limit_mb()}", f"--localstorage-file={directory / 'cache/localstorage'}",
-                "-r", "tsconfig-paths/register", "-r", "./scripts/esbuild-register.cjs",
-                "./panel/worker.ts", cwd=directory, env=env,
-                stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-                start_new_session=True, limit=65536)
-        except BaseException:
-            lock_handle.close()
-            self.secrets.pop(account, None)
-            raise
-        worker = {"process": process, "status": "starting", "pending": {}, "lock": lock_handle, "tasks": set()}
-        ready = asyncio.get_running_loop().create_future()
-        worker["pending"]["init"] = ready
-        self.workers[account] = worker
-        self._marker(account, True)
-        worker["readers"] = [asyncio.create_task(self._stdout(account, worker)), asyncio.create_task(self._stderr(account, worker)), asyncio.create_task(self._watch(account, worker))]
-        await self._send(worker, {"action": "init", "id": "init", **credentials})
-        self._log(account, "TeleBox 正在启动独立账号会话")
-        try:
-            result = await asyncio.wait_for(asyncio.shield(ready), 3)
-            if not result.get("ok"):
-                raise ValueError(result.get("message") or "TeleBox 启动失败，请查看运行日志")
-        except asyncio.TimeoutError:
-            # QR authorization can legitimately take minutes. The later
-            # state event and log report the actual outcome.
-            pass
-        return self.status(account)
+            if proxy.get("password"):
+                secrets.append(proxy["password"])
+        return credentials, secrets
 
     async def refresh_account_proxy(self, account: str):
         """Reconnect an enabled running worker after an explicit route edit."""
@@ -283,27 +468,46 @@ class TeleBoxService:
 
     async def _stdout(self, account: str, worker: dict):
         try:
-            while line := await worker["process"].stdout.readline():
+            while True:
+                try:
+                    line = await worker["process"].stdout.readline()
+                except ValueError:
+                    # StreamReader discards an over-limit line. Keep draining
+                    # stdout or the child can block on its full pipe.
+                    self._log(account, "TeleBox 控制通道单行过长，已丢弃", "error")
+                    continue
+                if not line:
+                    break
                 try:
                     event = json.loads(line)
                 except (ValueError, UnicodeDecodeError):
                     self._log(account, line.decode(errors="replace"))
                     continue
+                if not isinstance(event, dict):
+                    self._log(account, "TeleBox 控制通道收到非对象数据", "error")
+                    continue
                 if event.get("event") == "login_token":
+                    if worker["tasks"]:
+                        self._log(account, "TeleBox 重复授权请求已忽略")
+                        continue
                     task = asyncio.create_task(self._accept(account, worker, event.get("token", "")))
                     worker["tasks"].add(task)
                     task.add_done_callback(worker["tasks"].discard)
-                elif event.get("event") == "state" and event.get("status") in {"running", "password_required", "failed"}:
+                elif (event.get("event") == "state" and isinstance(event.get("status"), str)
+                      and event["status"] in {"running", "password_required", "failed"}):
                     worker["status"] = event["status"]
                 elif event.get("event") == "result":
-                    future = worker["pending"].pop(event.get("id"), None)
+                    identifier = event.get("id")
+                    if not isinstance(identifier, str):
+                        continue
+                    future = worker["pending"].pop(identifier, None)
                     if future and not future.done():
                         future.set_result(event)
-                    if event.get("id") == "init" and not event.get("ok"):
+                    if identifier == "init" and not event.get("ok"):
                         worker["status"] = "failed"
                         worker["message"] = redact(event.get("message") or "TeleBox 启动失败，请检查运行日志", self.secrets.get(account, []))
                         self._log(account, worker["message"], "error")
-        except (ValueError, OSError):
+        except OSError:
             self._log(account, "TeleBox 控制通道已关闭", "error")
 
     async def _stderr(self, account: str, worker: dict):
@@ -340,10 +544,8 @@ class TeleBoxService:
         await asyncio.gather(*worker["readers"][:2], return_exceptions=True)
         self.secrets.pop(account, None)
 
-    async def _stop_locked(self, account: str, *, disable: bool):
+    async def _terminate_worker(self, account: str) -> None:
         worker = self.workers.get(account)
-        if disable:
-            self._marker(account, False)
         if worker:
             worker["stopping"] = True
         if worker and worker["process"].returncode is None:
@@ -363,6 +565,11 @@ class TeleBoxService:
             await asyncio.gather(*worker["readers"], return_exceptions=True)
         if worker and worker["process"].returncode is not None:
             worker["status"] = "stopped"
+
+    async def _stop_locked(self, account: str, *, disable: bool):
+        if disable:
+            self._marker(account, False)
+        await self._terminate_worker(account)
         return self.status(account)
 
     async def stop(self, account: str, *, disable: bool = True):
@@ -427,12 +634,16 @@ class TeleBoxService:
 
     async def startup(self):
         self.closing = False
-        if not self.root.exists():
+        if self._is_link(self.root) or not self.root.is_dir():
             return
         for marker in self.root.glob("*/panel-state.json"):
             try:
+                if self._is_link(marker) or self._is_link(marker.parent):
+                    continue
                 state = json.loads(marker.read_text())
-                if state.get("enabled") and marker.parent == self.directory(state["account"]):
+                if (isinstance(state, dict) and state.get("enabled")
+                        and marker.parent == self.directory(state["account"])
+                        and self._safe_directory(state["account"], marker_required=True)):
                     await self.start(state["account"])
             except Exception:
                 continue

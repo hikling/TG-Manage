@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 
 from fastapi import (
@@ -626,21 +625,42 @@ async def delete_account(
         account_name = validate_storage_name(account_name, field_name="account_name")
         from backend.services.telebox import get_telebox_service
 
-        # 账号即将失去授权时先停止独立 TeleBox 进程；用户插件数据保留在私有目录。
+        telebox = get_telebox_service()
+        # Stop the independent worker before revoking the account session.
         if get_telegram_service().account_exists(account_name):
-            await get_telebox_service().stop(account_name)
+            await telebox.stop(account_name)
         success = await get_telegram_service().delete_account(account_name)
 
         if success:
             from backend.core.config import get_settings
+            from backend.services.device_keepalive import get_device_keepalive_service
+
+            cleanup_errors = []
+            try:
+                await telebox.purge_account_data(account_name)
+            except Exception as exc:
+                cleanup_errors.append("TeleBox")
+                logger.error("删除账号后清理 TeleBox 失败（%s）", type(exc).__name__)
+            try:
+                get_device_keepalive_service().remove_account_state(account_name)
+            except Exception as exc:
+                cleanup_errors.append("保活状态")
+                logger.error("删除账号后清理保活状态失败（%s）", type(exc).__name__)
 
             avatar_dir = get_settings().resolve_workdir() / "avatars"
             for suffix in (".jpg", ".no_avatar"):
-                with contextlib.suppress(OSError):
+                try:
                     (avatar_dir / f"{account_name}{suffix}").unlink(missing_ok=True)
-            get_telebox_service().forget_account(account_name)
+                except OSError as exc:
+                    cleanup_errors.append("头像缓存")
+                    logger.error("删除账号后清理头像缓存失败（%s）", type(exc).__name__)
             return DeleteAccountResponse(
-                success=True, message=f"账号 {account_name} 已删除"
+                success=True,
+                message=(
+                    f"账号 {account_name} 已删除"
+                    if not cleanup_errors else
+                    f"账号 {account_name} 已删除，但部分数据清理失败：{', '.join(sorted(set(cleanup_errors)))}"
+                ),
             )
         else:
             raise HTTPException(
