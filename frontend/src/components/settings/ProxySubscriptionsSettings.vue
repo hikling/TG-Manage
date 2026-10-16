@@ -49,6 +49,12 @@ function refreshedAt(source: SubscriptionSourceStatus | undefined) {
   if (!value || Number.isNaN(Date.parse(value))) return t('settings.subscriptions.neverRefreshed')
   return formatDateTime(value, locale.value === 'en' ? 'en-US' : 'zh-CN')
 }
+function displayCount(value: number | undefined) {
+  return Number.isFinite(value) ? value : '—'
+}
+function sourceLabel(source: SubscriptionSourceStatus) {
+  return source.label && !['主订阅', '兜底订阅'].includes(source.label) ? source.label : null
+}
 const routeMode = computed(() => {
   const mode = props.status?.route_mode
   if (mode === 'primary' || mode === 'fallback' || mode === 'direct' || mode === 'setup_required' || mode === 'mixed') {
@@ -66,14 +72,14 @@ const routeMode = computed(() => {
     </div>
     <template v-if="status">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="kind in (['primary', 'fallback'] as const)" :key="kind" class="border border-gray-200 dark:border-gray-700 rounded-md p-4 space-y-3">
+        <div v-for="kind in (['primary', 'fallback'] as const)" :key="kind" class="min-w-0 rounded-xl border border-gray-200 p-4 dark:border-gray-700 sm:p-5">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <h3 class="font-semibold text-sm">{{ t(`settings.subscriptions.${kind}`) }}</h3>
-            <span class="text-xs text-gray-600 dark:text-gray-300">{{ sourceStatus(status[kind]) }}</span>
+            <span class="rounded-full border border-gray-200 px-2.5 py-0.5 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300">{{ sourceStatus(status[kind]) }}</span>
           </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ status[kind].label || t('settings.subscriptions.noLabel') }}</p>
-          <label class="ui-label" :for="`subscription-${kind}`">{{ t('settings.subscriptions.url') }}</label>
-          <div class="relative">
+          <p v-if="sourceLabel(status[kind])" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ sourceLabel(status[kind]) }}</p>
+          <label class="ui-label mt-5 block" :for="`subscription-${kind}`">{{ t('settings.subscriptions.url') }}</label>
+          <div class="relative mt-1.5">
             <input
               :id="`subscription-${kind}`"
               :value="kind === 'primary' ? modelValue.primaryUrl : modelValue.fallbackUrl"
@@ -87,16 +93,25 @@ const routeMode = computed(() => {
             >
             <button type="button" class="absolute right-0 top-0 h-full w-11 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-gray-100" :aria-label="visible[kind] ? t('settings.hideSecret') : t('settings.showSecret')" :aria-pressed="visible[kind]" @click="visible[kind] = !visible[kind]"><EyeOff v-if="visible[kind]" class="w-4 h-4" /><Eye v-else class="w-4 h-4" /></button>
           </div>
-          <label class="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+          <label class="mt-3 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
             <input type="checkbox" :checked="kind === 'primary' ? modelValue.clearPrimary : modelValue.clearFallback" :disabled="loading" @change="update(kind === 'primary' ? { clearPrimary: ($event.target as HTMLInputElement).checked, primaryUrl: '' } : { clearFallback: ($event.target as HTMLInputElement).checked, fallbackUrl: '' })">
             {{ t('settings.subscriptions.disable') }}
           </label>
-          <dl class="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
-            <div><dt>{{ t('settings.subscriptions.imported') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].imported_count }}</dd></div>
-            <div><dt>{{ t('settings.subscriptions.usable') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].usable_count }}</dd></div>
-            <div><dt>{{ t('settings.subscriptions.unsupported') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].unsupported_count }}</dd></div>
+          <dl class="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-800/40">
+            <div class="min-w-0 px-3 py-3 sm:px-4">
+              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.imported') }}</dt>
+              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-gray-800 dark:text-gray-100">{{ displayCount(status[kind].imported_count) }}</dd>
+            </div>
+            <div class="min-w-0 border-l border-gray-200 px-3 py-3 dark:border-gray-700 sm:px-4">
+              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.usable') }}</dt>
+              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-sky-700 dark:text-sky-300">{{ displayCount(status[kind].usable_count) }}</dd>
+            </div>
+            <div class="min-w-0 border-l border-gray-200 px-3 py-3 dark:border-gray-700 sm:px-4">
+              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.unsupported') }}</dt>
+              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-gray-800 dark:text-gray-100">{{ displayCount(status[kind].unsupported_count) }}</dd>
+            </div>
           </dl>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.lastRefreshed') }}: {{ refreshedAt(status[kind]) }}</p>
+          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.lastRefreshed') }}: {{ refreshedAt(status[kind]) }}</p>
         </div>
       </div>
       <div class="flex flex-wrap items-end gap-4">

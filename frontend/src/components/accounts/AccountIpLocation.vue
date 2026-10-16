@@ -14,8 +14,9 @@ const source = computed(() => {
     : t('accounts.ipLocation.sources.unknown')
 })
 const location = computed(() => {
+  if (props.account.exit_lookup_status === 'failed') return t('accounts.ipLocation.failedLocation')
   if (!props.account.exit_ip || !props.account.exit_checked_at) {
-    return t(props.account.exit_lookup_status === 'failed' ? 'accounts.ipLocation.failedLocation' : 'accounts.ipLocation.unknown')
+    return t('accounts.ipLocation.unknown')
   }
   return props.account.exit_country || t('accounts.ipLocation.unknown')
 })
@@ -41,8 +42,8 @@ const details = computed(() => {
       <span class="account-ip-route">{{ source }}</span>
     </div>
     <span class="account-tile-status" :class="{
-      'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip,
-      'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable',
+      'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
+      'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
     }">
       <span class="account-status-dot" aria-hidden="true" />{{ location }}
     </span>

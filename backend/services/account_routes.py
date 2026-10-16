@@ -35,6 +35,7 @@ logger = logging.getLogger("backend.account_routes")
 HEALTH_INTERVAL_SECONDS = 300
 CONFIRM_SECONDS = 60
 GEO_TTL_SECONDS = 3600
+GEO_FAILURE_RETRY_SECONDS = 300
 GEO_ENDPOINT = "https://ipwho.is/"
 GEO_FALLBACK_ENDPOINT = "https://ipapi.co/json/"
 
@@ -225,7 +226,7 @@ class AccountRouteService:
                 "status": str(raw.get("status") or "unconfigured"),
                 "last_refreshed_at": raw.get("last_refreshed_at"),
                 "imported_count": sum(1 for node in self._nodes() if node.source == source),
-                "usable_count": sum(1 for node in self._nodes() if node.source == source and self._state["health"].get(self._key(node), {}).get("healthy") is True),
+                "usable_count": sum(1 for node in self._nodes() if node.source == source and self._state["health"].get(self._key(node), {}).get("healthy") is True and not self._geo_quarantined(self._key(node))),
                 "unsupported_count": int(raw.get("unsupported_count") or 0),
                 "label": "主订阅" if source == "primary" else "兜底订阅",
             }
@@ -373,6 +374,9 @@ class AccountRouteService:
             elif key not in self._confirm_tasks:
                 self._confirm_tasks[key] = asyncio.create_task(self._confirm_after(key))
 
+    def _geo_quarantined(self, key: str) -> bool:
+        return float(self._state["health"].get(key, {}).get("geo_failed_until") or 0) > time.time()
+
     async def _confirm_after(self, key: str) -> None:
         try:
             await asyncio.sleep(CONFIRM_SECONDS)
@@ -419,7 +423,7 @@ class AccountRouteService:
             if isinstance(entry, dict) and entry.get("mode") != "setup_required"
             and (
                 (cached := self._geo_cache.get(entry.get("key") or "direct")) is None
-                or now - cached[0] >= (GEO_TTL_SECONDS if cached[1].get("ip") else 300)
+                or now - cached[0] >= (GEO_TTL_SECONDS if cached[1].get("ip") and cached[1].get("country") else GEO_FAILURE_RETRY_SECONDS)
             )
         }
         self._schedule_geo_for_accounts(changed | geo_due)
@@ -454,7 +458,8 @@ class AccountRouteService:
             key = self._key(node)
             health = self._state["health"].get(key, {})
             if (key == exclude or key in occupied_keys or (source and node.source != source)
-                    or health.get("healthy") is not True or self.runtime.port_for(key) is None
+                    or health.get("healthy") is not True or self._geo_quarantined(key)
+                    or self.runtime.port_for(key) is None
                     or node_ips.get(key) in used_ips):
                 continue
             eligible.append(node)
@@ -502,7 +507,8 @@ class AccountRouteService:
             health = self._state["health"].get(current_key, {}) if current_key else {}
             ip = node_ips.get(current_key) if current_key else None
             if (current_key in nodes and current_key not in occupied_keys and ip not in used_ips
-                    and self.runtime.port_for(current_key) is not None and health.get("bad_streak", 0) < 2):
+                    and self.runtime.port_for(current_key) is not None and health.get("bad_streak", 0) < 2
+                    and not self._geo_quarantined(current_key)):
                 sticky[account] = nodes[current_key]
                 occupied_keys.add(current_key)
                 if ip:
@@ -636,7 +642,7 @@ class AccountRouteService:
         cached = self._geo_cache.get(cache_key)
         if (not force and cached
                 and (fresh_after is None or cached[0] >= fresh_after)
-                and time.monotonic() - cached[0] < (GEO_TTL_SECONDS if cached[1].get("ip") else 300)):
+                and time.monotonic() - cached[0] < (GEO_TTL_SECONDS if cached[1].get("ip") and cached[1].get("country") else GEO_FAILURE_RETRY_SECONDS)):
             geo = cached[1]
         else:
             port = self.runtime.port_for(key, entry.get("runtime_generation")) if key else None
@@ -657,15 +663,22 @@ class AccountRouteService:
         async with self._lock:
             current = self._state["assignments"].get(account)
             if current and current.get("key") == key and current.get("generation") == generation:
+                verified = bool(geo["ip"] and geo["country"])
                 current.update({"exit_ip": geo["ip"], "exit_country": geo["country"], "exit_region": geo["region"], "exit_checked_at": _now() if geo["ip"] else None,
-                                "exit_lookup_status": "verified" if geo["ip"] else "failed"})
+                                "exit_lookup_status": "verified" if verified else "failed"})
+                if key:
+                    health = self._state["health"].setdefault(key, {})
+                    if verified:
+                        health.pop("geo_failed_until", None)
+                    else:
+                        health["geo_failed_until"] = time.time() + GEO_FAILURE_RETRY_SECONDS
                 self._save_state()
                 duplicate = bool(key and geo["ip"] and any(
                     name != account and isinstance(other, dict) and other.get("key")
                     and other.get("key") != key and other.get("exit_ip") == geo["ip"]
                     for name, other in self._state["assignments"].items()
                 ))
-                changed = self._reconcile() if duplicate else set()
+                changed = self._reconcile() if duplicate or (key and not verified) else set()
             else:
                 changed = set()
         await self._notify(changed)

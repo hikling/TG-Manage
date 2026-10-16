@@ -363,10 +363,12 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.service._state["health"][key]["healthy"])
         self.assertGreaterEqual(self.service._settings_projection()["primary"]["usable_count"], 1)
 
-    async def test_geo_falls_back_through_same_route_and_marks_failed_after_both_providers(self):
+    async def test_geo_falls_back_through_same_route_and_rotates_after_both_providers_fail(self):
+        self.service._all_accounts = lambda: {"one"}
         self.service._secret["ever_configured"] = True
         key = self.service._key(self.primary)
         self.service._record_sample(key, 90)
+        self.service._record_sample(self.service._key(self.fallback), 90)
         self.service._reconcile()
         requested = []
         proxies = []
@@ -403,8 +405,52 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
 
         with patch("backend.services.account_routes.httpx.AsyncClient", FailingGeoClient):
             result = await self.service.refresh_account_exit("one")
-        self.assertIsNone(result["exit_ip"])
+        self.assertEqual(result["route_mode"], "fallback")
+        self.assertEqual(result["exit_lookup_status"], "pending")
+        self.assertGreater(self.service._state["health"][key]["geo_failed_until"], time.time())
+        self.assertEqual(self.service._settings_projection()["primary"]["usable_count"], 0)
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", GeoClient):
+            result = await self.service.refresh_account_exit("one")
+        self.assertEqual(result["route_mode"], "fallback")
+        self.assertEqual(result["exit_lookup_status"], "verified")
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", FailingGeoClient):
+            result = await self.service.refresh_account_exit("one")
+            self.assertEqual(result["route_mode"], "direct")
+            result = await self.service.refresh_account_exit("one")
         self.assertEqual(result["exit_lookup_status"], "failed")
+        self.assertIsNone(result["exit_ip"])
+
+    async def test_missing_country_rotates_node_and_quarantine_prevents_immediate_reuse(self):
+        self.service._all_accounts = lambda: {"one"}
+        self.service._secret["ever_configured"] = True
+        primary_key = self.service._key(self.primary)
+        fallback_key = self.service._key(self.fallback)
+        for key in (primary_key, fallback_key):
+            self.service._record_sample(key, 90)
+            self.service._record_sample(key, 90)
+        self.service._reconcile()
+
+        class NoCountryGeoClient:
+            def __init__(self, **_kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+            async def get(self, _url):
+                return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"ip": "8.8.8.8"})
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", NoCountryGeoClient):
+            result = await self.service.refresh_account_exit("one")
+        self.assertEqual(result["route_mode"], "fallback")
+        self.assertEqual(self.service._state["assignments"]["one"]["key"], fallback_key)
+        self.service._reconcile()
+        self.assertEqual(self.service.account_route_status("one")["route_mode"], "fallback")
 
     async def test_refresh_accepts_unreachable_primary_and_selects_healthy_fallback(self):
         self.service._secret["ever_configured"] = True
