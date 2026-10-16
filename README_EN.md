@@ -66,6 +66,8 @@ Read the **[full v2.5.0 release guide](docs/releases/v2.5.0.md)** for timings, m
   </tr>
 </table>
 <a id="quick-start"></a>
+
+
 ## 🚀 Quick start
 
 Small deployments support a minimum of 1 vCPU / 1 GiB RAM, with no artificial upper limit. Scale according to account count and actual workload. Install Docker Engine, Docker Compose v2, and Git. Ensure the server can reach Telegram and download build dependencies, then run:
