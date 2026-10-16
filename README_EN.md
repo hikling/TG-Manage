@@ -23,46 +23,48 @@ Read the **[full v2.5.0 release guide](docs/releases/v2.5.0.md)** for timings, m
 <a id="features"></a>
 ## ✨ Core features
 
-### 1. 👥 Account access, authorization, and migration
-
-- Manage multiple Telegram accounts with phone-code, QR, and 2FA sign-in.
-- The sign-in flow shows Telegram's actual code delivery method, the next available method, and the resend countdown.
-- Export and import password-encrypted `.tglogin` backups for main-account authorization; TeleBox authorization and panel settings remain separate.
-
-### 2. 🌐 Per-account Xray routes and automatic failover
-
-- Xray-core is included. Configure primary and fallback subscriptions; each healthy node serves at most one account, while overflow accounts explicitly use direct access.
-- Scheduled checks cover latency, connectivity, and public exit IP. A route switches after two consecutive abnormal results and returns to a preferred route only after stable recovery.
-- Account cards show the exit country, public IP, route source, and health state. Settings separates imported, usable, and unsupported nodes.
-
-### 3. 🩺 Scoped checks and the daily midnight report
-
-- A card check covers one account. Manual batch checking covers selected accounts and cleans orphaned account metadata and matching TeleBox data from the server.
-- A separate 00:00 job checks all accounts and routes. With Bot notifications enabled, it also checks the preceding 24 hours of Telegram official messages and sends summaries and details.
-- Manual checks, the Bot connection test, and the midnight report have separate entry points and never trigger one another.
-
-### 4. 🤖 On-demand verification codes through the private Bot
-
-- The configured private target can use `/me` for account numbers, names, and remarks, then `/code 4` or `/code account-name` for codes from the last five minutes.
-- Identical full commands have a 45-second cooldown; different commands may follow immediately. Idle operation never scans account messages.
-
-### 5. 🔌 Isolated TeleBox runtime
-
-- Each enabled account gets a separate Telegram session, runtime directory, and process, with status and start, stop, and log-out controls on the account card.
-- Logging out of TeleBox does not sign out the main managed account. Redacted process errors go to the server log, and the panel does not retain per-account runtime logs.
-- The pinned upstream revision is recorded in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json).
-
-### 6. 💬 Optional chat center
-
-- Browse and search group conversations per account, send attachments, reply, edit, and delete messages.
-- Chat can be enabled or disabled independently from account management, checks, and TeleBox.
-
-### 7. 🎨 Panel, security, and long-running operation
-
-- Includes the dashboard, accent colors, custom covers, panel TOTP, data backups, and an in-place upgrade path.
-- Node probes, avatar concurrency and caching, service logs, and error buffers have explicit bounds to reduce memory and cache growth during long-running deployments.
-- The About page displays the stable release version and compares updates with stable-version semantics, avoiding development-version false positives.
-
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>👥 Multi-account management</h3>
+      <p>Sign in by code, QR, or 2FA, and migrate main-account authorization with an encrypted <code>.tglogin</code> file.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🌐 Per-account Xray routes</h3>
+      <p>Each account gets an exclusive healthy node where possible, using primary, fallback, then direct routing.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🔄 Automatic failover</h3>
+      <p>Scheduled checks cover latency, connectivity, and exit IP; two abnormal results switch the route.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🩺 Scoped status checks</h3>
+      <p>Card checks cover one account; manual batch checks cover selected accounts and clean orphaned server data.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>📨 Daily midnight report</h3>
+      <p>At 00:00, all accounts and routes are checked, with the previous 24 hours of official messages summarized by Bot.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>🤖 Private Bot codes</h3>
+      <p>Use <code>/me</code> for account numbers, then <code>/code number</code> or an account name to retrieve a recent code.</p>
+    </td>
+  </tr>
+  <tr>
+    <td valign="top" width="50%">
+      <h3>🔌 Isolated TeleBox</h3>
+      <p>Each account has a separate session, directory, and process; TeleBox logout leaves the main authorization intact.</p>
+    </td>
+    <td valign="top" width="50%">
+      <h3>💬 Chat and panel tools</h3>
+      <p>Includes optional chat, themes and covers, TOTP, backup upgrades, and bounded caches and logs.</p>
+    </td>
+  </tr>
+</table>
 <a id="quick-start"></a>
 ## 🚀 Quick start
 
