@@ -22,6 +22,12 @@ const siteUrl =
 const DOC_PAGES = [
   { route: "/", file: "index.md", priority: "1.0", changefreq: "weekly" },
   { route: "/features", file: "features.md", priority: "0.9", changefreq: "monthly" },
+  {
+    route: "/releases/v2.5.0",
+    file: "releases/v2.5.0.md",
+    priority: "0.9",
+    changefreq: "monthly",
+  },
   { route: "/README", file: "README.md", priority: "0.8", changefreq: "monthly" },
   { route: "/faq", file: "faq.md", priority: "0.7", changefreq: "monthly" },
   {
