@@ -78,8 +78,8 @@ describe('useSettingsPage (mount + dirty)', () => {
     api.getRuntimeStatus.mockResolvedValue({ uptime: 1 })
     api.getMemoryStats.mockResolvedValue({ rss: 1 })
     api.getProxySubscriptions.mockResolvedValue({
-      primary: { configured: true, status: 'healthy', last_refreshed_at: null, usable_count: 2, unsupported_count: 0, label: 'Provider' },
-      fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, usable_count: 0, unsupported_count: 0, label: null },
+      primary: { configured: true, status: 'healthy', last_refreshed_at: null, imported_count: 2, usable_count: 2, unsupported_count: 0, label: 'Provider' },
+      fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, imported_count: 0, usable_count: 0, unsupported_count: 0, label: null },
       latency_threshold_ms: 800,
       route_mode: 'primary',
     })
@@ -209,5 +209,24 @@ describe('useSettingsPage (mount + dirty)', () => {
     await result.saveSubscriptions()
     expect(api.saveProxySubscriptions).toHaveBeenCalledWith('tok', { primary_url: null })
     unmount()
+  })
+
+  it('polls saved node health without overwriting an unsaved subscription draft', async () => {
+    const intervals = vi.spyOn(globalThis, 'setInterval')
+    const { result, unmount } = mountComposable(() => useSettingsPage())
+    await vi.waitFor(() => expect(result.pageLoading.value).toBe(false))
+    result.subscriptionDraft.value.primaryUrl = 'https://example.org/private'
+    api.getProxySubscriptions.mockResolvedValue({
+      ...result.subscriptions.value,
+      primary: { ...result.subscriptions.value!.primary, imported_count: 3, usable_count: 1 },
+    })
+    const poll = intervals.mock.calls.find(([, delay]) => delay === 30_000)?.[0]
+    expect(poll).toBeTypeOf('function')
+    await (poll as () => Promise<void>)()
+    expect(result.subscriptions.value?.primary.usable_count).toBe(1)
+    expect(result.subscriptionDraft.value.primaryUrl).toBe('https://example.org/private')
+    expect(result.subscriptionDirty.value).toBe(true)
+    unmount()
+    intervals.mockRestore()
   })
 })

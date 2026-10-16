@@ -44,4 +44,16 @@ describe('account IP location', () => {
     expect(wrapper.text()).toContain('直连')
     expect(wrapper.text()).toContain('198.51.100.7')
   })
+
+  it('distinguishes failed lookup from a pending lookup', async () => {
+    const wrapper = mount(AccountIpLocation, {
+      props: { account: account({ exit_ip: null, exit_checked_at: null, exit_lookup_status: 'pending' }) },
+      global: { plugins: [i18n] },
+    })
+    expect(wrapper.text()).toContain('IP 待验证')
+    await wrapper.setProps({ account: account({ exit_ip: null, exit_checked_at: null, exit_lookup_status: 'failed' }) })
+    expect(wrapper.text()).toContain('定位失败')
+    expect(wrapper.text()).toContain('IP 检测失败')
+    expect(wrapper.attributes('title')).toContain('点击检测状态重试')
+  })
 })

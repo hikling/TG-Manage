@@ -111,6 +111,7 @@ class AccountInfo(BaseModel):
     exit_country: Optional[str] = None
     exit_region: Optional[str] = None
     exit_checked_at: Optional[str] = None
+    exit_lookup_status: Literal["pending", "verified", "failed"] = "pending"
     shared_node: bool = False
     status_message: Optional[str] = None
     status_code: Optional[str] = None
@@ -230,6 +231,7 @@ class AccountStatusItem(BaseModel):
     exit_country: Optional[str] = None
     exit_region: Optional[str] = None
     exit_checked_at: Optional[str] = None
+    exit_lookup_status: Literal["pending", "verified", "failed"] = "pending"
     shared_node: bool = False
     needs_relogin: bool = False
     user_id: Optional[int] = None

@@ -93,6 +93,7 @@ export interface AccountInfo {
   exit_country?: string | null;
   exit_region?: string | null;
   exit_checked_at?: string | null;
+  exit_lookup_status?: 'pending' | 'verified' | 'failed';
   shared_node?: boolean;
   status?: "connected" | "invalid" | "checking" | "error" | string;
   status_message?: string | null;
@@ -130,6 +131,7 @@ export interface AccountStatusItem {
   exit_country?: string | null;
   exit_region?: string | null;
   exit_checked_at?: string | null;
+  exit_lookup_status?: AccountInfo['exit_lookup_status'];
   shared_node?: boolean;
   telebox?: { account: string; status: string; enabled: boolean; authorized: boolean; message?: string } | null;
 }

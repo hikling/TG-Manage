@@ -335,13 +335,76 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.service._secret["primary_url"] = "https://example.org/sub?token=hidden"
         self.service._record_sample(self.service._key(self.primary), 100)
         before = self.service._secret["nodes"]["primary"]
-        with patch("backend.services.account_routes.fetch_subscription", side_effect=SubscriptionError("SUBSCRIPTION_FETCH_FAILED")):
+        with patch("backend.services.account_routes.fetch_subscription", side_effect=SubscriptionError("SUBSCRIPTION_FETCH_FAILED")), patch(
+            "backend.services.account_routes._probe_socks_port", return_value=None
+        ):
             await self.service.refresh_subscriptions()
         self.assertEqual(self.service._secret["nodes"]["primary"], before)
         projection = await self.service.get_subscription_settings()
         self.assertTrue(projection["primary"]["configured"])
         self.assertNotIn("hidden", repr(projection))
         self.assertEqual(projection["primary"]["status"], "SUBSCRIPTION_FETCH_FAILED")
+
+    async def test_unchanged_subscription_refresh_rechecks_nodes_with_recovery_hysteresis(self):
+        self.service._secret["ever_configured"] = True
+        self.service._secret["primary_url"] = "https://example.org/primary"
+        key = self.service._key(self.primary)
+        self.service._record_sample(key, None)
+        self.service._record_sample(key, None)
+        document = b"trojan://secret@example.org:443?security=tls\ntrojan://secret2@example.com:443?security=tls"
+        with patch("backend.services.account_routes.fetch_subscription", return_value=document), patch(
+            "backend.services.account_routes._probe_socks_port", return_value=90
+        ) as probe:
+            await self.service.refresh_subscriptions()
+            self.assertGreaterEqual(probe.await_count, 2)
+            self.assertEqual(self.service._settings_projection()["primary"]["imported_count"], 2)
+            self.assertFalse(self.service._state["health"][key]["healthy"])
+            await self.service.refresh_subscriptions()
+        self.assertTrue(self.service._state["health"][key]["healthy"])
+        self.assertGreaterEqual(self.service._settings_projection()["primary"]["usable_count"], 1)
+
+    async def test_geo_falls_back_through_same_route_and_marks_failed_after_both_providers(self):
+        self.service._secret["ever_configured"] = True
+        key = self.service._key(self.primary)
+        self.service._record_sample(key, 90)
+        self.service._reconcile()
+        requested = []
+        proxies = []
+
+        class GeoClient:
+            def __init__(self, **kwargs):
+                proxies.append(kwargs.get("proxy"))
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *_args):
+                pass
+
+            async def get(self, url):
+                requested.append(url)
+                if url.endswith("ipwho.is/"):
+                    return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"success": False})
+                return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {
+                    "ip": "8.8.8.8", "country_name": "United States", "region": "California",
+                })
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", GeoClient):
+            result = await self.service.refresh_account_exit("one")
+        self.assertEqual(result["exit_ip"], "8.8.8.8")
+        self.assertEqual(result["exit_country"], "United States")
+        self.assertEqual(result["exit_lookup_status"], "verified")
+        self.assertEqual(len(requested), 2)
+        self.assertEqual(proxies, ["socks5://127.0.0.1:21001"])
+
+        class FailingGeoClient(GeoClient):
+            async def get(self, url):
+                return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"success": False})
+
+        with patch("backend.services.account_routes.httpx.AsyncClient", FailingGeoClient):
+            result = await self.service.refresh_account_exit("one")
+        self.assertIsNone(result["exit_ip"])
+        self.assertEqual(result["exit_lookup_status"], "failed")
 
     async def test_refresh_accepts_unreachable_primary_and_selects_healthy_fallback(self):
         self.service._secret["ever_configured"] = True

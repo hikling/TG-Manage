@@ -41,7 +41,9 @@ const teleboxStates = ref<Record<string, TeleBoxAccount>>({})
 const teleboxBusy = ref('')
 const teleboxPasswords = ref<Record<string, string>>({})
 let statusTimer: ReturnType<typeof setInterval> | undefined
+let routeStatusTimer: ReturnType<typeof setInterval> | undefined
 let teleboxStatesInFlight = false
+let routeStatesInFlight = false
 const pageLoading = ref(true)
 // 会话内头像 URL 缓存：避免每次刷新重复请求与重复创建 ObjectURL
 const avatarCache = new AvatarUrlCache()
@@ -202,6 +204,38 @@ const loadAccounts = async () => {
   }
 }
 
+const loadSavedRouteStates = async () => {
+  const token = getAuthToken()
+  if (!token || disposed || document.hidden || routeStatesInFlight || pageLoading.value) return
+  routeStatesInFlight = true
+  try {
+    // This GET reads saved route metadata only; node and IP probes stay in
+    // their scheduler or explicit account-check paths.
+    const latest = await accountsStore.refreshAccounts()
+    if (disposed || token !== getAuthToken()) return
+    const byName = new Map(latest.map(item => [item.name, item]))
+    for (const account of accounts.value) {
+      const route = byName.get(account.name)
+      if (!route || !account.raw) continue
+      account.raw.route_mode = route.route_mode
+      account.raw.route_status = route.route_status
+      account.raw.node_label = route.node_label
+      account.raw.latency_ms = route.latency_ms
+      account.raw.route_checked_at = route.route_checked_at
+      account.raw.exit_ip = route.exit_ip
+      account.raw.exit_country = route.exit_country
+      account.raw.exit_region = route.exit_region
+      account.raw.exit_checked_at = route.exit_checked_at
+      account.raw.exit_lookup_status = route.exit_lookup_status
+      account.raw.shared_node = route.shared_node
+    }
+  } catch {
+    // Leave the last saved card state visible until a later successful GET.
+  } finally {
+    routeStatesInFlight = false
+  }
+}
+
 const loadAvatar = async (acc: AccountUiItem, cacheOnly = false) => {
   if (disposed) return
   const version = avatarLoadGate.start(acc.name)
@@ -333,6 +367,7 @@ onMounted(async () => {
   await loadAccounts()
   void loadTeleBoxStates()
   statusTimer = setInterval(() => void loadTeleBoxStates(), 10000)
+  routeStatusTimer = setInterval(() => void loadSavedRouteStates(), 30000)
   // 刷新页面后恢复未完成的批量检测
   void resumeActiveBatchJob()
 })
@@ -349,6 +384,7 @@ onUnmounted(() => {
   pendingAvatarNames.length = 0
   queuedAvatarNames.clear()
   if (statusTimer) clearInterval(statusTimer)
+  if (routeStatusTimer) clearInterval(routeStatusTimer)
   if (reloginTimer !== undefined) {
     window.clearTimeout(reloginTimer)
     reloginTimer = undefined

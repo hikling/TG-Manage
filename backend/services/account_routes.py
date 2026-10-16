@@ -36,6 +36,7 @@ HEALTH_INTERVAL_SECONDS = 300
 CONFIRM_SECONDS = 60
 GEO_TTL_SECONDS = 3600
 GEO_ENDPOINT = "https://ipwho.is/"
+GEO_FALLBACK_ENDPOINT = "https://ipapi.co/json/"
 
 
 class RouteSetupRequired(ValueError):
@@ -59,6 +60,7 @@ def _default_assignment(mode: str = "direct") -> dict[str, Any]:
         "created_at": time.time(), "status": "pending" if mode != "direct" else "direct",
         "latency_ms": None, "route_checked_at": None, "exit_ip": None,
         "exit_country": None, "exit_region": None, "exit_checked_at": None,
+        "exit_lookup_status": "pending",
     }
 
 
@@ -222,6 +224,7 @@ class AccountRouteService:
                 "configured": bool(self._secret.get(f"{source}_url")),
                 "status": str(raw.get("status") or "unconfigured"),
                 "last_refreshed_at": raw.get("last_refreshed_at"),
+                "imported_count": sum(1 for node in self._nodes() if node.source == source),
                 "usable_count": sum(1 for node in self._nodes() if node.source == source and self._state["health"].get(self._key(node), {}).get("healthy") is True),
                 "unsupported_count": int(raw.get("unsupported_count") or 0),
                 "label": "主订阅" if source == "primary" else "兜底订阅",
@@ -329,6 +332,17 @@ class AccountRouteService:
                     task = self._confirm_tasks.pop(key, None)
                     if task is not None:
                         task.cancel()
+                # A refresh with unchanged node IDs skips the candidate
+                # validator, but must still recheck health now rather than
+                # leave a stale zero count until the scheduler runs.
+                unchecked = [(key, self.runtime.port_for(key)) for key in proposed_keys - samples.keys()]
+                semaphore = asyncio.Semaphore(6)
+
+                async def sample_installed(key: str, port: int | None) -> None:
+                    async with semaphore:
+                        samples[key] = await _probe_socks_port(port) if port is not None else None
+
+                await asyncio.gather(*(sample_installed(key, port) for key, port in unchecked))
                 for key, latency in samples.items():
                     self._record_sample(key, latency)
             changed = self._reconcile()
@@ -581,6 +595,7 @@ class AccountRouteService:
             "exit_country": entry.get("exit_country"),
             "exit_region": entry.get("exit_region"),
             "exit_checked_at": entry.get("exit_checked_at"),
+            "exit_lookup_status": entry.get("exit_lookup_status", "pending"),
             "shared_node": shared,
         }
 
@@ -642,7 +657,8 @@ class AccountRouteService:
         async with self._lock:
             current = self._state["assignments"].get(account)
             if current and current.get("key") == key and current.get("generation") == generation:
-                current.update({"exit_ip": geo["ip"], "exit_country": geo["country"], "exit_region": geo["region"], "exit_checked_at": _now() if geo["ip"] else None})
+                current.update({"exit_ip": geo["ip"], "exit_country": geo["country"], "exit_region": geo["region"], "exit_checked_at": _now() if geo["ip"] else None,
+                                "exit_lookup_status": "verified" if geo["ip"] else "failed"})
                 self._save_state()
                 duplicate = bool(key and geo["ip"] and any(
                     name != account and isinstance(other, dict) and other.get("key")
@@ -660,25 +676,32 @@ class AccountRouteService:
             return cache_key == "direct" or (
                 self.runtime.active is not None and self.runtime.active.number == runtime_generation
             )
+        proxy = f"socks5://127.0.0.1:{port}" if port else None
+        geo = {"ip": None, "country": None, "region": None}
         try:
-            proxy = f"socks5://127.0.0.1:{port}" if port else None
             async with httpx.AsyncClient(proxy=proxy, trust_env=False, timeout=5.0) as client:
-                response = await client.get(GEO_ENDPOINT)
-                response.raise_for_status()
-                body = response.json()
-            address = str(body.get("ip") or "")
-            if not ipaddress.ip_address(address).is_global or body.get("success") is False:
-                raise ValueError("invalid geo exit")
-            geo = {"ip": address, "country": str(body.get("country") or "")[:80] or None,
-                   "region": str(body.get("region") or "")[:80] or None}
-            if current_route() and (cache_key == "direct" or self._state["health"].get(cache_key, {}).get("healthy") is True):
-                self._geo_cache[cache_key] = (time.monotonic(), geo)
-            return geo
+                for endpoint in (GEO_ENDPOINT, GEO_FALLBACK_ENDPOINT):
+                    try:
+                        response = await client.get(endpoint)
+                        response.raise_for_status()
+                        body = response.json()
+                        if not isinstance(body, dict) or body.get("success") is False or body.get("error"):
+                            raise ValueError("invalid geo response")
+                        address = str(body.get("ip") or "")
+                        if not ipaddress.ip_address(address).is_global:
+                            raise ValueError("invalid geo exit")
+                        geo = {"ip": address, "country": str(body.get("country_name") or body.get("country") or "")[:80] or None,
+                               "region": str(body.get("region") or "")[:80] or None}
+                        if geo["country"]:
+                            break
+                    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+                        continue
         except (httpx.HTTPError, ValueError, TypeError, ImportError):
-            geo = {"ip": None, "country": None, "region": None}
-            if current_route():
+            pass
+        if current_route():
+            if geo["ip"] is None or cache_key == "direct" or self._state["health"].get(cache_key, {}).get("healthy") is True:
                 self._geo_cache[cache_key] = (time.monotonic(), geo)
-            return geo
+        return geo
 
 
 _route_service: AccountRouteService | None = None

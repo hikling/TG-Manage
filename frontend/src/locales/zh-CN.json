@@ -208,7 +208,10 @@
     "ipLocation": {
       "label": "IP定位",
       "unknown": "未知位置",
+      "failedLocation": "定位失败",
       "pendingIp": "IP 待验证",
+      "failedIp": "IP 检测失败",
+      "failedHint": "当前线路无法完成出口 IP 定位；点击检测状态重试",
       "shared": "共用节点",
       "latency": "延迟 {ms} 毫秒",
       "checkedAt": "IP 验证：{time}",
@@ -640,6 +643,7 @@
       "noLabel": "未设置名称",
       "disable": "停用并清除这个订阅",
       "usable": "可用节点",
+      "imported": "已导入节点",
       "unsupported": "不支持的节点",
       "lastRefreshed": "最近刷新",
       "neverRefreshed": "尚未刷新",
