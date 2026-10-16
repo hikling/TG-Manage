@@ -39,8 +39,9 @@ DEFAULT_GITHUB_HTML_LATEST = (
 )
 UPDATE_CACHE_TTL_SECONDS = 6 * 3600
 _HTTP_TIMEOUT_SECONDS = 8.0
-# Docker 未注入真实版本时的占位，不应覆盖包版本
-_PLACEHOLDER_VERSIONS = frozenset({"0.0.0", "0.0.0-dev"})
+# Docker 未注入真实版本时的占位，不应覆盖包版本。
+_PLACEHOLDER_VERSIONS = frozenset({"0.0.0", "0.0.0-dev", "dev"})
+_SEMVER_RE = re.compile(r"^\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 # api.github.com/repos/{owner}/{repo}/releases/latest
 _GITHUB_API_RELEASES_RE = re.compile(
     r"^https://api\.github\.com/repos/([^/]+)/([^/]+)/releases/latest/?$",
@@ -101,10 +102,10 @@ def parse_semver(raw: str) -> Tuple[int, int, int]:
 
 
 def is_update_available(current: str, latest: str) -> bool:
-    """当 latest 严格大于 current 时返回 True。任一为空则 False。"""
+    """仅比较有效版本；未知版本不能被当作 0.0.0 误报更新。"""
     cur = normalize_version(current)
     lat = normalize_version(latest)
-    if not cur or not lat:
+    if not _SEMVER_RE.fullmatch(cur) or not _SEMVER_RE.fullmatch(lat):
         return False
     return parse_semver(lat) > parse_semver(cur)
 
@@ -125,12 +126,12 @@ def _read_env(*names: str, default: str = "") -> str:
 
 
 def resolve_app_version(package_version: str, env_version: str = "") -> str:
-    """解析展示/比较用版本：空或占位 APP_VERSION 回退到包版本。"""
+    """解析展示/比较用版本：空、占位或无效 APP_VERSION 回退到包版本。"""
     raw = (env_version or "").strip()
     if not raw:
         return str(package_version)
     normalized = normalize_version(raw)
-    if not normalized or normalized in _PLACEHOLDER_VERSIONS:
+    if normalized.lower() in _PLACEHOLDER_VERSIONS or not _SEMVER_RE.fullmatch(normalized):
         return str(package_version)
     return normalized
 

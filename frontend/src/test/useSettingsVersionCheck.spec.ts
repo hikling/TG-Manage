@@ -40,6 +40,7 @@ describe('useSettingsVersionCheck', () => {
     useAuthStore().setToken('tok')
     versionUtils.loadCachedUpdateCheck.mockReturnValue(null)
     versionUtils.safeHttpUrl.mockImplementation((u: string | null) => u)
+    versionUtils.isUpdateAvailable.mockReturnValue(false)
     testLocale = ref('zh')
   })
 
@@ -53,11 +54,25 @@ describe('useSettingsVersionCheck', () => {
       latest_version: '1.1.0',
       latest_url: 'https://example.com/r',
     })
+    versionUtils.isUpdateAvailable.mockReturnValue(true)
     const { loadVersion, appVersion, versionBanner, versionLoading } = useSettingsVersionCheck()
     await loadVersion('tok')
     expect(appVersion.value?.version).toBe('1.0.0')
     expect(versionBanner.value?.kind).toBe('update')
     expect(versionLoading.value).toBe(false)
+  })
+
+  it('ignores an old update banner when the installed version has caught up', async () => {
+    api.getAppVersion.mockResolvedValue({ version: '2.5.0', update_check_enabled: true })
+    versionUtils.loadCachedUpdateCheck.mockReturnValue({
+      update_available: true,
+      latest_version: '2.5.0',
+      latest_url: 'https://example.com/r',
+    })
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    expect(versionUtils.isUpdateAvailable).toHaveBeenCalledWith('2.5.0', '2.5.0')
+    expect(vc.versionBanner.value).toBeNull()
   })
 
   it('handleCheckUpdate uses server update_check when enabled', async () => {
@@ -80,6 +95,7 @@ describe('useSettingsVersionCheck', () => {
         error: null,
       },
     })
+    versionUtils.isUpdateAvailable.mockReturnValue(true)
     const vc = useSettingsVersionCheck()
     await vc.loadVersion('tok')
     await vc.handleCheckUpdate(true)
@@ -87,6 +103,26 @@ describe('useSettingsVersionCheck', () => {
     expect(vc.versionBanner.value?.kind).toBe('update')
     expect(versionUtils.saveCachedUpdateCheck).toHaveBeenCalled()
     expect(vc.checkLoading.value).toBe(false)
+  })
+
+  it('does not trust a stale server update flag when versions are equal', async () => {
+    api.getAppVersion.mockResolvedValue({ version: '2.5.0', os_platform: 'Linux', update_check_enabled: true })
+    api.checkAppVersion.mockResolvedValue({
+      version: '2.5.0', update_check_enabled: true,
+      update_check: {
+        update_available: true, latest_version: '2.5.0',
+        latest_url: 'https://example.com/v2.5.0', error: null,
+      },
+    })
+    const vc = useSettingsVersionCheck()
+    await vc.loadVersion('tok')
+    await vc.handleCheckUpdate()
+    expect(versionUtils.isUpdateAvailable).toHaveBeenCalledWith('2.5.0', '2.5.0')
+    expect(vc.versionBanner.value?.kind).toBe('latest')
+    expect(vc.appVersion.value?.os_platform).toBe('Linux')
+    expect(versionUtils.saveCachedUpdateCheck).toHaveBeenLastCalledWith(
+      expect.objectContaining({ update_available: false }),
+    )
   })
 
   it('handleCheckUpdate falls back to browser github when server errors', async () => {

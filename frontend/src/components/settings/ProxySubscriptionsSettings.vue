@@ -114,6 +114,7 @@ const routeMode = computed(() => {
           <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.lastRefreshed') }}: {{ refreshedAt(status[kind]) }}</p>
         </div>
       </div>
+      <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.unavailableHint') }}</p>
       <div class="flex flex-wrap items-end gap-4">
         <div class="space-y-1.5">
           <label class="ui-label" for="subscription-latency">{{ t('settings.subscriptions.threshold') }}</label>

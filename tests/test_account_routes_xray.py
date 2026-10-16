@@ -363,6 +363,60 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.service._state["health"][key]["healthy"])
         self.assertGreaterEqual(self.service._settings_projection()["primary"]["usable_count"], 1)
 
+    async def test_subscription_metrics_count_latest_latency_and_known_ip_failures_once(self):
+        self.service._secret["ever_configured"] = True
+        self.service._secret["sources"]["primary"]["unsupported_count"] = 2
+        first = self.service._key(self.primary)
+        second = self.service._key(self.second_primary)
+
+        # Parsed nodes awaiting their first probe are imported, but not yet usable.
+        initial = self.service._settings_projection()["primary"]
+        self.assertEqual((initial["imported_count"], initial["usable_count"], initial["unsupported_count"]), (2, 0, 4))
+
+        self.service._record_sample(first, 100)
+        self.service._record_sample(second, 110)
+        healthy = self.service._settings_projection()["primary"]
+        self.assertEqual((healthy["imported_count"], healthy["usable_count"], healthy["unsupported_count"]), (2, 2, 2))
+
+        self.service._reconcile()
+        self.service._record_sample(first, 900)
+        # The first bad probe changes the metric without bypassing route hysteresis.
+        self.service._reconcile()
+        self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
+        abnormal = self.service._settings_projection()["primary"]
+        self.assertEqual((abnormal["usable_count"], abnormal["unsupported_count"]), (1, 3))
+
+        self.service._state["health"][first]["geo_failed_until"] = time.time() + 300
+        self.service._state["health"][second]["geo_failed_until"] = time.time() - 1
+        # A retry window can expire before the IP lookup succeeds. Keep both
+        # failures visible and do not count the first node twice.
+        failed_geo = self.service._settings_projection()["primary"]
+        self.assertEqual((failed_geo["usable_count"], failed_geo["unsupported_count"]), (0, 4))
+
+        self.service._record_sample(first, 100)
+        self.service._state["health"][first].pop("geo_failed_until")
+        self.service._state["health"][second].pop("geo_failed_until")
+        recovered = self.service._settings_projection()["primary"]
+        self.assertEqual((recovered["usable_count"], recovered["unsupported_count"]), (2, 2))
+
+        self.runtime.ports.pop(second)
+        unavailable_runtime = self.service._settings_projection()["primary"]
+        self.assertEqual((unavailable_runtime["usable_count"], unavailable_runtime["unsupported_count"]), (1, 3))
+
+    async def test_new_account_skips_node_after_first_over_threshold_probe(self):
+        self.service._all_accounts = lambda: {"one"}
+        self.service._secret["ever_configured"] = True
+        slow = self.service._key(self.primary)
+        healthy = self.service._key(self.second_primary)
+        self.service._record_sample(slow, 100)
+        self.service._record_sample(slow, 900)
+        self.service._record_sample(healthy, 110)
+
+        self.service._reconcile()
+
+        self.assertTrue(self.service._state["health"][slow]["healthy"])
+        self.assertEqual(self.service._state["assignments"]["one"]["key"], healthy)
+
     async def test_geo_falls_back_through_same_route_and_rotates_after_both_providers_fail(self):
         self.service._all_accounts = lambda: {"one"}
         self.service._secret["ever_configured"] = True
@@ -478,6 +532,7 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_refresh_keeps_working_pool_when_new_exits_all_fail(self):
         self.service._secret["ever_configured"] = True
         self.service._secret["primary_url"] = "https://example.org/primary"
+        self.service._secret["sources"]["primary"]["unsupported_count"] = 3
         old_key = self.service._key(self.primary)
         self.service._record_sample(old_key, 100)
         old_nodes = list(self.service._secret["nodes"]["primary"])
@@ -489,6 +544,8 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(self.service._secret["nodes"]["primary"], old_nodes)
         self.assertEqual(self.runtime.ports, old_ports)
+        self.assertEqual(self.service._secret["sources"]["primary"]["unsupported_count"], 3)
+        self.assertEqual(self.service._settings_projection()["primary"]["imported_count"], len(old_nodes))
         self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
 
     async def test_unhealthy_node_needs_two_good_samples_before_reuse(self):

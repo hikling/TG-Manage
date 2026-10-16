@@ -40,8 +40,9 @@ RUN set -eu; \
 # Python 3.11 for Telethon + dependencies.
 FROM python:3.11-slim-bookworm AS production
 
-# Version and build time metadata injected via build args (e.g. CI / Docker build).
-ARG APP_VERSION=dev
+# Optional version/build metadata injected via build args (e.g. CI / Docker build).
+# Empty by default so the application uses tg_manage.__version__.
+ARG APP_VERSION=
 ARG GIT_SHA=unknown
 ARG GIT_BRANCH=unknown
 ARG BUILD_TIME=unknown

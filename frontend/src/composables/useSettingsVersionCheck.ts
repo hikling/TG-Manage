@@ -57,7 +57,8 @@ export function useSettingsVersionCheck() {
 
   const applyClientCache = () => {
     const cached = loadCachedUpdateCheck()
-    if (!cached?.update_available || !cached.latest_version) return
+    const current = appVersion.value?.version
+    if (!cached?.latest_version || !current || !isUpdateAvailable(current, cached.latest_version)) return
     setUpdateBanner(
       'update',
       'settings.updateAvailable',
@@ -104,7 +105,7 @@ export function useSettingsVersionCheck() {
     }
   }
 
-  const showFromRemote = (uc: UpdateCheckInfo) => {
+  const showFromRemote = (uc: UpdateCheckInfo, currentVersion: string) => {
     if (uc.source?.replace(/_stale$/, '') === 'github_no_releases' && !uc.latest_version && !uc.error) {
       saveCachedUpdateCheck({
         latest_version: null,
@@ -126,7 +127,7 @@ export function useSettingsVersionCheck() {
       return
     }
     const safeUrl = safeHttpUrl(uc.latest_url)
-    if (uc.update_available && uc.latest_version) {
+    if (uc.latest_version && isUpdateAvailable(currentVersion, uc.latest_version)) {
       saveCachedUpdateCheck({
         latest_version: uc.latest_version,
         latest_url: safeUrl,
@@ -170,6 +171,7 @@ export function useSettingsVersionCheck() {
               git_branch: res.git_branch,
               build_time: res.build_time,
               app_name: res.app_name,
+              os_platform: res.os_platform ?? appVersion.value.os_platform,
               python: res.python,
               update_check_enabled: res.update_check_enabled,
             }
@@ -189,7 +191,7 @@ export function useSettingsVersionCheck() {
               }
               return
             }
-            showFromRemote(res.update_check)
+            showFromRemote(res.update_check, res.version)
             return
           } catch {
             try {

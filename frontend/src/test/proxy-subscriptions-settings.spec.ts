@@ -6,7 +6,7 @@ import ProxySubscriptionsSettings, { type SubscriptionDraft } from '../component
 import type { ProxySubscriptionSettings } from '../lib/api/settings'
 
 const status: ProxySubscriptionSettings = {
-  primary: { configured: true, status: 'healthy', last_refreshed_at: '2026-10-15T00:00:00Z', imported_count: 4, usable_count: 3, unsupported_count: 1, label: 'Primary provider' },
+  primary: { configured: true, status: 'healthy', last_refreshed_at: '2026-10-15T00:00:00Z', imported_count: 4, usable_count: 3, unsupported_count: 2, label: 'Primary provider' },
   fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, imported_count: 0, usable_count: 0, unsupported_count: 0, label: null },
   latency_threshold_ms: 800,
   route_mode: 'primary',
@@ -32,7 +32,8 @@ describe('Xray subscription settings', () => {
     expect(metrics.findAll('div')).toHaveLength(3)
     expect(metrics.text()).toContain('已导入节点4')
     expect(metrics.text()).toContain('可用节点3')
-    expect(metrics.text()).toContain('不支持的节点1')
+    expect(metrics.text()).toContain('不可用/不支持节点2')
+    expect(wrapper.text()).toContain('含待检测、连接失败、延迟超阈值、已知的 IP 定位失败及不支持的格式。')
     expect(wrapper.get<HTMLInputElement>('#subscription-primary').element.value).toBe('')
     expect(wrapper.get('#subscription-primary').attributes('type')).toBe('password')
     expect(wrapper.html()).not.toContain('https://secret.example/sub')
@@ -42,10 +43,20 @@ describe('Xray subscription settings', () => {
   it('shows a placeholder instead of an empty metric when an older status omits a count', () => {
     const olderStatus = {
       ...status,
-      primary: { ...status.primary, imported_count: undefined },
+      primary: { ...status.primary, imported_count: undefined, unsupported_count: undefined },
     } as unknown as ProxySubscriptionSettings
     const wrapper = mountSettings({ status: olderStatus })
     expect(wrapper.findAll('dl')[0].text()).toContain('已导入节点—')
+    expect(wrapper.findAll('dl')[0].text()).toContain('不可用/不支持节点—')
+  })
+
+  it('explains the combined unusable count in English', async () => {
+    i18n.global.locale.value = 'en-US'
+    await nextTick()
+    const wrapper = mountSettings()
+    expect(wrapper.findAll('dl')[0].text()).toContain('Unavailable / unsupported nodes2')
+    expect(wrapper.text()).toContain('Includes pending probes, connection failures, latency above the threshold, known IP lookup failures, and unsupported formats.')
+    expect(wrapper.text()).not.toMatch(/\p{Script=Han}/u)
   })
 
   it('emits replacement and explicit clear edits, while refresh waits for save', async () => {
