@@ -222,7 +222,7 @@ export function useSettingsPage() {
     try {
       const result = await getProxySubscriptions(token)
       // Background health updates own only the read projection, not the form.
-      if (!disposed) subscriptions.value = result
+      if (!disposed && token === getAuthToken()) subscriptions.value = result
     } catch {
       // Preserve the last saved status; explicit loading owns error feedback.
     } finally {
