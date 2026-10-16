@@ -2,7 +2,7 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">A focused Telegram multi-account dashboard with an isolated TeleBox runtime.</p>
 <p align="center"><a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a></p>
-<p align="center"><a href="#whats-new">🆕 What's new</a> · <a href="#features">✨ Features</a> · <a href="#screenshots">🖼️ Screenshots</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
+<p align="center"><a href="#whats-new">🆕 What's new</a> · <a href="#features">✨ Core features</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
 
 
 > Based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrating [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). The current project is [hikling/TG-Manage](https://github.com/hikling/TG-Manage); build from this repository because upstream images do not include these UI and TeleBox changes.
@@ -10,84 +10,58 @@
 <a id="whats-new"></a>
 ## 🆕 What's new in v2.5.0
 
-- **Xray subscriptions and account-specific routes:** Configure an HTTPS primary subscription and an optional fallback. Each account receives an exclusive healthy node: available primary nodes first, then fallback nodes; overflow accounts use direct access. Nodes are checked every 5 minutes; a slow or failed result is rechecked after 1 minute, and two consecutive abnormal results trigger a switch. The default latency threshold is 800 ms and can be changed. Account cards show exit country, public IP, and route source. Legacy manually entered SOCKS5 settings no longer control connections.
-- **Scheduled report and scoped manual checks:** At 00:00 in the configured time zone, the service checks every account and route. With Bot notifications enabled, it also reports Telegram official messages from the preceding 24 hours. A card check covers only that account's Telegram, TeleBox, and IP state; manual batch checking also cleans orphaned account and TeleBox data. The Bot connection test sends one test message only.
-- **Sign-in and migration:** Account Management can export and import an encrypted `.tglogin` backup of main account authorizations. Phone-code login displays Telegram's actual delivery method and resend countdown; no delivery preference is required. The private Bot adds `/me` for numbered accounts and `/code number` for recent codes.
-- **UI and resource changes:** Duplicate card-menu check/log actions, the TeleBox runtime-log page, and manual keepalive were removed. IP probes, log buffers, and avatar request state now have resource bounds.
+- **Xray subscriptions and per-account routes:** Configure an HTTPS primary subscription and an optional fallback. Each account receives an exclusive healthy node where possible; free primary nodes are used first, then fallback nodes, and overflow accounts use direct access. Legacy manually entered SOCKS5 settings no longer control connections.
+- **Automatic route health and failover:** Nodes are checked every 5 minutes. Timeouts, connection failures, missing public-IP location, or excessive latency are rechecked after 1 minute; two consecutive abnormal results trigger a switch. Cards show the exit country, public IP, and primary, fallback, or direct source.
+- **Midnight status report:** At 00:00 in the configured time zone, the service checks all accounts and routes. With Bot notifications enabled, it also reads Telegram official messages from the preceding 24 hours and sends account, route, and message summaries plus details.
+- **Explicit manual-check scopes:** A card check covers only that account's Telegram, TeleBox, and exit IP. Manual batch checking covers selected accounts and removes orphaned account and TeleBox data. Neither manual path reads official messages or starts the midnight report.
+- **Sign-in, authorization, and migration:** Sign in by phone code, QR, and 2FA. The code screen shows Telegram's actual delivery method and resend countdown. Main-account authorization can be exported and imported in a password-encrypted `.tglogin` file.
+- **On-demand private Bot codes:** Use `/me` for numbered accounts and `/code number` or `/code account-name` for codes from the last five minutes. Idle operation never scans account messages.
+- **UI and long-running resource work:** Duplicate checks, per-account logs, the TeleBox runtime-log page, and manual keepalive were removed. Node probes, avatar loading, and log buffers are bounded, and version display and update comparison now use the stable release version.
 
 Read the **[full v2.5.0 release guide](docs/releases/v2.5.0.md)** for timings, migration steps, and verification limits (Chinese).
 
 <a id="features"></a>
-## ✨ Features
+## ✨ Core features
 
-<table>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>👥 Account management</h3>
-      <p>Sign in by code or QR. A card check reads only that account's Telegram, TeleBox, and exit IP status; a manual batch check also removes orphaned account and TeleBox data on the server. Each account has an exclusive Xray node: free primary nodes are used first, then fallback nodes, with excess accounts using direct access. IP location shows the country, public IP, and current route source.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>💬 Chat center</h3>
-      <p>Browse group conversations by account, search, send attachments, reply, edit, and delete messages. Chat can be switched on independently.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🤖 Private bot</h3>
-      <p>The configured private target ID may use <code>/me</code> to list numbered account names and remarks, then <code>/code 4</code> to query the fourth account's code from the last five minutes. <code>/code account-name</code> remains supported. Repeating the same complete command has a 45-second cooldown; different commands may follow immediately. Idle operation never scans account messages.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🎨 Dashboard and appearance</h3>
-      <p>The dashboard provides the cover, Manage accounts, and Refresh entry points. Accent colors and custom covers are saved on the server, with positioning, reset, and a 1 MiB upload limit.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🔌 Integrated TeleBox</h3>
-      <p>Each enabled account gets a separate Telegram session and runtime directory. Its card shows status and controls to start, stop, or log out. Redacted process errors go to the server log; the panel no longer caches per-account runtime logs. The pinned upstream revision is recorded in <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🔐 Separate session boundary</h3>
-      <p>Logging out of TeleBox clears only its separate authorization, not the main account session. Keep the two session stores separate.</p>
-    </td>
-  </tr>
-</table>
+### 1. 👥 Account access, authorization, and migration
 
+- Manage multiple Telegram accounts with phone-code, QR, and 2FA sign-in.
+- The sign-in flow shows Telegram's actual code delivery method, the next available method, and the resend countdown.
+- Export and import password-encrypted `.tglogin` backups for main-account authorization; TeleBox authorization and panel settings remain separate.
 
-<a id="screenshots"></a>
-## 🖼️ Screenshots
+### 2. 🌐 Per-account Xray routes and automatic failover
 
-<details>
-<summary><strong>View project screenshots</strong></summary>
+- Xray-core is included. Configure primary and fallback subscriptions; each healthy node serves at most one account, while overflow accounts explicitly use direct access.
+- Scheduled checks cover latency, connectivity, and public exit IP. A route switches after two consecutive abnormal results and returns to a preferred route only after stable recovery.
+- Account cards show the exit country, public IP, route source, and health state. Settings separates imported, usable, and unsupported nodes.
 
-Click an image to view the full screenshot.
+### 3. 🩺 Scoped checks and the daily midnight report
 
-<table>
-  <tr>
-    <th width="50%">Login</th>
-    <th width="50%">Dashboard</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/登录.png"><img src="docs/public/screenshots/登录.png" width="100%" alt="TG Manage login page"></a></td>
-    <td align="center"><a href="docs/public/screenshots/仪表盘.png"><img src="docs/public/screenshots/仪表盘.png" width="100%" alt="TG Manage dashboard and account metrics"></a></td>
-  </tr>
-  <tr>
-    <th>Account management</th>
-    <th>Chat center</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/账户管理.png"><img src="docs/public/screenshots/账户管理.png" width="100%" alt="TG Manage account management page"></a></td>
-    <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage chat center page"></a></td>
-  </tr>
-  <tr>
-    <th colspan="2">Bot verification codes</th>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="Telegram verification code retrieved with the private bot"></a></td>
-  </tr>
-</table>
+- A card check covers one account. Manual batch checking covers selected accounts and cleans orphaned account metadata and matching TeleBox data from the server.
+- A separate 00:00 job checks all accounts and routes. With Bot notifications enabled, it also checks the preceding 24 hours of Telegram official messages and sends summaries and details.
+- Manual checks, the Bot connection test, and the midnight report have separate entry points and never trigger one another.
 
-</details>
+### 4. 🤖 On-demand verification codes through the private Bot
+
+- The configured private target can use `/me` for account numbers, names, and remarks, then `/code 4` or `/code account-name` for codes from the last five minutes.
+- Identical full commands have a 45-second cooldown; different commands may follow immediately. Idle operation never scans account messages.
+
+### 5. 🔌 Isolated TeleBox runtime
+
+- Each enabled account gets a separate Telegram session, runtime directory, and process, with status and start, stop, and log-out controls on the account card.
+- Logging out of TeleBox does not sign out the main managed account. Redacted process errors go to the server log, and the panel does not retain per-account runtime logs.
+- The pinned upstream revision is recorded in [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json).
+
+### 6. 💬 Optional chat center
+
+- Browse and search group conversations per account, send attachments, reply, edit, and delete messages.
+- Chat can be enabled or disabled independently from account management, checks, and TeleBox.
+
+### 7. 🎨 Panel, security, and long-running operation
+
+- Includes the dashboard, accent colors, custom covers, panel TOTP, data backups, and an in-place upgrade path.
+- Node probes, avatar concurrency and caching, service logs, and error buffers have explicit bounds to reduce memory and cache growth during long-running deployments.
+- The About page displays the stable release version and compares updates with stable-version semantics, avoiding development-version false positives.
 
 <a id="quick-start"></a>
 ## 🚀 Quick start
@@ -199,3 +173,4 @@ TG-Manage/
 Source development needs Python 3.10–3.13, Node 22.23.1 for the frontend, and Node 24 for TeleBox. See [`Dockerfile`](Dockerfile) for native module dependencies. Local AI workflows, skills, and task notes are not published with the source. TeleBox keeps its upstream [LGPL-2.1-only license](telebox/LICENSE); the rest of this project uses the root [`LICENSE`](LICENSE).
 
 </details>
+

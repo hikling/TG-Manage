@@ -2,7 +2,7 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">一个清爽的 Telegram 多账号管理面板，内置独立运行的 TeleBox。</p>
 <p align="center"><a href="README.md"><strong>简体中文</strong></a> · <a href="README_EN.md">English</a></p>
-<p align="center"><a href="#whats-new">🆕 v2.5.0 更新</a> · <a href="#features">✨ 功能</a> · <a href="#screenshots">🖼️ 截图</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
+<p align="center"><a href="#whats-new">🆕 v2.5.0 更新</a> · <a href="#features">✨ 核心功能</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
 
 
 > 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，集成 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)。当前项目源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；请从本仓库构建，上游镜像不包含这里的界面和集成改动。
@@ -10,84 +10,58 @@
 <a id="whats-new"></a>
 ## 🆕 v2.5.0 有什么更新
 
-- **Xray 订阅与独立线路：**设置 HTTPS 主订阅和可选兜底订阅；每个账号独占一个健康节点，主订阅空闲节点用完后使用兜底节点，仍不足的账号直连。节点每 5 分钟检测，首次异常 1 分钟后复检，连续两次异常才切换；初始延迟阈值 800 ms，可调整。账号卡片显示出口国家、公网 IP 和线路来源；旧版手填 SOCKS5 不再生效。
-- **零点自动报告与手动检查分工：**每天按系统时区 00:00 检测全部账号和线路；启用 Bot 通知时，再汇总前 24 小时 Telegram 官方消息，标明有无新消息并转发详情。账号卡片单检只检查本账号状态、TeleBox 和 IP；手动批检另会清理孤立账号与 TeleBox 数据。Bot 连接测试只发送测试消息。
-- **登录与迁移：**账户管理新增密码加密的 `.tglogin` 主账号登录备份；验证码界面提示 Telegram 实际送达方式和重发倒计时，无需选择送达渠道。私人 Bot 新增 `/me` 账号编号清单及 `/code 编号` 验证码查询。
-- **界面与资源调整：**移除重复的账号菜单检测/日志入口、TeleBox 运行日志页和手动保活；对 IP 探测、日志缓冲及头像请求状态设置边界。
+- **Xray 订阅与每账号独立线路：**支持 HTTPS 主订阅和可选兜底订阅。每个账号优先独占一个健康节点，主订阅节点不足时使用兜底订阅，仍不足才直连；旧版手填 SOCKS5 不再控制连接。
+- **线路自动检测与切换：**节点每 5 分钟检测，首次超时、连接失败、IP 定位失败或延迟超限后 1 分钟复检，连续两次异常自动换线。账号卡片显示出口国家、公网 IP 以及主订阅、兜底订阅或直连来源。
+- **零点检测报告：**每天按系统时区 00:00 检测全部账号和线路；启用 Bot 通知时，再读取前 24 小时 Telegram 官方消息，汇总账号状态、线路来源和有无新消息，并转发消息详情。
+- **明确的手动检测范围：**卡片检测只处理当前账号的 Telegram、TeleBox 和出口 IP；批量检测处理所选账号，并清理服务器孤立账号及 TeleBox 数据。两者都不会读取官方消息或触发零点报告。
+- **登录、授权与迁移：**支持手机验证码、二维码和二步验证；验证码页展示 Telegram 实际送达方式与重发倒计时。可用密码加密的 `.tglogin` 文件导出、导入主账号授权。
+- **私人 Bot 按需取码：**使用 `/me` 查看账号编号，再用 `/code 编号` 或 `/code 账号名` 查询最近 5 分钟验证码；空闲时不会扫描账号消息。
+- **界面与长期运行优化：**移除重复检测、单账号日志、TeleBox 运行日志和手动保活入口；限制节点探测、头像加载与日志缓冲规模，并修正版本显示和更新判断。
 
 功能边界、切换时序、迁移注意事项和验证范围见 **[v2.5.0 完整更新说明](docs/releases/v2.5.0.md)**。
 
 <a id="features"></a>
 ## ✨ 核心功能
 
-<table>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>👥 多账号管理</h3>
-      <p>支持手机验证码或二维码登录。单卡检测只检查该账号的 Telegram、TeleBox 和出口 IP；手动批量检测还会清理服务器上的孤立账户与 TeleBox 数据。账号独占 Xray 节点，主订阅节点不足时使用兜底订阅，仍不足则直连。IP 定位显示国家、公网 IP 和当前线路来源。</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>💬 聊天中心</h3>
-      <p>按账号浏览群组对话，支持搜索、收发附件、回复、编辑和删除消息。聊天能力可以独立开启或关闭。</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🤖 私人机器人</h3>
-      <p>配置的私人目标 ID 可用 <code>/me</code> 查看编号、账号名称和备注，再用 <code>/code 4</code> 查询第 4 个账号最近 5 分钟内的验证码，也支持 <code>/code 账号名</code>。同一条完整指令 45 秒内不能重复，不同指令可以接着发送；空闲时不扫描账号消息。</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🎨 仪表盘与外观</h3>
-      <p>仪表盘提供封面、账号管理和刷新入口。主题色与自定义封面同步保存到服务器，封面支持位置调整、恢复默认和 1 MiB 上传限制。</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🔌 内置 TeleBox</h3>
-      <p>每个启用的账号使用独立 Telegram 会话和运行目录，可在账号卡片查看状态并启动、停止或退出登录。进程错误写入脱敏的服务日志，不在面板缓存每账号运行日志。上游版本见 <a href="telebox/UPSTREAM.json"><code>telebox/UPSTREAM.json</code></a>。</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🔐 独立会话边界</h3>
-      <p>退出 TeleBox 只清除它的独立授权，不会退出账号管理中的主账号。两套 session 文件必须保持独立。</p>
-    </td>
-  </tr>
-</table>
+### 1. 👥 账号接入、授权与迁移
 
+- 管理多个 Telegram 账号，支持手机验证码、二维码和二步验证登录。
+- 登录流程展示 Telegram 实际采用的验证码送达方式、下一可用方式和重发倒计时。
+- 手动导出、导入密码加密的 `.tglogin` 主账号登录备份；TeleBox 授权和面板设置保持独立。
 
-<a id="screenshots"></a>
-## 🖼️ 屏幕截图
+### 2. 🌐 Xray 独立线路与自动故障切换
 
-<details>
-<summary><strong>查看项目截图</strong></summary>
+- 镜像内置 Xray-core，可配置主订阅与兜底订阅；每个健康节点最多分配给一个账号，多出的账号明确使用直连。
+- 定时检测延迟、连通性和公网出口 IP；连续两次异常才换线，优先线路连续恢复后再回切，减少短暂抖动造成的频繁重连。
+- 账号卡片直接显示出口国家、公网 IP、线路来源和检测状态；设置页区分已导入、可用与不支持节点。
 
-点击图片可查看完整截图。
+### 3. 🩺 分级检测与每日零点报告
 
-<table>
-  <tr>
-    <th width="50%">登录</th>
-    <th width="50%">仪表盘</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/登录.png"><img src="docs/public/screenshots/登录.png" width="100%" alt="TG Manage 登录页面"></a></td>
-    <td align="center"><a href="docs/public/screenshots/仪表盘.png"><img src="docs/public/screenshots/仪表盘.png" width="100%" alt="TG Manage 仪表盘与账号指标"></a></td>
-  </tr>
-  <tr>
-    <th>账户管理</th>
-    <th>聊天中心</th>
-  </tr>
-  <tr>
-    <td align="center"><a href="docs/public/screenshots/账户管理.png"><img src="docs/public/screenshots/账户管理.png" width="100%" alt="TG Manage 账户管理页面"></a></td>
-    <td align="center"><a href="docs/public/screenshots/聊天中心.png"><img src="docs/public/screenshots/聊天中心.png" width="100%" alt="TG Manage 聊天中心页面"></a></td>
-  </tr>
-  <tr>
-    <th colspan="2">Bot 获取验证码</th>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><a href="docs/public/screenshots/bot获取验证码.png"><img src="docs/public/screenshots/bot获取验证码.png" width="463" alt="私人机器人获取 Telegram 验证码的聊天截图"></a></td>
-  </tr>
-</table>
+- 卡片检测只检查当前账号；手动批量检测检查所选账号，并清理服务器孤立账号和对应 TeleBox 数据。
+- 每日 00:00 独立运行全部账号与节点检测。Bot 通知启用后，同时检查前 24 小时 Telegram 官方消息并发送汇总及详情。
+- 手动检测、Bot 连接测试和零点报告互不混用，避免误触发全量检查或消息读取。
 
-</details>
+### 4. 🤖 私人 Bot 按需获取验证码
+
+- 私人目标 ID 可用 `/me` 查看账号编号、名称和备注，再用 `/code 4` 或 `/code 账号名` 查询该账号最近 5 分钟的验证码。
+- 相同完整指令有 45 秒冷却，不同指令可连续发送；空闲时不扫描账号消息。
+
+### 5. 🔌 独立运行的 TeleBox
+
+- 每个启用账号使用独立 Telegram 会话、运行目录和进程，可在账号卡片查看状态并启动、停止或退出登录。
+- 退出 TeleBox 不会退出账号管理中的主账号；进程错误写入脱敏服务日志，面板不缓存每个账号的运行日志。
+- 固定的上游版本记录在 [`telebox/UPSTREAM.json`](telebox/UPSTREAM.json)。
+
+### 6. 💬 可选聊天中心
+
+- 按账号浏览和搜索群组对话，支持收发附件、回复、编辑和删除消息。
+- 聊天能力可独立开启或关闭，不影响账号管理、检测和 TeleBox。
+
+### 7. 🎨 面板、安全与长期运行
+
+- 提供仪表盘、主题色、自定义封面、面板 TOTP、数据备份与无损升级流程。
+- 节点探测、头像并发与缓存、服务日志和错误缓冲均有明确上限，降低长期运行时的内存和缓存增长风险。
+- 关于页面显示正式版本并按稳定版语义检查更新，避免开发版本标识造成误报。
 
 <a id="quick-start"></a>
 ## 🚀 快速部署
@@ -199,3 +173,4 @@ TG-Manage/
 源码开发需 Python 3.10–3.13、前端 Node 22.23.1 和 TeleBox Node 24；Node 原生模块依赖见 [`Dockerfile`](Dockerfile)。本地 AI 工作流、技能与任务记录不随源码发布。TeleBox 保留其 [LGPL-2.1-only 许可证](telebox/LICENSE)，本项目其他部分见根目录 [`LICENSE`](LICENSE)。
 
 </details>
+
