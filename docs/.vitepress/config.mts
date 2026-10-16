@@ -142,6 +142,7 @@ export default defineConfig({
         text: "开始",
         items: [
           { text: "功能介绍", link: "/features" },
+          { text: "v2.5.0 更新说明", link: "/releases/v2.5.0" },
           { text: "快速开始", link: "/guide/quick-start" },
           { text: "文档总览", link: "/README" },
         ],

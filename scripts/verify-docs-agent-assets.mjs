@@ -16,6 +16,7 @@ const required = [
   "llms.txt",
   "auth.md",
   "_sources/index.md",
+  "_sources/releases/v2.5.0.md",
   "_sources/guide/quick-start.md",
   ".well-known/api-catalog",
   ".well-known/agent-skills/index.json",

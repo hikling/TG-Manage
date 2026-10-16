@@ -1,6 +1,6 @@
 ---
 name: docs-navigator
-description: 根据主题定位 TG Manage 的部署、账号、聊天、备份、运维和配置文档。
+description: 根据主题定位 TG Manage 的 v2.5.0 功能、Xray 线路、账号、部署、备份和运维文档。
 ---
 
 # TG Manage 文档导航
@@ -14,9 +14,10 @@ description: 根据主题定位 TG Manage 的部署、账号、聊天、备份�
 | 主题 | 仓库路径 |
 | --- | --- |
 | 功能总览 | `docs/features.md` |
+| v2.5.0 新增功能与迁移边界 | `docs/releases/v2.5.0.md` |
 | 快速开始 | `docs/guide/quick-start.md` |
-| 账号与聊天 | `docs/guide/accounts.md` |
-| WebDAV 备份 | `docs/guide/backup-webdav.md` |
+| 账号、Xray 线路、零点报告与聊天 | `docs/guide/accounts.md` |
+| 账户登录备份 | `docs/guide/account-login-backup.md` |
 | Docker 部署与无损升级 | `docs/deploy/docker.md` |
 | Nginx | `docs/deploy/nginx.md` |
 | 配置参考 | `docs/reference/configuration.md` |

@@ -6,7 +6,7 @@
       "type": "skill-md",
       "description": "根据主题定位 TG Manage 官方文档页面（部署、账号、任务、AI、监听、运维）。",
       "url": "/.well-known/agent-skills/docs-navigator/SKILL.md",
-      "digest": "sha256:990b76ff6e0e7d9f12fe1a0411e82416b3e8a911935dca51895f40d14269b1ea"
+      "digest": "sha256:c2bc29cd6830457cd859ab87c19db5fdae9c0ef79db1cf17d0c49b4ab8dd9453"
     },
     {
       "name": "quick-start",

@@ -2,10 +2,20 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">一个清爽的 Telegram 多账号管理面板，内置独立运行的 TeleBox。</p>
 <p align="center"><a href="README.md"><strong>简体中文</strong></a> · <a href="README_EN.md">English</a></p>
-<p align="center"><a href="#features">✨ 功能</a> · <a href="#screenshots">🖼️ 截图</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
+<p align="center"><a href="#whats-new">🆕 v2.5.0 更新</a> · <a href="#features">✨ 功能</a> · <a href="#screenshots">🖼️ 截图</a> · <a href="#quick-start">🚀 快速部署</a> · <a href="#guides">📚 使用指南</a> · <a href="#reference">🧰 技术参考</a></p>
 
 
 > 本项目源于 [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse)，集成 [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox)。当前项目源码位于 [hikling/TG-Manage](https://github.com/hikling/TG-Manage)；请从本仓库构建，上游镜像不包含这里的界面和集成改动。
+
+<a id="whats-new"></a>
+## 🆕 v2.5.0 有什么更新
+
+- **Xray 订阅与独立线路：**设置 HTTPS 主订阅和可选兜底订阅；每个账号独占一个健康节点，主订阅空闲节点用完后使用兜底节点，仍不足的账号直连。节点每 5 分钟检测，首次异常 1 分钟后复检，连续两次异常才切换；初始延迟阈值 800 ms，可调整。账号卡片显示出口国家、公网 IP 和线路来源；旧版手填 SOCKS5 不再生效。
+- **零点自动报告与手动检查分工：**每天按系统时区 00:00 检测全部账号和线路；启用 Bot 通知时，再汇总前 24 小时 Telegram 官方消息，标明有无新消息并转发详情。账号卡片单检只检查本账号状态、TeleBox 和 IP；手动批检另会清理孤立账号与 TeleBox 数据。Bot 连接测试只发送测试消息。
+- **登录与迁移：**账户管理新增密码加密的 `.tglogin` 主账号登录备份；验证码界面提示 Telegram 实际送达方式和重发倒计时，无需选择送达渠道。私人 Bot 新增 `/me` 账号编号清单及 `/code 编号` 验证码查询。
+- **界面与资源调整：**移除重复的账号菜单检测/日志入口、TeleBox 运行日志页和手动保活；对 IP 探测、日志缓冲及头像请求状态设置边界。
+
+功能边界、切换时序、迁移注意事项和验证范围见 **[v2.5.0 完整更新说明](docs/releases/v2.5.0.md)**。
 
 <a id="features"></a>
 ## ✨ 核心功能
@@ -101,6 +111,7 @@ bash scripts/install.sh
 2. **🌐 配置订阅：**在「设置 → 机场订阅」填写 HTTPS 主订阅，可选填兜底订阅并刷新。首次配置前账号网络保持「待配置」；每个健康节点只分配给一个账号，节点不足或全部失效时，多出的账号会明确标为直连。详见 [Xray 与订阅说明](docs/deploy/docker.md#机场订阅与-xray)。
 3. **➕ 添加账号：**在「账号管理」选择验证码或二维码登录。普通账号可免填 API ID/Hash；启用 TeleBox 时，请填写该账号的专属 API ID/Hash，并按提示完成二步验证。
 4. **🗂️ 按需使用：**账号卡片只检测当前账户的状态、TeleBox 和 IP；手动批量检测还会清理服务器孤立数据。每日 00:00 自动检测全部账户和过去 24 小时的官方消息，完成后按通知设置推送机器人。「聊天中心」打开后再启用聊天。
+5. **💾 按需迁移登录：**在「账户管理 → 登录备份」手动导出、导入加密的 `.tglogin` 主账号会话。该文件不包含 TeleBox 或面板配置；跨服务器使用前先停止旧服务器，详见 [登录备份指南](docs/guide/account-login-backup.md)。
 
 TeleBox 的插件和命令由 TeleBox 自身管理。内置系统插件随镜像提供；社区插件见 [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins)，具体使用方式见 [`telebox/README.md`](telebox/README.md)。
 
@@ -109,6 +120,7 @@ TeleBox 的插件和命令由 TeleBox 自身管理。内置系统插件随镜像
 
 - **📦 [Docker 部署与无损升级](docs/deploy/docker.md)** — 安装、检查、备份、回退与构建排查。
 - **🧭 [快速入门](docs/guide/quick-start.md)** — 首次设置和账号接入。
+- **🆕 [v2.5.0 完整更新说明](docs/releases/v2.5.0.md)** — 新功能、检测时序、迁移与验证范围。
 - **⚙️ [配置参考](docs/reference/configuration.md)** — 环境变量与数据目录。
 - **🛠️ [本地开发](docs/reference/development.md)** — 源码运行和开发命令。
 

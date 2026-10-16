@@ -2,10 +2,20 @@
 <h1 align="center">🚀 TG Manage</h1>
 <p align="center">A focused Telegram multi-account dashboard with an isolated TeleBox runtime.</p>
 <p align="center"><a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a></p>
-<p align="center"><a href="#features">✨ Features</a> · <a href="#screenshots">🖼️ Screenshots</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
+<p align="center"><a href="#whats-new">🆕 What's new</a> · <a href="#features">✨ Features</a> · <a href="#screenshots">🖼️ Screenshots</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
 
 
 > Based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrating [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). The current project is [hikling/TG-Manage](https://github.com/hikling/TG-Manage); build from this repository because upstream images do not include these UI and TeleBox changes.
+
+<a id="whats-new"></a>
+## 🆕 What's new in v2.5.0
+
+- **Xray subscriptions and account-specific routes:** Configure an HTTPS primary subscription and an optional fallback. Each account receives an exclusive healthy node: available primary nodes first, then fallback nodes; overflow accounts use direct access. Nodes are checked every 5 minutes; a slow or failed result is rechecked after 1 minute, and two consecutive abnormal results trigger a switch. The default latency threshold is 800 ms and can be changed. Account cards show exit country, public IP, and route source. Legacy manually entered SOCKS5 settings no longer control connections.
+- **Scheduled report and scoped manual checks:** At 00:00 in the configured time zone, the service checks every account and route. With Bot notifications enabled, it also reports Telegram official messages from the preceding 24 hours. A card check covers only that account's Telegram, TeleBox, and IP state; manual batch checking also cleans orphaned account and TeleBox data. The Bot connection test sends one test message only.
+- **Sign-in and migration:** Account Management can export and import an encrypted `.tglogin` backup of main account authorizations. Phone-code login displays Telegram's actual delivery method and resend countdown; no delivery preference is required. The private Bot adds `/me` for numbered accounts and `/code number` for recent codes.
+- **UI and resource changes:** Duplicate card-menu check/log actions, the TeleBox runtime-log page, and manual keepalive were removed. IP probes, log buffers, and avatar request state now have resource bounds.
+
+Read the **[full v2.5.0 release guide](docs/releases/v2.5.0.md)** for timings, migration steps, and verification limits (Chinese).
 
 <a id="features"></a>
 ## ✨ Features
@@ -101,6 +111,7 @@ The installer builds from this repository, starts the service, and prints a one-
 2. **🌐 Configure subscriptions:** In Settings, save an HTTPS primary subscription and optionally a fallback, then refresh them. Account networking remains in setup-required mode until the first subscription is configured. Each healthy node serves one account; accounts beyond the available primary and fallback nodes explicitly use direct access. See the [Xray and subscription deployment notes](docs/deploy/docker.md#机场订阅与-xray).
 3. **➕ Add an account:** Choose code or QR login in Account Management. An ordinary account may omit API ID/Hash; supply account-specific credentials when enabling TeleBox, and complete 2FA if prompted.
 4. **🗂️ Work on demand:** A card check reads that account's status, TeleBox, and IP; a manual batch check also cleans orphaned server data. The daily 00:00 job checks all accounts and the prior 24 hours of official messages, then sends the configured Bot report. Enable chat inside the Chat Center when needed.
+5. **💾 Migrate authorization when needed:** Account Management → Login Backup can manually export and import an encrypted `.tglogin` file for main account sessions. It excludes TeleBox and panel settings; stop the old server before using the same authorization on a new one. See the [login-backup guide](docs/guide/account-login-backup.md) (Chinese).
 
 TeleBox manages its own commands and plugins. System plugins are bundled; community plugins are published in [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins). See the bundled [`telebox/README.md`](telebox/README.md) for details.
 
@@ -109,6 +120,7 @@ TeleBox manages its own commands and plugins. System plugins are bundled; commun
 
 - **📦 [Docker deployment and upgrades](docs/deploy/docker.md)** — Installation, backups, rollback, and build troubleshooting.
 - **🧭 [Quick-start guide](docs/guide/quick-start.md)** — Initial setup and account onboarding.
+- **🆕 [v2.5.0 release guide](docs/releases/v2.5.0.md)** — Features, timing, migration, and verification limits (Chinese).
 - **⚙️ [Configuration reference](docs/reference/configuration.md)** — Environment variables and data paths.
 - **🛠️ [Local development](docs/reference/development.md)** — Source setup and development commands.
 
