@@ -14,14 +14,17 @@ const source = computed(() => {
     : t('accounts.ipLocation.sources.unknown')
 })
 const location = computed(() => {
-  if (!props.account.exit_ip || !props.account.exit_checked_at) return t('accounts.ipLocation.unknown')
+  if (!props.account.exit_ip || !props.account.exit_checked_at) {
+    return t(props.account.exit_lookup_status === 'failed' ? 'accounts.ipLocation.failedLocation' : 'accounts.ipLocation.unknown')
+  }
   return props.account.exit_country || t('accounts.ipLocation.unknown')
 })
 const address = computed(() => props.account.exit_ip && props.account.exit_checked_at
-  ? props.account.exit_ip : t('accounts.ipLocation.pendingIp'))
+  ? props.account.exit_ip : t(props.account.exit_lookup_status === 'failed' ? 'accounts.ipLocation.failedIp' : 'accounts.ipLocation.pendingIp'))
 const details = computed(() => {
   const parts = [source.value]
   if (props.account.node_label) parts.push(props.account.node_label)
+  if (props.account.exit_lookup_status === 'failed') parts.push(t('accounts.ipLocation.failedHint'))
   if (props.account.latency_ms != null) parts.push(t('accounts.ipLocation.latency', { ms: props.account.latency_ms }))
   const checked = props.account.exit_checked_at
   if (checked && !Number.isNaN(Date.parse(checked))) {

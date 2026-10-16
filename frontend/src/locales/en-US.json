@@ -208,7 +208,10 @@
     "ipLocation": {
       "label": "IP location",
       "unknown": "Unknown location",
+      "failedLocation": "Location lookup failed",
       "pendingIp": "IP pending verification",
+      "failedIp": "IP lookup failed",
+      "failedHint": "Exit IP lookup failed through this route; click the account status check to retry",
       "shared": "Shared node",
       "latency": "Latency {ms} ms",
       "checkedAt": "IP verified: {time}",
@@ -640,6 +643,7 @@
       "noLabel": "No name set",
       "disable": "Disable and clear this subscription",
       "usable": "Usable nodes",
+      "imported": "Imported nodes",
       "unsupported": "Unsupported nodes",
       "lastRefreshed": "Last refreshed",
       "neverRefreshed": "Never refreshed",

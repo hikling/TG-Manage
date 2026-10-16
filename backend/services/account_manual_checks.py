@@ -21,7 +21,7 @@ async def inspect_account_resources(
         route = {
             **account_route_status(account_name),
             "exit_ip": None, "exit_country": None, "exit_region": None,
-            "exit_checked_at": None,
+            "exit_checked_at": None, "exit_lookup_status": "failed",
         }
     try:
         telebox = get_telebox_service().status(account_name)

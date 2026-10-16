@@ -90,6 +90,7 @@ export interface SubscriptionSourceStatus {
   configured: boolean;
   status: string;
   last_refreshed_at: string | null;
+  imported_count: number;
   usable_count: number;
   unsupported_count: number;
   label: string | null;

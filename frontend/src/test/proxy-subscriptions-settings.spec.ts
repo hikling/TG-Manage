@@ -6,8 +6,8 @@ import ProxySubscriptionsSettings, { type SubscriptionDraft } from '../component
 import type { ProxySubscriptionSettings } from '../lib/api/settings'
 
 const status: ProxySubscriptionSettings = {
-  primary: { configured: true, status: 'healthy', last_refreshed_at: '2026-10-15T00:00:00Z', usable_count: 3, unsupported_count: 1, label: 'Primary provider' },
-  fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, usable_count: 0, unsupported_count: 0, label: null },
+  primary: { configured: true, status: 'healthy', last_refreshed_at: '2026-10-15T00:00:00Z', imported_count: 4, usable_count: 3, unsupported_count: 1, label: 'Primary provider' },
+  fallback: { configured: false, status: 'unconfigured', last_refreshed_at: null, imported_count: 0, usable_count: 0, unsupported_count: 0, label: null },
   latency_threshold_ms: 800,
   route_mode: 'primary',
 }

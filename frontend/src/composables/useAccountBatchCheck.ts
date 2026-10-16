@@ -79,6 +79,7 @@ export function useAccountBatchCheck(options: {
         if ('exit_country' in r) acc.raw.exit_country = r.exit_country
         if ('exit_region' in r) acc.raw.exit_region = r.exit_region
         if ('exit_checked_at' in r) acc.raw.exit_checked_at = r.exit_checked_at
+        if ('exit_lookup_status' in r) acc.raw.exit_lookup_status = r.exit_lookup_status
         if ('shared_node' in r) acc.raw.shared_node = r.shared_node
       }
       if (r.ok) {

@@ -92,6 +92,7 @@ const routeMode = computed(() => {
             {{ t('settings.subscriptions.disable') }}
           </label>
           <dl class="grid grid-cols-2 gap-2 text-xs text-gray-500 dark:text-gray-400">
+            <div><dt>{{ t('settings.subscriptions.imported') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].imported_count }}</dd></div>
             <div><dt>{{ t('settings.subscriptions.usable') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].usable_count }}</dd></div>
             <div><dt>{{ t('settings.subscriptions.unsupported') }}</dt><dd class="font-semibold text-gray-800 dark:text-gray-200">{{ status[kind].unsupported_count }}</dd></div>
           </dl>

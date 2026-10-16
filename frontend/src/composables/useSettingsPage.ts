@@ -99,6 +99,8 @@ export function useSettingsPage() {
   const botTokenSet = ref(false)
   const botCodeStatus = ref('')
   let botStatusTimer: ReturnType<typeof setInterval> | undefined
+  let subscriptionStatusTimer: ReturnType<typeof setInterval> | undefined
+  let subscriptionStatusInFlight = false
   const afterBotTokenSaved = () => {
     if (settings.value.botToken) {
       botTokenSet.value = true
@@ -210,6 +212,21 @@ export function useSettingsPage() {
       if (!disposed) applySubscriptionSettings(result)
     } catch (error: unknown) {
       if (!disposed) subscriptionError.value = resolveApiErrorMessage(error, 'settings.subscriptions.loadFailed')
+    }
+  }
+
+  const pollSubscriptionStatus = async () => {
+    const token = getAuthToken()
+    if (!token || disposed || document.hidden || subscriptionStatusInFlight || subscriptionLoading.value || subscriptionRefreshing.value) return
+    subscriptionStatusInFlight = true
+    try {
+      const result = await getProxySubscriptions(token)
+      // Background health updates own only the read projection, not the form.
+      if (!disposed && token === getAuthToken()) subscriptions.value = result
+    } catch {
+      // Preserve the last saved status; explicit loading owns error feedback.
+    } finally {
+      subscriptionStatusInFlight = false
     }
   }
 
@@ -338,12 +355,14 @@ export function useSettingsPage() {
         // Keep the last known status; normal settings load owns error feedback.
       }
     }, 20_000)
+    subscriptionStatusTimer = setInterval(() => void pollSubscriptionStatus(), 30_000)
   })
 
   onUnmounted(() => {
     disposed = true
     window.removeEventListener('beforeunload', onBeforeUnload)
     if (botStatusTimer) clearInterval(botStatusTimer)
+    if (subscriptionStatusTimer) clearInterval(subscriptionStatusTimer)
   })
 
 
