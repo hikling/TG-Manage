@@ -71,6 +71,7 @@ class SubscriptionSourceStatus(BaseModel):
     configured: bool = False
     status: str = "unconfigured"
     last_refreshed_at: Optional[str] = None
+    imported_count: int = 0
     usable_count: int = 0
     unsupported_count: int = 0
     label: Optional[str] = None

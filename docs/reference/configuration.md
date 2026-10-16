@@ -17,6 +17,7 @@
 | 变量 | 默认 | 作用 |
 | --- | --- | --- |
 | `APP_DATA_DIR` | 容器 `/data` | 数据库、会话、密钥、任务和 TeleBox 状态根目录 |
+| `APP_VERSION` | 包内版本（当前 `2.5.0`） | 可选有效版本覆盖值；正常部署无需设置，`dev` 等占位值不会覆盖包内版本 |
 | `PORT` | Compose `8080` | 容器内 HTTP 端口 |
 | `TZ` | Compose `Asia/Shanghai` | 日志和调度时区，可在面板设置显示时区 |
 | `APP_DATABASE_URL` | SQLite `data/db.sqlite` | 可选 SQLAlchemy 数据库 URL |

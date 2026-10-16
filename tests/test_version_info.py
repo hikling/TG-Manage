@@ -18,6 +18,7 @@ from backend.utils.version_info import (
     resolve_app_version,
     validate_update_check_url,
 )
+from tg_manage import __version__
 
 
 class TestSemver:
@@ -39,10 +40,13 @@ class TestSemver:
         assert is_update_available("2.1.0", "2.1.0") is False
         assert is_update_available("2.2.0", "2.1.0") is False
         assert is_update_available("v2.0.0", "v2.0.1") is True
+        assert is_update_available("v1.0", "2.0") is True
 
     def test_is_update_available_invalid_returns_false(self):
         assert is_update_available("", "2.0.0") is False
         assert is_update_available("2.0.0", "") is False
+        assert is_update_available("dev", "2.5.0") is False
+        assert is_update_available("preview", "2.5.0") is False
 
 
 class TestResolveVersion:
@@ -51,9 +55,12 @@ class TestResolveVersion:
         assert resolve_app_version("2.0.0", "0.0.0") == "2.0.0"
         assert resolve_app_version("2.0.0", "v0.0.0") == "2.0.0"
         assert resolve_app_version("2.0.0", "0.0.0-dev") == "2.0.0"
+        assert resolve_app_version("2.5.0", "dev") == "2.5.0"
+        assert resolve_app_version("2.5.0", "preview") == "2.5.0"
 
     def test_real_env_override(self):
         assert resolve_app_version("2.0.0", "v2.1.0") == "2.1.0"
+        assert resolve_app_version("2.0.0", "v2.1") == "2.1"
 
 
 class TestValidateUrl:
@@ -92,11 +99,15 @@ class TestLocalInfo:
         assert info["version"] == "9.9.9"
 
     def test_placeholder_app_version_falls_back(self, monkeypatch):
-        monkeypatch.setenv("APP_VERSION", "0.0.0")
+        monkeypatch.setenv("APP_VERSION", "dev")
         info = get_local_version_info()
         from tg_manage import __version__
 
         assert info["version"] == __version__
+
+    def test_explicit_zero_placeholder_falls_back(self, monkeypatch):
+        monkeypatch.setenv("APP_VERSION", "0.0.0")
+        assert get_local_version_info()["version"] == __version__
 
 
 class TestUpdateCheckFlag:
@@ -164,6 +175,19 @@ class TestRemoteCheck:
         called_url = str(mock_client.get.call_args[0][0])
         assert "api.github.com" not in called_url
         assert "github.com" in called_url and "releases/latest" in called_url
+
+    def test_docker_dev_placeholder_does_not_report_current_release_as_new(self, monkeypatch):
+        monkeypatch.setenv("APP_UPDATE_CHECK", "1")
+        monkeypatch.setenv("APP_VERSION", "dev")
+        monkeypatch.delenv("APP_UPDATE_CHECK_URL", raising=False)
+        mock_client = self._html_redirect_client(f"v{__version__}")
+        with patch(
+            "backend.utils.version_info.httpx.Client", return_value=mock_client
+        ):
+            result = check_remote_update(force=True)
+        assert get_local_version_info()["version"] == __version__
+        assert result["latest_version"] == __version__
+        assert result["update_available"] is False
 
     def test_real_httpx_redirect_uses_location_without_api_fallback(self, monkeypatch):
         monkeypatch.setenv("APP_UPDATE_CHECK", "1")

@@ -27,6 +27,9 @@ describe('version-utils', () => {
     expect(isUpdateAvailable('2.1.0', '2.1.0')).toBe(false)
     expect(isUpdateAvailable('2.2.0', '2.1.0')).toBe(false)
     expect(isUpdateAvailable('v2.0.0', 'v2.0.1')).toBe(true)
+    expect(isUpdateAvailable('v1.0', '2.0')).toBe(true)
+    expect(isUpdateAvailable('dev', '2.5.0')).toBe(false)
+    expect(isUpdateAvailable('preview', '2.5.0')).toBe(false)
   })
 
   it('localStorage cache roundtrip', () => {

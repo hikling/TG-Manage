@@ -217,17 +217,35 @@ class AccountRouteService:
     async def get_subscription_settings(self) -> dict[str, Any]:
         return self._settings_projection()
 
+    def _probe_usable(self, key: str) -> bool:
+        health = self._state["health"].get(key, {})
+        latency = health.get("latency_ms")
+        return (health.get("healthy") is True
+                and not health.get("bad_streak")
+                and (latency is None or latency <= self._secret["latency_threshold_ms"])
+                and self.runtime.port_for(key) is not None)
+
     def _settings_projection(self) -> dict[str, Any]:
         sources: dict[str, Any] = {}
+        nodes_by_source: dict[str, list[ImportedNode]] = {"primary": [], "fallback": []}
+        for node in self._nodes():
+            nodes_by_source[node.source].append(node)
         for source in ("primary", "fallback"):
             raw = self._secret["sources"].get(source, {})
+            imported = nodes_by_source[source]
+            usable_count = 0
+            for node in imported:
+                key = self._key(node)
+                if (self._probe_usable(key)
+                        and "geo_failed_until" not in self._state["health"].get(key, {})):
+                    usable_count += 1
             sources[source] = {
                 "configured": bool(self._secret.get(f"{source}_url")),
                 "status": str(raw.get("status") or "unconfigured"),
                 "last_refreshed_at": raw.get("last_refreshed_at"),
-                "imported_count": sum(1 for node in self._nodes() if node.source == source),
-                "usable_count": sum(1 for node in self._nodes() if node.source == source and self._state["health"].get(self._key(node), {}).get("healthy") is True and not self._geo_quarantined(self._key(node))),
-                "unsupported_count": int(raw.get("unsupported_count") or 0),
+                "imported_count": len(imported),
+                "usable_count": usable_count,
+                "unsupported_count": int(raw.get("unsupported_count") or 0) + len(imported) - usable_count,
                 "label": "主订阅" if source == "primary" else "兜底订阅",
             }
         assignments = self._state["assignments"].values()
@@ -319,7 +337,12 @@ class AccountRouteService:
                 await self.runtime.replace(candidates, accept=accept if changed_sources and proposed_keys != previous_keys else None)
             except (XrayRuntimeError, OSError) as exc:
                 for source in changed_sources:
-                    source_updates[source]["status"] = "XRAY_CANDIDATE_FAILED"
+                    # The previous pool remains installed, so retain its
+                    # parser statistics and refresh time as well.
+                    source_updates[source] = {
+                        **self._secret["sources"].get(source, _default_source()),
+                        "status": "XRAY_CANDIDATE_FAILED",
+                    }
                 self._secret["sources"].update(source_updates)
                 self._save_secret()
                 logger.warning("Xray 候选配置未启用（%s）", type(exc).__name__)
@@ -456,10 +479,8 @@ class AccountRouteService:
         eligible: list[ImportedNode] = []
         for node in self._nodes():
             key = self._key(node)
-            health = self._state["health"].get(key, {})
             if (key == exclude or key in occupied_keys or (source and node.source != source)
-                    or health.get("healthy") is not True or self._geo_quarantined(key)
-                    or self.runtime.port_for(key) is None
+                    or not self._probe_usable(key) or self._geo_quarantined(key)
                     or node_ips.get(key) in used_ips):
                 continue
             eligible.append(node)

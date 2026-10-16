@@ -45,7 +45,8 @@ function parseSemver(raw: string): [number, number, number] {
 export function isUpdateAvailable(current: string, latest: string): boolean {
   const cur = normalizeVersion(current)
   const lat = normalizeVersion(latest)
-  if (!cur || !lat) return false
+  const semver = /^\d+(?:\.\d+){0,2}(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+  if (!semver.test(cur) || !semver.test(lat)) return false
   const a = parseSemver(cur)
   const b = parseSemver(lat)
   for (let i = 0; i < 3; i++) {
