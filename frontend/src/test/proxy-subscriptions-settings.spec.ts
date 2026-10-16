@@ -27,10 +27,25 @@ describe('Xray subscription settings', () => {
     expect(wrapper.text()).toContain('Primary provider')
     expect(wrapper.text()).toContain('可用节点')
     expect(wrapper.text()).toContain('主订阅')
+    const metrics = wrapper.findAll('dl')[0]
+    expect(metrics.classes()).toContain('grid-cols-3')
+    expect(metrics.findAll('div')).toHaveLength(3)
+    expect(metrics.text()).toContain('已导入节点4')
+    expect(metrics.text()).toContain('可用节点3')
+    expect(metrics.text()).toContain('不支持的节点1')
     expect(wrapper.get<HTMLInputElement>('#subscription-primary').element.value).toBe('')
     expect(wrapper.get('#subscription-primary').attributes('type')).toBe('password')
     expect(wrapper.html()).not.toContain('https://secret.example/sub')
     expect(wrapper.get('button.ui-btn-primary').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows a placeholder instead of an empty metric when an older status omits a count', () => {
+    const olderStatus = {
+      ...status,
+      primary: { ...status.primary, imported_count: undefined },
+    } as unknown as ProxySubscriptionSettings
+    const wrapper = mountSettings({ status: olderStatus })
+    expect(wrapper.findAll('dl')[0].text()).toContain('已导入节点—')
   })
 
   it('emits replacement and explicit clear edits, while refresh waits for save', async () => {
