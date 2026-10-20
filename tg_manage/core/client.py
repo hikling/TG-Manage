@@ -17,6 +17,8 @@ from typing import (
 
 from pydantic import BaseModel
 
+from tg_manage.private_file import write_private_text
+
 try:
     from pydantic import ConfigDict
 except ImportError:  # pragma: no cover - pydantic v1 compatibility
@@ -369,8 +371,7 @@ class Client(BaseClient):
         return self.workdir / (self.name + ".session_string")
 
     async def save_session_string(self):
-        with open(self.session_string_file, "w") as fp:
-            fp.write(await self.export_session_string())
+        write_private_text(self.session_string_file, await self.export_session_string())
 
     def load_session_string(self):
         logger.info("从本地文件加载 session_string。")

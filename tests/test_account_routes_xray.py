@@ -160,6 +160,74 @@ class AccountRouteTests(unittest.IsolatedAsyncioTestCase):
         self.service._reconcile()
         self.assertEqual(self.service.account_route_status("one")["route_mode"], "primary")
 
+    async def test_account_failure_switches_only_to_free_healthy_distinct_ip(self):
+        self.service._secret["ever_configured"] = True
+        for node in (self.primary, self.second_primary, self.fallback):
+            self.service._record_sample(self.service._key(node), 100)
+        self.service._assign("one", self.primary)
+        self.service._assign("two", self.fallback)
+        self.service._state["assignments"]["one"]["exit_ip"] = "8.8.8.8"
+        self.service._state["assignments"]["two"]["exit_ip"] = "1.1.1.1"
+        changes = AsyncMock()
+        self.service.register_change_callback(changes)
+
+        with patch.object(self.service, "_fetch_geo", new=AsyncMock(return_value={
+            "ip": "9.9.9.9", "country": "US", "region": None,
+        })):
+            assert await self.service.switch_account_to_alternate_node("one")
+
+        self.assertEqual(
+            self.service._state["assignments"]["one"]["key"],
+            self.service._key(self.second_primary),
+        )
+        self.assertEqual(
+            self.service._state["assignments"]["two"]["key"],
+            self.service._key(self.fallback),
+        )
+        changes.assert_awaited_once_with({"one"})
+
+    async def test_account_failure_keeps_route_if_alternates_share_ip_or_are_occupied(self):
+        self.service._secret["ever_configured"] = True
+        for node in (self.primary, self.second_primary, self.fallback):
+            self.service._record_sample(self.service._key(node), 100)
+        self.service._assign("one", self.primary)
+        self.service._assign("two", self.fallback)
+        self.service._state["assignments"]["one"]["exit_ip"] = "8.8.8.8"
+        self.service._geo_cache[self.service._key(self.second_primary)] = (
+            time.monotonic(), {"ip": "8.8.8.8", "country": "US", "region": None},
+        )
+        old = dict(self.service._state["assignments"]["one"])
+
+        with patch.object(self.service, "_fetch_geo", new=AsyncMock(return_value={
+            "ip": "8.8.8.8", "country": "US", "region": None,
+        })):
+            assert not await self.service.switch_account_to_alternate_node("one")
+
+        self.assertEqual(self.service._state["assignments"]["one"], old)
+        self.assertEqual(
+            self.service._state["assignments"]["two"]["key"],
+            self.service._key(self.fallback),
+        )
+
+    async def test_account_failure_verifies_unknown_old_and_new_exit_ips(self):
+        self.service._secret["ever_configured"] = True
+        for node in (self.primary, self.second_primary, self.fallback):
+            self.service._record_sample(self.service._key(node), 100)
+        self.service._assign("one", self.primary)
+        self.service._assign("two", self.fallback)
+        self.service._state["assignments"]["two"]["exit_ip"] = "1.1.1.1"
+        fetch = AsyncMock(side_effect=[
+            {"ip": "8.8.8.8", "country": "US", "region": None},
+            {"ip": "8.8.8.8", "country": "US", "region": None},
+        ])
+        with patch.object(self.service, "_fetch_geo", new=fetch):
+            assert not await self.service.switch_account_to_alternate_node("one")
+        self.assertEqual(fetch.await_count, 2)
+        self.assertEqual(
+            self.service._state["assignments"]["one"]["key"],
+            self.service._key(self.primary),
+        )
+
     async def test_legacy_shared_route_moves_second_account_to_free_fallback(self):
         self.service._secret["ever_configured"] = True
         primary_key = self.service._key(self.primary)

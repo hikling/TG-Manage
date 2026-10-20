@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from backend.core.config import get_settings
@@ -63,6 +64,21 @@ def get_engine() -> Engine:
     if _engine is None:
         init_engine()
     return _engine  # type: ignore[return-value]
+
+
+def ensure_user_auth_version(engine: Engine) -> None:
+    """Upgrade existing databases without losing users or their login settings."""
+    if "users" not in inspect(engine).get_table_names():
+        return
+    if "auth_version" in {column["name"] for column in inspect(engine).get_columns("users")}:
+        return
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0"))
+    except DBAPIError:
+        # Another instance may have completed the same additive migration.
+        if "auth_version" not in {column["name"] for column in inspect(engine).get_columns("users")}:
+            raise
 
 
 def get_session_local() -> sessionmaker:

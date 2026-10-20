@@ -67,7 +67,8 @@ const handlePasswordChange = async () => {
   error.value = ''
   successMessage.value = ''
   try {
-    await changePassword(token, form.value.old_password, form.value.new_password)
+    const res = await changePassword(token, form.value.old_password, form.value.new_password)
+    authStore.setToken(res.access_token)
     successMessage.value = t('profile.passwordChanged')
     toast.success(t('profile.passwordChanged'))
     form.value.old_password = ''
@@ -160,7 +161,8 @@ const handleEnableTOTP = async () => {
   loading.value = true
   error.value = ''
   try {
-    await enableTOTP(token, totpCode.value)
+    const res = await enableTOTP(token, totpCode.value)
+    authStore.setToken(res.access_token)
     successMessage.value = t('profile.totpEnableSuccess')
     toast.success(t('profile.totpEnableSuccess'))
     totpCode.value = ''
@@ -180,7 +182,8 @@ const handleDisableTOTP = async () => {
   loading.value = true
   error.value = ''
   try {
-    await disableTOTP(token, totpCode.value)
+    const res = await disableTOTP(token, totpCode.value)
+    authStore.setToken(res.access_token)
     successMessage.value = t('profile.totpDisableSuccess')
     toast.success(t('profile.totpDisableSuccess'))
     totpCode.value = ''

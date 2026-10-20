@@ -27,6 +27,10 @@ def scheduler_env(monkeypatch):
         "backend.services.config.get_config_service",
         lambda: SimpleNamespace(get_global_settings=lambda: dict(config)),
     )
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_config_service",
+        lambda: SimpleNamespace(get_global_settings=lambda: dict(config)),
+    )
     monkeypatch.setattr(instance_lock, "try_acquire_scheduler_lock", Mock(return_value=True))
     monkeypatch.setattr(instance_lock, "has_scheduler_lock", Mock(return_value=True))
     monkeypatch.setattr(instance_lock, "release_scheduler_lock", Mock())
@@ -50,6 +54,28 @@ def cleanup_run(monkeypatch):
     run = AsyncMock(return_value={"telebox": 0, "metadata": 0, "keepalive": 0, "avatars": 0})
     monkeypatch.setattr(account_data_cleanup, "reconcile_orphan_account_data", run)
     return run
+
+
+@pytest.fixture(autouse=True)
+def subscription_refresh(monkeypatch):
+    settings = {
+        "primary": {
+            "configured": True, "status": "ready", "usable_count": 3,
+            "unsupported_count": 2,
+        },
+        "fallback": {
+            "configured": True, "status": "ready", "usable_count": 1,
+            "unsupported_count": 4,
+        },
+    }
+    service = SimpleNamespace(
+        refresh_subscriptions=AsyncMock(return_value=set()),
+        get_subscription_settings=AsyncMock(return_value=settings),
+    )
+    monkeypatch.setattr(
+        "backend.services.account_routes.get_route_service", lambda: service,
+    )
+    return service
 
 
 @pytest.fixture
@@ -185,6 +211,7 @@ async def test_retired_keepalive_job_removed_without_replacing_midnight(schedule
 )
 async def test_job_only_starts_within_configured_midnight_minute(
     scheduler_env, scheduler_clock, monkeypatch, utc_time, starts, official_run,
+    subscription_refresh,
 ):
     scheduler_clock[0] = datetime(2026, 10, 12, *utc_time, tzinfo=ZoneInfo("UTC"))
     run = AsyncMock(return_value={"checked": 1})
@@ -197,10 +224,12 @@ async def test_job_only_starts_within_configured_midnight_minute(
     await scheduling._job_account_status_report()
 
     if starts:
+        subscription_refresh.refresh_subscriptions.assert_awaited_once()
         run.assert_awaited_once()
         service.assert_called_once()
         official_run.assert_awaited_once()
     else:
+        subscription_refresh.refresh_subscriptions.assert_not_awaited()
         run.assert_not_awaited()
         service.assert_not_called()
         official_run.assert_not_awaited()
@@ -303,7 +332,9 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
 
     await scheduling._job_account_status_report()
 
-    status_run.assert_awaited_once_with(send_report=False)
+    status_run.assert_awaited_once_with(
+        send_report=False, midnight_recovery=True,
+    )
     assert official_run.await_args.kwargs["send_normal_summary"] is False
     assert official_run.await_args.kwargs["account_names"] == ["quiet"]
     send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
@@ -312,6 +343,123 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     assert "🟢 quiet — 账户正常 · 主订阅 · 无官方新消息" in report_chunks(
         rows, {"quiet": "empty"},
     )[0]
+
+
+@pytest.mark.asyncio
+async def test_midnight_refresh_precedes_checks_and_sends_node_counts(
+    scheduler_env, scheduler_clock, monkeypatch, subscription_refresh,
+):
+    scheduler_env.update({
+        "telegram_bot_notify_enabled": True,
+        "telegram_bot_token": "test-token",
+        "telegram_bot_chat_id": "12345",
+        "telegram_bot_message_thread_id": 8,
+    })
+    events = []
+
+    async def refresh():
+        events.append("refresh")
+        return set()
+
+    async def status_run(**_kwargs):
+        events.append("status")
+        return {"checked": 0, "rows": []}
+
+    subscription_refresh.refresh_subscriptions.side_effect = refresh
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=AsyncMock(side_effect=status_run)),
+    )
+    send = AsyncMock()
+    monkeypatch.setattr(
+        "backend.services.account_status_report.send_telegram_bot_message", send,
+    )
+    monkeypatch.setattr(
+        "backend.services.account_status_report._send_report",
+        AsyncMock(return_value=1),
+    )
+
+    await scheduling._job_account_status_report()
+
+    assert events == ["refresh", "status"]
+    send.assert_awaited_once()
+    assert send.await_args.kwargs == {
+        "bot_token": "test-token",
+        "chat_id": "12345",
+        "message_thread_id": 8,
+        "text": (
+            "零点机场订阅节点报告\n"
+            "主订阅（已刷新）：可用 3 · 不可用/不支持 2\n"
+            "兜底订阅（已刷新）：可用 1 · 不可用/不支持 4"
+        ),
+    }
+
+
+@pytest.mark.asyncio
+async def test_failed_subscription_refresh_reports_retained_counts_and_continues(
+    scheduler_env, monkeypatch, subscription_refresh, official_run, caplog,
+):
+    scheduler_env.update({
+        "telegram_bot_notify_enabled": True,
+        "telegram_bot_token": "test-token",
+        "telegram_bot_chat_id": "12345",
+    })
+    subscription_refresh.refresh_subscriptions.side_effect = RuntimeError(
+        "secret subscription URL"
+    )
+    subscription_refresh.get_subscription_settings.return_value["fallback"]["status"] = (
+        "SUBSCRIPTION_FETCH_FAILED"
+    )
+    send = AsyncMock()
+    monkeypatch.setattr(
+        "backend.services.account_status_report.send_telegram_bot_message", send,
+    )
+    monkeypatch.setattr(
+        "backend.services.account_status_report._send_report",
+        AsyncMock(return_value=0),
+    )
+    status = AsyncMock(return_value={"checked": 0, "rows": []})
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status),
+    )
+
+    result = await scheduling._run_combined_report(
+        datetime(2026, 10, 13, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    status.assert_awaited_once()
+    official_run.assert_awaited_once()
+    assert result["success"] is False
+    assert result["messages_sent"] == 1
+    assert "本次刷新中断" in send.await_args.kwargs["text"]
+    assert "兜底订阅（刷新失败，沿用上次节点）" in send.await_args.kwargs["text"]
+    assert "secret subscription URL" not in send.await_args.kwargs["text"]
+    assert "secret subscription URL" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_source_refresh_failure_is_marked_without_exposing_source_url(
+    scheduler_env, subscription_refresh,
+):
+    subscription_refresh.get_subscription_settings.return_value["fallback"].update({
+        "status": "SUBSCRIPTION_FETCH_FAILED",
+        "url": "https://example.invalid/private-token",
+    })
+
+    success, sent = await scheduling._refresh_midnight_subscriptions()
+
+    subscription_refresh.refresh_subscriptions.assert_awaited_once()
+    assert success is False
+    assert sent == 0  # Bot notifications are disabled in this fixture.
+    from backend.services.account_status_report import subscription_report_text
+
+    text = subscription_report_text(
+        subscription_refresh.get_subscription_settings.return_value,
+    )
+    assert "主订阅（已刷新）：可用 3" in text
+    assert "兜底订阅（刷新失败，沿用上次节点）：可用 1" in text
+    assert "private-token" not in text
 
 
 @pytest.mark.asyncio

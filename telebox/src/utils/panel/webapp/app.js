@@ -413,19 +413,8 @@
 
     setProgress("正在连接更新服务…");
 
-    // Connect via SSE
+    // Read SSE through fetch so the session token stays in the header.
     const url = API + "/tpm/update/stream";
-    const es = new EventSource(url + "?token=" + encodeURIComponent(TOKEN));
-
-    // Since we need auth, send token as query param
-    // Actually, EventSource doesn't support custom headers, so we need a different approach:
-    // Use fetch with GET + Authorization header, then read the stream
-    // Let's use fetch-based SSE reader instead
-
-    // Close the EventSource experiment, use fetch
-    es.close();
-
-    // Use fetch-based SSE
     let lines = [];
     let currentEvent = "";
 
