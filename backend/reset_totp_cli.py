@@ -3,12 +3,19 @@ from __future__ import annotations
 
 import argparse
 
-from backend.core.database import get_session_local, init_engine
+from backend.core.database import (
+    ensure_user_auth_version,
+    get_engine,
+    get_session_local,
+    init_engine,
+)
 from backend.models.user import User
 
 
 def reset_totp_for_user(username: str) -> bool:
     init_engine()
+    # Recovery must work even when the upgraded web service has not started yet.
+    ensure_user_auth_version(get_engine())
     with get_session_local()() as db:
         user = db.query(User).filter(User.username == username).one_or_none()
         if user is None:
