@@ -324,18 +324,35 @@ class AccountStatusReportService:
                                 lock.release()
                         except Exception as exc:
                             logger.warning("保存账户日报状态失败（%s）", type(exc).__name__)
-                    result.update(account_route_status(name))
+                    try:
+                        result.update(account_route_status(name))
+                    except Exception as exc:
+                        logger.warning("账户日报线路状态读取失败（%s）", type(exc).__name__)
+                        result["route_status"] = "error"
                     reservation.finish(name, success=bool(result.get("ok")))
                     await asyncio.sleep(INTER_DELAY_SECONDS)
                     return name, result
                 finally:
                     reservation.release()
 
+        async def check_one_safely(name: str, ready_at: float) -> tuple[str, dict[str, Any] | float]:
+            try:
+                return await check_one(name, ready_at)
+            except Exception as exc:
+                logger.warning("账户日报处理失败（%s）", type(exc).__name__)
+                return name, {
+                    "account_name": name, "ok": False, "status": "error",
+                    "code": "STATUS_CHECK_FAILED", "checked_at": utc_now_iso_z(),
+                    "needs_relogin": False, "route_status": "error",
+                }
+
         while pending:
             deferred: list[tuple[str, float]] = []
-            async with asyncio.TaskGroup() as group:
-                tasks = [group.create_task(check_one(name, ready_at)) for name, ready_at in pending]
-            for name, outcome in (task.result() for task in tasks):
+            # asyncio.gather also supports the project's Python 3.10 minimum.
+            outcomes = await asyncio.gather(
+                *(check_one_safely(name, ready_at) for name, ready_at in pending)
+            )
+            for name, outcome in outcomes:
                 if isinstance(outcome, dict):
                     results[name] = outcome
                 else:

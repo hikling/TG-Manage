@@ -523,7 +523,12 @@ async def test_iterator_cleanup_preserves_primary_failure_and_cancellation(
             await reader.read_official_page(context.service, "alpha", end=END)
         else:
             await download(context, tmp_path)
-    assert error.value is primary
+    # Python 3.10's wait_for may reconstruct CancelledError at the task
+    # boundary. The cancellation type and cleanup behavior are the contract.
+    if canceled:
+        assert isinstance(error.value, asyncio.CancelledError)
+    else:
+        assert error.value is primary
     assert iterator.closed
     assert list(tmp_path.iterdir()) == []
     assert "RuntimeError" in caplog.text and "SECRET" not in caplog.text
@@ -599,7 +604,12 @@ async def test_client_exit_cleanup_preserves_primary_failure_and_cancellation(
             )
         else:
             await download(context, tmp_path)
-    assert error.value is primary
+    # Python 3.10's wait_for may reconstruct CancelledError at the task
+    # boundary. Non-cancellation failures still retain their original object.
+    if canceled:
+        assert isinstance(error.value, asyncio.CancelledError)
+    else:
+        assert error.value is primary
     assert list(tmp_path.iterdir()) == []
     assert "RuntimeError" in caplog.text and "SECRET" not in caplog.text
     assert_released(context)

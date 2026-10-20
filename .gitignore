@@ -192,9 +192,13 @@ coding-trajectories.jsonl
 .trellis/.runtime/
 
 # Keep local agent instructions, skills, workflows and task journals out of GitHub.
+# The reliability smoke check below is the one tracked CI workflow.
 /.agents/
 /.codex/
-/.github/
+/.github/*
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/reliability-smoke.yml
 /.trellis/
 /AGENTS.md
 **/CLAUDE.md
