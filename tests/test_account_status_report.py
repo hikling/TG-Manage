@@ -92,6 +92,47 @@ async def test_daily_route_projection_runs_even_after_account_failure(report_env
 
 
 @pytest.mark.asyncio
+async def test_route_projection_failure_marks_one_row_without_losing_report(report_env, monkeypatch):
+    _, service, _, _ = report_env
+    service.list_accounts.return_value = [{"name": "broken"}, {"name": "healthy"}]
+
+    def project(name: str):
+        if name == "broken":
+            raise RuntimeError("private route details")
+        return {"route_mode": "primary", "route_status": "healthy"}
+
+    monkeypatch.setattr(report, "account_route_status", project)
+    result = await report.AccountStatusReportService().run(send_report=False)
+
+    assert result["checked"] == 2
+    assert [row["account_name"] for row in result["rows"]] == ["broken", "healthy"]
+    assert result["rows"][0]["route_status"] == "error"
+    assert result["rows"][1]["route_status"] == "healthy"
+    assert "private route details" not in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+async def test_unexpected_account_error_keeps_other_rows(report_env, monkeypatch):
+    _, service, _, _ = report_env
+    service.list_accounts.return_value = [{"name": "broken"}, {"name": "healthy"}]
+    reservation = Mock()
+
+    def reserve(names):
+        if names == ["broken"]:
+            raise RuntimeError("private gate details")
+        return reservation
+
+    monkeypatch.setattr(report, "account_check_gate", SimpleNamespace(reserve=reserve))
+    result = await report.AccountStatusReportService().run(send_report=False)
+
+    assert result["checked"] == 2
+    assert result["fail"] == 1
+    assert result["rows"][0]["code"] == "STATUS_CHECK_FAILED"
+    assert result["rows"][1]["ok"] is True
+    assert "private gate details" not in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
 async def test_midnight_retry_recovers_without_switching_node(report_env, monkeypatch):
     _, service, _, _ = report_env
     service.check_account_status.side_effect = [
