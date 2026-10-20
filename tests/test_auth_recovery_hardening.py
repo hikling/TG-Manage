@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import pyotp
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import sessionmaker
 
+import backend.reset_totp_cli as recovery_cli
 from backend.core.database import ensure_user_auth_version
 from backend.models.user import User
 from backend.reset_totp_cli import reset_totp_for_user
@@ -83,4 +85,28 @@ def test_existing_users_table_gets_auth_version_without_losing_data():
         assert connection.execute(text(
             "SELECT username, password_hash, auth_version FROM users WHERE id = 1"
         )).one() == ("admin", "hash", 0)
+    engine.dispose()
+
+
+def test_host_recovery_upgrades_legacy_schema_before_web_start(monkeypatch):
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "CREATE TABLE users (id INTEGER PRIMARY KEY, username VARCHAR(50), "
+            "password_hash VARCHAR(255), totp_secret VARCHAR(64), "
+            "created_at DATETIME NOT NULL)"
+        ))
+        connection.execute(text(
+            "INSERT INTO users (id, username, password_hash, totp_secret, created_at) "
+            "VALUES (1, 'admin', 'hash', 'SECRET', '2026-10-20 00:00:00')"
+        ))
+    monkeypatch.setattr(recovery_cli, "init_engine", lambda: None)
+    monkeypatch.setattr(recovery_cli, "get_engine", lambda: engine)
+    monkeypatch.setattr(recovery_cli, "get_session_local", lambda: sessionmaker(bind=engine))
+
+    assert recovery_cli.reset_totp_for_user("admin")
+    with engine.connect() as connection:
+        assert connection.execute(text(
+            "SELECT totp_secret, auth_version FROM users WHERE id = 1"
+        )).one() == (None, 1)
     engine.dispose()
