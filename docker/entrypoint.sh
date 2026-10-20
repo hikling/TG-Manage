@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 PORT_VALUE="${PORT:-8080}"
 AUTO_FIX_PERMS="${APP_AUTO_FIX_DATA_PERMS:-1}"
@@ -19,13 +20,13 @@ DEFAULT_GID="${APP_GID:-10001}"
 TARGET_UID="$DEFAULT_UID"
 TARGET_GID="$DEFAULT_GID"
 
-# If /data is mounted, prefer running as its owner/group to avoid chmod 777.
+# Reuse a non-root volume owner where possible; never run the web app as root.
 if [ -d /data ]; then
   DATA_UID="$(stat -c '%u' /data 2>/dev/null || true)"
   DATA_GID="$(stat -c '%g' /data 2>/dev/null || true)"
   if [ -n "${DATA_UID}" ] && [ -n "${DATA_GID}" ]; then
-    TARGET_UID="${DATA_UID}"
-    TARGET_GID="${DATA_GID}"
+    if [ "${DATA_UID}" != "0" ]; then TARGET_UID="${DATA_UID}"; fi
+    if [ "${DATA_GID}" != "0" ]; then TARGET_GID="${DATA_GID}"; fi
   fi
 fi
 
@@ -41,22 +42,28 @@ if [ "$(id -u)" -eq 0 ]; then
       if [ -e "${p}" ]; then
         chown -R "${TARGET_UID}:${TARGET_GID}" "${p}" 2>/dev/null || true
         chmod -R u+rwX "${p}" 2>/dev/null || true
-        chmod -R g+rwX "${p}" 2>/dev/null || true
       fi
     done
     # Per-account API credentials and the root encryption key stay private
     # even after the recursive compatibility permission repair above.
-    for p in /data/.app_secret_key /data/.admin_setup_token /data/sessions/accounts.json; do
+    for p in /data/.app_secret_key /data/.admin_setup_token /data/.admin_bootstrap_password /data/sessions/accounts.json; do
       if [ -f "${p}" ]; then
         chown "${TARGET_UID}:${TARGET_GID}" "${p}" 2>/dev/null || true
         chmod 600 "${p}" 2>/dev/null || true
       fi
     done
+    # Legacy Telegram sessions may have been created with mode 0644.
+    find /data/sessions -type d -exec chmod 700 {} +
+    find /data/sessions -type f -exec chmod 600 {} +
   fi
 
-  # If mounted volume is root-owned, keep root to preserve writability.
   if [ "${TARGET_UID}" = "0" ] || [ "${TARGET_GID}" = "0" ]; then
-    exec uvicorn backend.main:app --host 0.0.0.0 --port "${PORT_VALUE}" ${ACCESS_LOG_OPT}
+    echo "ERROR: refusing to run the application as root" >&2
+    exit 1
+  fi
+  if ! gosu "${TARGET_UID}:${TARGET_GID}" test -w /data; then
+    echo "ERROR: /data is not writable by ${TARGET_UID}:${TARGET_GID}; repair the volume owner or enable APP_AUTO_FIX_DATA_PERMS" >&2
+    exit 1
   fi
   exec gosu "${TARGET_UID}:${TARGET_GID}" uvicorn backend.main:app --host 0.0.0.0 --port "${PORT_VALUE}" ${ACCESS_LOG_OPT}
 fi

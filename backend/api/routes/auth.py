@@ -13,7 +13,6 @@ from backend.core import auth as auth_core
 from backend.core.auth import (
     authenticate_user,
     create_access_token,
-    get_user_by_username,
     verify_totp,
 )
 from backend.core.database import get_db
@@ -22,7 +21,7 @@ from backend.core.rate_limit import (
     get_client_identifier,
     get_rate_limiter,
 )
-from backend.core.security import hash_password, verify_password
+from backend.core.security import hash_password
 from backend.models.login_log import LoginLog
 from backend.models.user import User
 from backend.schemas.auth import LoginRequest, TokenResponse, UserOut
@@ -33,9 +32,6 @@ logger = logging.getLogger("backend.auth")
 rate_limiter = get_rate_limiter()
 
 LOGIN_RATE_LIMIT_DETAIL = "Too many login attempts. Please try again later."
-RESET_TOTP_RATE_LIMIT_DETAIL = (
-    "Too many TOTP reset attempts. Please try again later."
-)
 
 
 class InitialSetupRequest(BaseModel):
@@ -72,7 +68,7 @@ def initial_setup(payload: InitialSetupRequest, request: Request, db: Session = 
         db.add(user)
         db.commit()
         path.unlink(missing_ok=True)
-    return TokenResponse(access_token=create_access_token({"sub": "admin"}))
+    return TokenResponse(access_token=create_access_token({"sub": "admin", "auth_version": user.auth_version or 0}))
 
 
 def _resolve_request_ip(request: Request) -> str:
@@ -101,20 +97,6 @@ def _append_login_log(
     except Exception as exc:
         db.rollback()
         logger.warning("登录日志持久化失败: %s", exc)
-
-
-class ResetTOTPRequest(BaseModel):
-    """重置 TOTP 请求（通过密码验证）"""
-
-    username: str
-    password: str
-
-
-class ResetTOTPResponse(BaseModel):
-    """重置 TOTP 响应"""
-
-    success: bool
-    message: str
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -188,7 +170,7 @@ def login(
             )
     rate_limiter.reset("auth.login", login_key)
     access_token = create_access_token(
-        data={"sub": user.username},
+        data={"sub": user.username, "auth_version": user.auth_version or 0},
         expires_delta=timedelta(hours=12),
     )
     try:
@@ -218,66 +200,3 @@ def login(
 @router.get("/me", response_model=UserOut)
 def me(current_user: User = Depends(auth_core.get_current_user)):
     return current_user
-
-
-@router.post("/reset-totp", response_model=ResetTOTPResponse)
-def reset_totp(
-    request: ResetTOTPRequest,
-    http_request: Request,
-    db: Session = Depends(get_db),
-):
-    """
-    强制重置 TOTP（不需要 TOTP 验证码，只需要密码）
-
-    用于解决用户启用了 TOTP 但无法登录的问题。
-    需要提供正确的用户名和密码。
-    """
-    # 验证用户名和密码
-    reset_key = compose_rate_limit_key(http_request, request.username)
-    rate_limiter.hit(
-        scope="auth.reset_totp.ip",
-        key=get_client_identifier(http_request),
-        max_attempts=60,
-        window_seconds=600,
-        block_seconds=1800,
-        detail=RESET_TOTP_RATE_LIMIT_DETAIL,
-    )
-    rate_limiter.hit(
-        scope="auth.reset_totp",
-        key=reset_key,
-        max_attempts=5,
-        window_seconds=600,
-        block_seconds=1800,
-        detail=RESET_TOTP_RATE_LIMIT_DETAIL,
-    )
-
-    user = get_user_by_username(db, request.username)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
-        )
-
-    if not verify_password(request.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
-        )
-
-    had_totp_enabled = bool(user.totp_secret)
-    user.totp_secret = None
-    db.commit()
-    try:
-        from backend.api.routes.user import clear_pending_totp_secret
-
-        clear_pending_totp_secret(user.id)
-    except Exception as exc:
-        # 清理会话内 TOTP 待验证状态失败不影响重置结果，但留痕便于排查
-        logger.debug("清理 TOTP 待验证状态失败 user=%s: %s", user.id, exc)
-    rate_limiter.reset("auth.reset_totp", reset_key)
-
-    if not had_totp_enabled:
-        return ResetTOTPResponse(
-            success=True,
-            message="该用户未启用两步验证，待确认设置已清理",
-        )
-
-    return ResetTOTPResponse(success=True, message="两步验证已重置，现在可以正常登录")

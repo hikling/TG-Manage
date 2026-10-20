@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from backend.core.config import get_settings
 from backend.utils.time import utc_now, utc_now_iso
+from tg_manage.private_file import write_private_text
 
 _logger = logging.getLogger("backend.tg_session")
 
@@ -650,7 +651,7 @@ def _export_session_string_from_file(session_dir: Path, account_name: str) -> Op
         # Cache it to .session_string file for future use
         try:
             cache_path = session_string_file_path(session_dir, account_name)
-            cache_path.write_text(session_string, encoding="utf-8")
+            write_private_text(cache_path, session_string)
         except Exception:
             pass
 
@@ -665,7 +666,7 @@ def save_session_string_file(
     session_dir: Path, account_name: str, session_string: str
 ) -> None:
     path = session_string_file_path(session_dir, account_name)
-    path.write_text(session_string.strip(), encoding="utf-8")
+    write_private_text(path, session_string.strip())
 
 
 def delete_session_string_file(session_dir: Path, account_name: str) -> None:

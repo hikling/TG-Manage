@@ -6,7 +6,7 @@ import { MEDIUM_TIMEOUT_MS, request, requestBlob } from "./core";
 // ─── 用户设置 ───
 
 export const changePassword = (token: string, oldPassword: string, newPassword: string) =>
-  request<{ success: boolean; message: string }>("/user/password", {
+  request<{ success: boolean; message: string; access_token: string }>("/user/password", {
     method: "PUT",
     body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
   }, token);
@@ -25,13 +25,13 @@ export const fetchTOTPQRCode = async (token: string) => {
 };
 
 export const enableTOTP = (token: string, totpCode: string) =>
-  request<{ success: boolean; message: string }>("/user/totp/enable", {
+  request<{ success: boolean; message: string; access_token: string }>("/user/totp/enable", {
     method: "POST",
     body: JSON.stringify({ totp_code: totpCode }),
   }, token);
 
 export const disableTOTP = (token: string, totpCode: string) =>
-  request<{ success: boolean; message: string }>("/user/totp/disable", {
+  request<{ success: boolean; message: string; access_token: string }>("/user/totp/disable", {
     method: "POST",
     body: JSON.stringify({ totp_code: totpCode }),
   }, token);

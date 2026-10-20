@@ -92,6 +92,202 @@ async def test_daily_route_projection_runs_even_after_account_failure(report_env
 
 
 @pytest.mark.asyncio
+async def test_midnight_retry_recovers_without_switching_node(report_env, monkeypatch):
+    _, service, _, _ = report_env
+    service.check_account_status.side_effect = [
+        {"ok": False, "status": "checking", "code": "TIMEOUT"},
+        {"ok": True, "status": "connected"},
+    ]
+    route_service = SimpleNamespace(switch_account_to_alternate_node=AsyncMock())
+    monkeypatch.setattr(report, "get_route_service", lambda: route_service)
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert result["ok"] == 1
+    assert service.check_account_status.await_count == 2
+    route_service.switch_account_to_alternate_node.assert_not_awaited()
+    assert "复检恢复" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final_ok", [True, False])
+async def test_midnight_switches_once_then_reports_final_status(
+    report_env, monkeypatch, final_ok,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.side_effect = [
+        {"ok": False, "status": "checking", "code": "CONNECTION_ERROR"},
+        {"ok": False, "status": "checking", "code": "CONNECTION_ERROR"},
+        {"ok": final_ok, "status": "connected" if final_ok else "checking",
+         "code": "OK" if final_ok else "CONNECTION_ERROR"},
+    ]
+    switch = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        report, "get_route_service",
+        lambda: SimpleNamespace(switch_account_to_alternate_node=switch),
+    )
+    monkeypatch.setattr(
+        report, "account_route_status",
+        Mock(return_value={"route_mode": "fallback", "route_status": "healthy"}),
+    )
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert service.check_account_status.await_count == 3
+    switch.assert_awaited_once_with("alpha")
+    assert result["ok"] == int(final_ok)
+    text = report.report_chunks(result["rows"], {"alpha": "empty"})[0]
+    if final_ok:
+        assert "🟢 alpha — 账户正常 · 兜底订阅 · 无官方新消息 · 换线后恢复" in text
+    else:
+        assert "🔴 alpha — 账户异常（连接失败） · 兜底订阅 · 无官方新消息 · 换线复检后仍异常" in text
+
+
+@pytest.mark.asyncio
+async def test_midnight_without_alternate_reports_failure_after_two_checks(
+    report_env, monkeypatch,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.return_value = {
+        "ok": False, "status": "checking", "code": "TIMEOUT",
+    }
+    switch = AsyncMock(return_value=False)
+    monkeypatch.setattr(
+        report, "get_route_service",
+        lambda: SimpleNamespace(switch_account_to_alternate_node=switch),
+    )
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert result["fail"] == 1
+    assert service.check_account_status.await_count == 2
+    switch.assert_awaited_once_with("alpha")
+    assert "暂无可用备用节点" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+async def test_midnight_removed_account_is_rechecked_without_creating_route(
+    report_env, monkeypatch,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.return_value = {
+        "ok": False, "status": "not_found", "code": "ACCOUNT_NOT_FOUND",
+    }
+    route_service = Mock()
+    monkeypatch.setattr(report, "get_route_service", route_service)
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert service.check_account_status.await_count == 2
+    route_service.assert_not_called()
+    assert "账户已移除" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code,status", [
+    ("ACCOUNT_SESSION_INVALID", "invalid"),
+    ("API_CREDENTIALS_MISSING", "error"),
+    ("STORAGE_PERMISSION_DENIED", "checking"),
+    ("FLOOD_WAIT", "checking"),
+])
+async def test_midnight_does_not_switch_route_for_non_network_failures(
+    report_env, monkeypatch, code, status,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.return_value = {
+        "ok": False, "status": status, "code": code,
+        "needs_relogin": status == "invalid",
+    }
+    switch = AsyncMock()
+    monkeypatch.setattr(
+        report, "get_route_service",
+        lambda: SimpleNamespace(switch_account_to_alternate_node=switch),
+    )
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+    assert result["fail"] == 1
+    assert service.check_account_status.await_count == 2
+    switch.assert_not_awaited()
+    assert "换线无法修复" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+async def test_report_probes_multiple_accounts_with_bounded_concurrency(report_env, monkeypatch):
+    _, service, _, _ = report_env
+    service.list_accounts.return_value = [{"name": str(i)} for i in range(12)]
+    monkeypatch.setattr(report, "REPORT_CONCURRENCY", 3)
+    active = 0
+    peak = 0
+
+    async def probe(*_args, **_kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.01)
+        active -= 1
+        return {"ok": True, "status": "connected"}
+
+    service.check_account_status.side_effect = probe
+    result = await report.AccountStatusReportService().run(send_report=False)
+    assert result["checked"] == 12
+    assert peak == 3
+
+
+@pytest.mark.asyncio
+async def test_midnight_account_removed_after_retry_does_not_switch_route(
+    report_env, monkeypatch,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.return_value = {
+        "ok": False, "status": "checking", "code": "TIMEOUT",
+    }
+    service.account_exists.return_value = False
+    route_service = Mock()
+    monkeypatch.setattr(report, "get_route_service", route_service)
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert service.check_account_status.await_count == 2
+    route_service.assert_not_called()
+    assert result["rows"][0]["status"] == "not_found"
+    assert "复检时账户已移除" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
+async def test_midnight_switch_error_is_reported_without_stopping_scan(
+    report_env, monkeypatch,
+):
+    _, service, _, _ = report_env
+    service.check_account_status.return_value = {
+        "ok": False, "status": "checking", "code": "CONNECTION_ERROR",
+    }
+    switch = AsyncMock(side_effect=RuntimeError("private route details"))
+    monkeypatch.setattr(
+        report, "get_route_service",
+        lambda: SimpleNamespace(switch_account_to_alternate_node=switch),
+    )
+
+    result = await report.AccountStatusReportService().run(
+        send_report=False, midnight_recovery=True,
+    )
+
+    assert result["fail"] == 1
+    assert service.check_account_status.await_count == 2
+    assert "备用节点切换失败" in report.report_chunks(result["rows"])[0]
+
+
+@pytest.mark.asyncio
 async def test_mixed_fresh_results_icons_and_persisted_failures(report_env, caplog):
     _, service, send, persist = report_env
     service.list_accounts.return_value = [

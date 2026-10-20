@@ -132,7 +132,10 @@ def _resolve_user_from_token(token: str, db: Session) -> Optional[User]:
     except PyJWTError as exc:
         logger.debug("JWT 解码失败（无效/篡改/格式错误）: %s", exc)
         return None
-    return get_user_by_username(db, username)
+    user = get_user_by_username(db, username)
+    if user is None or payload.get("auth_version", 0) != (user.auth_version or 0):
+        return None
+    return user
 
 
 def get_current_user(

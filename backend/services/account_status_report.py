@@ -7,7 +7,7 @@ import time
 from typing import Any
 
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
-from backend.services.account_routes import account_route_status
+from backend.services.account_routes import account_route_status, get_route_service
 from backend.services.config import get_config_service
 from backend.services.push_notifications import _bot_config, send_telegram_bot_message
 from backend.services.telegram import get_telegram_service
@@ -18,6 +18,10 @@ logger = logging.getLogger("backend.account_status_report")
 PROBE_TIMEOUT_SECONDS = 8.0
 INTER_DELAY_SECONDS = 0.15
 MAX_MESSAGE_UNITS = 3500
+REPORT_CONCURRENCY = 6
+_ROUTE_RECOVERABLE_CODES = {"TIMEOUT", "CONNECTION_ERROR"}
+
+
 def _failure_reason(result: dict[str, Any]) -> str:
     if result.get("status") == "not_found" or result.get("code") == "ACCOUNT_NOT_FOUND":
         return "账户已移除"
@@ -29,6 +33,62 @@ def _failure_reason(result: dict[str, Any]) -> str:
         "STORAGE_PERMISSION_DENIED": "会话文件不可读写",
         "API_CREDENTIALS_MISSING": "缺少 API 凭据",
     }.get(result.get("code"), "检测失败")
+
+
+async def _probe_account_status(service: Any, name: str) -> dict[str, Any]:
+    try:
+        result = await asyncio.wait_for(
+            service.check_account_status(
+                name, timeout_seconds=PROBE_TIMEOUT_SECONDS, no_updates=True,
+            ),
+            # Also bound waits for a shared account client lock.
+            timeout=PROBE_TIMEOUT_SECONDS + 1.0,
+        )
+        if not isinstance(result, dict):
+            raise TypeError("Invalid account status result")
+        return result
+    except Exception as exc:
+        logger.warning("账户日报检测失败（%s）", type(exc).__name__)
+        return {
+            "ok": False,
+            "status": "checking" if isinstance(exc, asyncio.TimeoutError) else "error",
+            "code": "TIMEOUT" if isinstance(exc, asyncio.TimeoutError) else "STATUS_CHECK_FAILED",
+            "checked_at": utc_now_iso_z(),
+            "needs_relogin": False,
+        }
+
+
+async def _probe_with_midnight_recovery(service: Any, name: str) -> dict[str, Any]:
+    result = await _probe_account_status(service, name)
+    if result.get("ok"):
+        return result
+
+    result = await _probe_account_status(service, name)
+    if result.get("ok"):
+        return {**result, "midnight_recovery": "retry_recovered"}
+    if result.get("status") == "not_found":
+        return {**result, "midnight_recovery": "account_removed"}
+    if result.get("needs_relogin") or result.get("status") == "invalid" or result.get("code") not in _ROUTE_RECOVERABLE_CODES:
+        return {**result, "midnight_recovery": "not_route_related"}
+
+    try:
+        if not service.account_exists(name):
+            return {
+                **result, "ok": False, "status": "not_found",
+                "code": "ACCOUNT_NOT_FOUND", "midnight_recovery": "account_removed",
+            }
+        switched = await get_route_service().switch_account_to_alternate_node(name)
+    except Exception as exc:
+        logger.warning("账户日报备用节点切换失败（%s）", type(exc).__name__)
+        return {**result, "midnight_recovery": "switch_error"}
+    if not switched:
+        return {**result, "midnight_recovery": "no_alternate"}
+
+    result = await _probe_account_status(service, name)
+    return {
+        **result,
+        "midnight_recovery": "route_recovered" if result.get("ok") else "route_failed",
+    }
 
 
 def _message_chunks(lines: list[str]) -> list[str]:
@@ -108,6 +168,17 @@ def report_chunks(
             official = official_status.get(result["account_name"])
             notes.append({"empty": "无官方新消息", "messages": "有官方新消息"}.get(
                 official, "官方消息检测异常"))
+        recovery = {
+            "retry_recovered": "复检恢复",
+            "account_removed": "复检时账户已移除",
+            "no_alternate": "复检后仍异常，暂无可用备用节点（出口 IP 未核验或相同）",
+            "switch_error": "复检后仍异常，备用节点切换失败",
+            "not_route_related": "复检后仍异常，换线无法修复",
+            "route_recovered": "换线后恢复",
+            "route_failed": "换线复检后仍异常",
+        }.get(result.get("midnight_recovery"))
+        if recovery:
+            notes.append(recovery)
         row = f"{'🟢' if healthy(result) else '🔴'} {name} — {' · '.join(notes)}"
         lines.append(row)
     if not results:
@@ -143,18 +214,68 @@ async def _send_report(
     return sent
 
 
+def subscription_report_text(
+    settings: dict[str, Any], *, refresh_interrupted: bool = False,
+) -> str:
+    """Summarize the sanitized subscription projection after the midnight refresh."""
+    lines = ["零点机场订阅节点报告"]
+    if refresh_interrupted:
+        lines.append("本次刷新中断，以下为保留节点的状态")
+    for source, label in (("primary", "主订阅"), ("fallback", "兜底订阅")):
+        item = settings.get(source) or {}
+        if not item.get("configured"):
+            state = "未配置"
+        elif refresh_interrupted or item.get("status") != "ready":
+            state = "刷新失败，沿用上次节点"
+        else:
+            state = "已刷新"
+        usable = max(0, int(item.get("usable_count") or 0))
+        unavailable = max(0, int(item.get("unsupported_count") or 0))
+        lines.append(
+            f"{label}（{state}）：可用 {usable} · 不可用/不支持 {unavailable}"
+        )
+    return "\n".join(lines)
+
+
+async def _send_subscription_report(
+    settings: dict[str, Any], *, refresh_interrupted: bool = False,
+) -> int:
+    target = _enabled_target()
+    if target is None or _enabled_target() != target:
+        return 0
+    try:
+        await send_telegram_bot_message(
+            bot_token=target[0],
+            chat_id=target[1],
+            message_thread_id=target[2],
+            text=subscription_report_text(
+                settings, refresh_interrupted=refresh_interrupted,
+            ),
+        )
+    except Exception as exc:
+        logger.warning("零点订阅节点报告发送失败（%s）", type(exc).__name__)
+        return 0
+    return 1
+
+
 class AccountStatusReportService:
     def __init__(self) -> None:
         self._running_lock = asyncio.Lock()
 
-    async def run(self, *, send_report: bool = True) -> dict[str, Any]:
-        """Check the fresh inventory sequentially, without the interactive cap."""
+    async def run(
+        self, *, send_report: bool = True, midnight_recovery: bool = False,
+    ) -> dict[str, Any]:
+        """Check every account with bounded concurrency and no interactive cap."""
         if self._running_lock.locked():
             return {"skipped": True, "checked": 0, "messages_sent": 0}
         async with self._running_lock:
-            return await self._run(send_report=send_report)
+            return await self._run(
+                send_report=send_report, midnight_recovery=midnight_recovery,
+            )
 
-    async def _run(self, *, send_report: bool = True) -> dict[str, Any]:
+    async def _run(
+        self, *, send_report: bool = True, midnight_recovery: bool = False,
+    ) -> dict[str, Any]:
         service = get_telegram_service()
         names = dict.fromkeys(
             str(account.get("name") or "").strip()
@@ -163,39 +284,21 @@ class AccountStatusReportService:
         )
         pending = [(name, 0.0) for name in names]
         results: dict[str, dict[str, Any]] = {}
-        while pending:
-            deferred: list[tuple[str, float]] = []
-            for name, ready_at in pending:
+        semaphore = asyncio.Semaphore(REPORT_CONCURRENCY)
+
+        async def check_one(name: str, ready_at: float) -> tuple[str, dict[str, Any] | float]:
+            async with semaphore:
                 if ready_at > time.monotonic():
-                    deferred.append((name, ready_at))
-                    continue
+                    return name, ready_at
                 try:
                     reservation = account_check_gate.reserve([name])
                 except AccountCheckBusy as exc:
-                    deferred.append((name, time.monotonic() + exc.remaining_seconds))
-                    continue
+                    return name, time.monotonic() + exc.remaining_seconds
                 try:
-                    try:
-                        result = await asyncio.wait_for(
-                            service.check_account_status(
-                                name,
-                                timeout_seconds=PROBE_TIMEOUT_SECONDS,
-                                no_updates=True,
-                            ),
-                            # Also bound waits for a shared account client lock.
-                            timeout=PROBE_TIMEOUT_SECONDS + 1.0,
-                        )
-                        if not isinstance(result, dict):
-                            raise TypeError("Invalid account status result")
-                    except Exception as exc:
-                        logger.warning("账户日报检测失败（%s）", type(exc).__name__)
-                        result = {
-                            "ok": False,
-                            "status": "checking" if isinstance(exc, asyncio.TimeoutError) else "error",
-                            "code": "TIMEOUT" if isinstance(exc, asyncio.TimeoutError) else "STATUS_CHECK_FAILED",
-                            "checked_at": utc_now_iso_z(),
-                            "needs_relogin": False,
-                        }
+                    result = await (
+                        _probe_with_midnight_recovery(service, name)
+                        if midnight_recovery else _probe_account_status(service, name)
+                    )
                     result = {**result, "account_name": name}
                     # The existing probe persists healthy/invalid sessions.
                     # Persist other fresh failures too, but never recreate a
@@ -223,10 +326,20 @@ class AccountStatusReportService:
                             logger.warning("保存账户日报状态失败（%s）", type(exc).__name__)
                     result.update(account_route_status(name))
                     reservation.finish(name, success=bool(result.get("ok")))
-                    results[name] = result
+                    await asyncio.sleep(INTER_DELAY_SECONDS)
+                    return name, result
                 finally:
                     reservation.release()
-                await asyncio.sleep(INTER_DELAY_SECONDS)
+
+        while pending:
+            deferred: list[tuple[str, float]] = []
+            async with asyncio.TaskGroup() as group:
+                tasks = [group.create_task(check_one(name, ready_at)) for name, ready_at in pending]
+            for name, outcome in (task.result() for task in tasks):
+                if isinstance(outcome, dict):
+                    results[name] = outcome
+                else:
+                    deferred.append((name, outcome))
             pending = deferred
             if pending:
                 await asyncio.sleep(max(0.0, min(ready for _, ready in pending) - time.monotonic()))

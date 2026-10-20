@@ -110,6 +110,7 @@ async def _job_account_status_report() -> None:
 async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
     """Run the scheduled midnight report for its fixed preceding 24 hours."""
     logger = logging.getLogger("backend.scheduler")
+    subscriptions_ok, subscription_messages = await _refresh_midnight_subscriptions()
     end = now.astimezone(datetime_timezone.utc)
     start = end - timedelta(hours=24)
     status_rows = None
@@ -122,7 +123,9 @@ async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
             get_account_status_report_service,
         )
 
-        result = await get_account_status_report_service().run(send_report=False)
+        result = await get_account_status_report_service().run(
+            send_report=False, midnight_recovery=True,
+        )
         status_rows = result.get("rows")
         status_failed = bool(result.get("skipped")) or status_rows is None
         logger.info("Account status check finished: checked=%s", result.get("checked"))
@@ -163,10 +166,47 @@ async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
         except Exception as exc:
             logger.error("合并日报发送失败（%s）", type(exc).__name__)
     return {
-        "success": not status_failed and not official_failed and sent == expected_chunks,
+        "success": subscriptions_ok and not status_failed and not official_failed and sent == expected_chunks,
         "checked": len(status_rows or []),
-        "messages_sent": sent + int((official_result or {}).get("messages_sent") or 0),
+        "messages_sent": subscription_messages + sent + int((official_result or {}).get("messages_sent") or 0),
     }
+
+
+async def _refresh_midnight_subscriptions() -> tuple[bool, int]:
+    """Refresh both sources before account checks and report their saved counts."""
+    logger = logging.getLogger("backend.scheduler")
+    try:
+        from backend.services.account_routes import get_route_service
+
+        route_service = get_route_service()
+    except Exception as exc:
+        logger.error("零点订阅服务不可用（%s）", type(exc).__name__)
+        return False, 0
+
+    refresh_interrupted = False
+    try:
+        await route_service.refresh_subscriptions()
+    except Exception as exc:
+        refresh_interrupted = True
+        logger.error("零点订阅刷新中断（%s）", type(exc).__name__)
+
+    try:
+        settings = await route_service.get_subscription_settings()
+    except Exception as exc:
+        logger.error("零点订阅状态读取失败（%s）", type(exc).__name__)
+        return False, 0
+
+    sources_ready = all(
+        not (settings.get(source) or {}).get("configured")
+        or (settings.get(source) or {}).get("status") == "ready"
+        for source in ("primary", "fallback")
+    )
+    from backend.services.account_status_report import _send_subscription_report
+
+    sent = await _send_subscription_report(
+        settings, refresh_interrupted=refresh_interrupted,
+    )
+    return not refresh_interrupted and sources_ready, sent
 
 
 def _sync_account_status_report_job() -> None:

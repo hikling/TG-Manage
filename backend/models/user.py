@@ -13,4 +13,5 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     totp_secret = Column(String(64), nullable=True)
+    auth_version = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, default=utc_now_naive, nullable=False)

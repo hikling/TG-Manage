@@ -388,6 +388,9 @@ async def serve_spa(full_path: str):
 
 
 async def on_startup() -> None:
+    if os.name == "posix":
+        # Pyrogram creates SQLite .session files itself; protect new files too.
+        os.umask(0o077)
     # 重新应用日志配置（uvicorn 启动后会重新配置 logging，覆盖之前的设置）
     _configure_backend_logging()
 
@@ -413,6 +416,9 @@ async def on_startup() -> None:
         )
     init_engine()
     Base.metadata.create_all(bind=get_engine())
+    from backend.core.database import ensure_user_auth_version
+
+    ensure_user_auth_version(get_engine())
     with get_session_local()() as db:
         prepare_admin_setup(db)
     from backend.services.account_routes import get_route_service

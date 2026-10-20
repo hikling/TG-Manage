@@ -571,6 +571,94 @@ class AccountRouteService:
         self._save_state()
         return changed
 
+    async def switch_account_to_alternate_node(self, account_name: str) -> bool:
+        """Move to a healthy node only after confirming a distinct exit IP."""
+        async with self._lock:
+            current = self._state["assignments"].get(account_name)
+            if not isinstance(current, dict) or current.get("mode") == "setup_required":
+                return False
+            old_key = current.get("key")
+            old_generation = current.get("generation")
+            runtime_generation = current.get("runtime_generation")
+            node_ips = self._node_exit_ips()
+            old_ip = current.get("exit_ip") or node_ips.get(old_key)
+            occupied_keys = {
+                entry["key"]
+                for name, entry in self._state["assignments"].items()
+                if name != account_name and isinstance(entry, dict) and entry.get("key")
+            }
+            used_ips = {ip for key in occupied_keys if (ip := node_ips.get(key))}
+            candidates = [
+                node for node in self._nodes()
+                if self._key(node) != old_key
+                and self._key(node) not in occupied_keys
+                and self._probe_usable(self._key(node))
+                and not self._geo_quarantined(self._key(node))
+                and self.runtime.port_for(self._key(node)) is not None
+                and node_ips.get(self._key(node)) not in used_ips
+            ]
+            candidates.sort(key=lambda node: (
+                0 if node.source == "primary" else 1,
+                self._state["health"][self._key(node)].get("latency_ms") or 999999,
+            ))
+            old_port = self.runtime.port_for(old_key, runtime_generation) if old_key else None
+        if not old_ip:
+            if old_key and old_port is None:
+                return False
+            old_geo = await self._fetch_geo(old_key or "direct", old_port, runtime_generation)
+            old_ip = old_geo.get("ip")
+        if not old_ip:
+            return False
+
+        # A failed geo lookup is not proof of a new IP. Check candidates outside
+        # the state lock, then recheck assignment and availability before commit.
+        for node in candidates:
+            key = self._key(node)
+            port = self.runtime.port_for(key)
+            if port is None:
+                continue
+            generation = self.runtime.active.number if self.runtime.active else 0
+            geo = await self._fetch_geo(key, port, generation)
+            ip = geo.get("ip")
+            if not ip or not geo.get("country") or ip == old_ip:
+                continue
+            async with self._lock:
+                current = self._state["assignments"].get(account_name)
+                if not isinstance(current, dict) or current.get("generation") != old_generation:
+                    return False
+                if (self.runtime.active is None or self.runtime.active.number != generation
+                        or self.runtime.port_for(key) != port or not self._probe_usable(key)
+                        or self._geo_quarantined(key)):
+                    continue
+                if key not in {self._key(item) for item in self._nodes()}:
+                    continue
+                occupied = {
+                    entry.get("key") for name, entry in self._state["assignments"].items()
+                    if name != account_name and isinstance(entry, dict)
+                }
+                used = {
+                    occupied_ip for occupied_key in occupied
+                    if occupied_key and (occupied_ip := self._node_exit_ips().get(occupied_key))
+                }
+                used.update(
+                    entry.get("exit_ip") for name, entry in self._state["assignments"].items()
+                    if name != account_name and isinstance(entry, dict) and entry.get("exit_ip")
+                )
+                if current.get("exit_ip") not in {None, old_ip} or key in occupied or ip in used:
+                    continue
+                if not self._assign(account_name, node):
+                    return False
+                assigned = self._state["assignments"][account_name]
+                assigned.update({
+                    "exit_ip": ip, "exit_country": geo["country"],
+                    "exit_region": geo.get("region"), "exit_checked_at": _now(),
+                    "exit_lookup_status": "verified",
+                })
+                self._save_state()
+            await self._notify({account_name})
+            return True
+        return False
+
     def resolve_account_route(self, account_name: str) -> dict[str, Any] | None:
         if not self._secret["ever_configured"]:
             raise RouteSetupRequired()

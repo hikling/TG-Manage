@@ -5,22 +5,18 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-import jwt
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.core.auth import (
     create_access_token,
     get_current_user,
-    get_current_user_optional,
     get_user_by_username,
     verify_totp,
 )
-from backend.core.config import get_settings
 from backend.core.database import get_db
 from backend.core.security import hash_password, verify_password
 from backend.models.user import User
@@ -88,6 +84,7 @@ class ChangePasswordRequest(BaseModel):
 class ChangePasswordResponse(BaseModel):
     success: bool
     message: str
+    access_token: str
 
 
 class ChangeUsernameRequest(BaseModel):
@@ -108,6 +105,7 @@ class EnableTOTPRequest(BaseModel):
 class EnableTOTPResponse(BaseModel):
     success: bool
     message: str
+    access_token: str
 
 
 class DisableTOTPRequest(BaseModel):
@@ -117,6 +115,7 @@ class DisableTOTPRequest(BaseModel):
 class DisableTOTPResponse(BaseModel):
     success: bool
     message: str
+    access_token: Optional[str] = None
 
 
 class TOTPStatusResponse(BaseModel):
@@ -143,9 +142,13 @@ def change_password(
         )
 
     current_user.password_hash = hash_password(request.new_password)
+    current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
 
-    return ChangePasswordResponse(success=True, message="密码修改成功")
+    return ChangePasswordResponse(
+        success=True, message="密码修改成功",
+        access_token=create_access_token({"sub": current_user.username, "auth_version": current_user.auth_version}),
+    )
 
 
 @router.put("/username", response_model=ChangeUsernameResponse)
@@ -182,7 +185,7 @@ def change_username(
     current_user.username = new_username
     db.commit()
 
-    new_token = create_access_token(data={"sub": new_username})
+    new_token = create_access_token(data={"sub": new_username, "auth_version": current_user.auth_version or 0})
     return ChangeUsernameResponse(
         success=True,
         message="用户名修改成功",
@@ -213,28 +216,9 @@ def setup_totp(current_user: User = Depends(get_current_user)):
 
 @router.get("/totp/qrcode")
 def get_totp_qrcode(
-    token: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    settings = get_settings()
-
-    if current_user is None and token:
-        try:
-            payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
-            username = payload.get("sub")
-            if username:
-                current_user = get_user_by_username(db, username)
-        except JWTError:
-            current_user = None
-
-    if current_user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="认证失败",
-        )
-
-    secret = get_pending_totp_secret(current_user.id) or current_user.totp_secret
+    secret = get_pending_totp_secret(current_user.id)
     if not secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -278,10 +262,14 @@ def enable_totp(
         )
 
     current_user.totp_secret = pending_secret
+    current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
     clear_pending_totp_secret(current_user.id)
 
-    return EnableTOTPResponse(success=True, message="两步验证已启用")
+    return EnableTOTPResponse(
+        success=True, message="两步验证已启用",
+        access_token=create_access_token({"sub": current_user.username, "auth_version": current_user.auth_version}),
+    )
 
 
 @router.post("/totp/cancel", response_model=DisableTOTPResponse)
@@ -309,18 +297,11 @@ def disable_totp(
         )
 
     current_user.totp_secret = None
+    current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
     clear_pending_totp_secret(current_user.id)
 
-    return DisableTOTPResponse(success=True, message="两步验证已禁用")
-
-
-@router.post("/totp/reset", response_model=DisableTOTPResponse)
-def reset_totp(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    current_user.totp_secret = None
-    db.commit()
-    clear_pending_totp_secret(current_user.id)
-    return DisableTOTPResponse(success=True, message="两步验证已重置")
+    return DisableTOTPResponse(
+        success=True, message="两步验证已禁用",
+        access_token=create_access_token({"sub": current_user.username, "auth_version": current_user.auth_version}),
+    )
