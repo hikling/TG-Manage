@@ -82,6 +82,56 @@ async def test_combined_midnight_report_shows_route_and_new_official_messages(re
 
 
 @pytest.mark.asyncio
+async def test_midnight_summary_has_bold_sections_in_order_and_escapes_names(report_env):
+    _, _, send, _ = report_env
+    rows = [{
+        "account_name": "<alpha&beta>", "ok": True,
+        "route_mode": "primary", "route_status": "healthy",
+    }]
+    subscription = (
+        "零点机场订阅节点报告\n"
+        "主订阅（已刷新）：可用 3 · 不可用/不支持 2\n"
+        "兜底订阅（已刷新）：可用 1 · 不可用/不支持 4"
+    )
+
+    sent = await report._send_report(
+        rows, {"<alpha&beta>": "empty"}, subscription_text=subscription,
+    )
+
+    assert sent == 1
+    send.assert_awaited_once()
+    message = send.await_args.kwargs
+    assert message["parse_mode"] == "HTML"
+    text = message["text"]
+    assert text.startswith("<b>零点账户状态与官方消息日报</b>\n总计 1 · 正常 1 · 异常 0")
+    assert "🟢 &lt;alpha&amp;beta&gt; — 账户正常 · 主订阅 · 无官方新消息" in text
+    assert text.index("<b>零点机场订阅节点报告</b>") > text.index("🟢 &lt;alpha")
+    assert text.endswith("兜底订阅（已刷新）：可用 1 · 不可用/不支持 4")
+
+
+def test_large_midnight_summary_keeps_all_accounts_and_subscription_footer():
+    names = [f"account-{i:03d}-" + "&🙂" * 80 for i in range(60)]
+    rows = [{
+        "account_name": name, "ok": True,
+        "route_mode": "primary", "route_status": "healthy",
+    } for name in names]
+    chunks = report.report_chunks(
+        rows, dict.fromkeys(names, "empty"),
+        subscription_text="零点机场订阅节点报告\n主订阅（已刷新）：可用 3",
+    )
+
+    assert len(chunks) > 1
+    assert all(len(chunk.encode("utf-16-le")) // 2 <= report.MAX_MESSAGE_UNITS for chunk in chunks)
+    joined = "\n".join(chunks)
+    assert joined.count("<b>零点账户状态与官方消息日报</b>") == 1
+    assert joined.count("<b>零点机场订阅节点报告</b>") == 1
+    assert joined.count("&amp;") == len(names) * 80
+    assert joined.endswith("主订阅（已刷新）：可用 3")
+    for name in names:
+        assert joined.count(name.split("&")[0]) == 1
+
+
+@pytest.mark.asyncio
 async def test_daily_route_projection_runs_even_after_account_failure(report_env, monkeypatch):
     _, service, _, _ = report_env
     service.check_account_status.side_effect = RuntimeError("account failed")
