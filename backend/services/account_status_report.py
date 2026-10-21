@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from html import escape
 from typing import Any
 
 from backend.services.account_check_gate import AccountCheckBusy, account_check_gate
@@ -118,6 +119,49 @@ def _message_chunks(lines: list[str]) -> list[str]:
     return chunks
 
 
+def _html_message_chunks(lines: list[str]) -> list[str]:
+    """Split complete HTML lines without cutting tags or escaped characters."""
+    headings = {"零点账户状态与官方消息日报", "零点机场订阅节点报告"}
+    chunks: list[str] = []
+    current = ""
+    current_units = 0
+
+    for line in lines:
+        bold = line in headings
+        wrapper_units = len("<b></b>") if bold else 0
+        max_line_units = MAX_MESSAGE_UNITS - wrapper_units
+        part = ""
+        part_units = 0
+        parts: list[str] = []
+        for character in line:
+            encoded = escape(character, quote=False)
+            units = len(encoded.encode("utf-16-le")) // 2
+            if part and part_units + units > max_line_units:
+                parts.append(part)
+                part = ""
+                part_units = 0
+            part += encoded
+            part_units += units
+        parts.append(part)
+
+        for part in parts:
+            rendered = f"<b>{part}</b>" if bold else part
+            units = len(rendered.encode("utf-16-le")) // 2
+            if current and current_units + 1 + units > MAX_MESSAGE_UNITS:
+                chunks.append(current)
+                current = ""
+                current_units = 0
+            if current:
+                current += "\n" + rendered
+                current_units += 1 + units
+            else:
+                current = rendered
+                current_units = units
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 def _configured_target(config: dict[str, Any] | None = None) -> tuple[str, str, int | None] | None:
     if config is None:
         config = get_config_service().get_global_settings()
@@ -132,7 +176,8 @@ def _enabled_target() -> tuple[str, str, int | None] | None:
 
 def report_chunks(
     results: list[dict[str, Any]], official_status: dict[str, str] | None = None,
-    *, title: str | None = None,
+    *, title: str | None = None, subscription_text: str | None = None,
+    status_error: bool = False,
 ) -> list[str]:
     def healthy(result: dict[str, Any]) -> bool:
         return (
@@ -142,12 +187,19 @@ def report_chunks(
             and (official_status is None or official_status.get(result["account_name"]) == "empty")
         )
 
+    heading = title or (
+        "零点账户状态与官方消息日报"
+        if official_status is not None else "账户状态日报（零点检测）"
+    )
     ok_count = sum(healthy(result) for result in results)
-    lines = [
-        title or ("零点账户状态与官方消息日报" if official_status is not None else "账户状态日报（零点检测）"),
-        f"总计 {len(results)} · 正常 {ok_count} · 异常 {len(results) - ok_count}",
-        "",
-    ]
+    lines = [heading]
+    if status_error:
+        lines.extend(["账户状态检测失败，暂无可用结果", ""])
+    else:
+        lines.extend([
+            f"总计 {len(results)} · 正常 {ok_count} · 异常 {len(results) - ok_count}",
+            "",
+        ])
     for result in results:
         username = " ".join(str(result.get("username") or "").split())
         name = f"@{username.lstrip('@')}" if username else result["account_name"]
@@ -181,21 +233,28 @@ def report_chunks(
             notes.append(recovery)
         row = f"{'🟢' if healthy(result) else '🔴'} {name} — {' · '.join(notes)}"
         lines.append(row)
-    if not results:
+    if not results and not status_error:
         lines.append("暂无账户")
+    if subscription_text is not None:
+        lines.extend(["", *subscription_text.splitlines()])
+        return _html_message_chunks(lines)
     return _message_chunks(lines)
 
 
 async def _send_report(
     results: list[dict[str, Any]], official_status: dict[str, str] | None = None,
-    *, title: str | None = None,
+    *, title: str | None = None, subscription_text: str | None = None,
+    status_error: bool = False,
 ) -> int:
     target = _enabled_target()
     if target is None:
         return 0
 
     sent = 0
-    for text in report_chunks(results, official_status, title=title):
+    for text in report_chunks(
+        results, official_status, title=title,
+        subscription_text=subscription_text, status_error=status_error,
+    ):
         # Unlike event notifications, this explicitly scheduled report ignores
         # quiet hours. Stop if credentials/target/topic change or are disabled.
         if _enabled_target() != target:
@@ -206,6 +265,7 @@ async def _send_report(
                 chat_id=target[1],
                 message_thread_id=target[2],
                 text=text,
+                **({"parse_mode": "HTML"} if subscription_text is not None else {}),
             )
         except Exception as exc:
             logger.warning("账户状态日报发送失败（%s）", type(exc).__name__)
@@ -235,27 +295,6 @@ def subscription_report_text(
             f"{label}（{state}）：可用 {usable} · 不可用/不支持 {unavailable}"
         )
     return "\n".join(lines)
-
-
-async def _send_subscription_report(
-    settings: dict[str, Any], *, refresh_interrupted: bool = False,
-) -> int:
-    target = _enabled_target()
-    if target is None or _enabled_target() != target:
-        return 0
-    try:
-        await send_telegram_bot_message(
-            bot_token=target[0],
-            chat_id=target[1],
-            message_thread_id=target[2],
-            text=subscription_report_text(
-                settings, refresh_interrupted=refresh_interrupted,
-            ),
-        )
-    except Exception as exc:
-        logger.warning("零点订阅节点报告发送失败（%s）", type(exc).__name__)
-        return 0
-    return 1
 
 
 class AccountStatusReportService:
