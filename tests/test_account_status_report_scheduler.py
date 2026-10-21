@@ -337,7 +337,15 @@ async def test_midnight_sends_one_combined_summary_after_official_scan(
     )
     assert official_run.await_args.kwargs["send_normal_summary"] is False
     assert official_run.await_args.kwargs["account_names"] == ["quiet"]
-    send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
+    send_combined.assert_awaited_once_with(
+        rows, {"quiet": "empty"},
+        subscription_text=(
+            "零点机场订阅节点报告\n"
+            "主订阅（已刷新）：可用 3 · 不可用/不支持 2\n"
+            "兜底订阅（已刷新）：可用 1 · 不可用/不支持 4"
+        ),
+        status_error=False,
+    )
     from backend.services.account_status_report import report_chunks
 
     assert "🟢 quiet — 账户正常 · 主订阅 · 无官方新消息" in report_chunks(
@@ -374,11 +382,6 @@ async def test_midnight_refresh_precedes_checks_and_sends_node_counts(
     monkeypatch.setattr(
         "backend.services.account_status_report.send_telegram_bot_message", send,
     )
-    monkeypatch.setattr(
-        "backend.services.account_status_report._send_report",
-        AsyncMock(return_value=1),
-    )
-
     await scheduling._job_account_status_report()
 
     assert events == ["refresh", "status"]
@@ -387,8 +390,12 @@ async def test_midnight_refresh_precedes_checks_and_sends_node_counts(
         "bot_token": "test-token",
         "chat_id": "12345",
         "message_thread_id": 8,
+        "parse_mode": "HTML",
         "text": (
-            "零点机场订阅节点报告\n"
+            "<b>零点账户状态与官方消息日报</b>\n"
+            "总计 0 · 正常 0 · 异常 0\n\n"
+            "暂无账户\n\n"
+            "<b>零点机场订阅节点报告</b>\n"
             "主订阅（已刷新）：可用 3 · 不可用/不支持 2\n"
             "兜底订阅（已刷新）：可用 1 · 不可用/不支持 4"
         ),
@@ -413,10 +420,6 @@ async def test_failed_subscription_refresh_reports_retained_counts_and_continues
     send = AsyncMock()
     monkeypatch.setattr(
         "backend.services.account_status_report.send_telegram_bot_message", send,
-    )
-    monkeypatch.setattr(
-        "backend.services.account_status_report._send_report",
-        AsyncMock(return_value=0),
     )
     status = AsyncMock(return_value={"checked": 0, "rows": []})
     monkeypatch.setattr(
@@ -447,11 +450,11 @@ async def test_source_refresh_failure_is_marked_without_exposing_source_url(
         "url": "https://example.invalid/private-token",
     })
 
-    success, sent = await scheduling._refresh_midnight_subscriptions()
+    success, text = await scheduling._refresh_midnight_subscriptions()
 
     subscription_refresh.refresh_subscriptions.assert_awaited_once()
     assert success is False
-    assert sent == 0  # Bot notifications are disabled in this fixture.
+    assert "兜底订阅（刷新失败，沿用上次节点）" in text
     from backend.services.account_status_report import subscription_report_text
 
     text = subscription_report_text(
@@ -460,6 +463,80 @@ async def test_source_refresh_failure_is_marked_without_exposing_source_url(
     assert "主订阅（已刷新）：可用 3" in text
     assert "兜底订阅（刷新失败，沿用上次节点）：可用 1" in text
     assert "private-token" not in text
+
+
+@pytest.mark.asyncio
+async def test_status_failure_still_sends_one_combined_failure_and_node_report(
+    scheduler_env, monkeypatch, subscription_refresh,
+):
+    scheduler_env.update({
+        "telegram_bot_notify_enabled": True,
+        "telegram_bot_token": "test-token",
+        "telegram_bot_chat_id": "12345",
+    })
+    status = AsyncMock(side_effect=RuntimeError("private account details"))
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=status),
+    )
+    send = AsyncMock()
+    monkeypatch.setattr(
+        "backend.services.account_status_report.send_telegram_bot_message", send,
+    )
+
+    result = await scheduling._run_combined_report(
+        datetime(2026, 10, 13, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    assert result["success"] is False
+    assert result["messages_sent"] == 1
+    send.assert_awaited_once()
+    text = send.await_args.kwargs["text"]
+    assert "<b>零点账户状态与官方消息日报</b>" in text
+    assert "账户状态检测失败，暂无可用结果" in text
+    assert "<b>零点机场订阅节点报告</b>" in text
+    assert "主订阅（已刷新）：可用 3" in text
+    assert "private account details" not in text
+    subscription_refresh.refresh_subscriptions.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_subscription_status_read_failure_still_sends_account_summary(
+    scheduler_env, monkeypatch, subscription_refresh, official_run,
+):
+    scheduler_env.update({
+        "telegram_bot_notify_enabled": True,
+        "telegram_bot_token": "test-token",
+        "telegram_bot_chat_id": "12345",
+    })
+    subscription_refresh.get_subscription_settings.side_effect = RuntimeError(
+        "private subscription URL"
+    )
+    rows = [{
+        "account_name": "quiet", "ok": True,
+        "route_mode": "primary", "route_status": "healthy",
+    }]
+    monkeypatch.setattr(
+        "backend.services.account_status_report.get_account_status_report_service",
+        lambda: SimpleNamespace(run=AsyncMock(return_value={"checked": 1, "rows": rows})),
+    )
+    official_run.return_value = {"accounts": 1, "account_status": {"quiet": "empty"}}
+    send = AsyncMock()
+    monkeypatch.setattr(
+        "backend.services.account_status_report.send_telegram_bot_message", send,
+    )
+
+    result = await scheduling._run_combined_report(
+        datetime(2026, 10, 13, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    assert result["success"] is False
+    assert result["messages_sent"] == 1
+    send.assert_awaited_once()
+    text = send.await_args.kwargs["text"]
+    assert "🟢 quiet — 账户正常 · 主订阅 · 无官方新消息" in text
+    assert "<b>零点机场订阅节点报告</b>\n订阅状态读取失败" in text
+    assert "private subscription URL" not in text
 
 
 @pytest.mark.asyncio
@@ -484,7 +561,11 @@ async def test_partial_midnight_summary_is_reported_as_incomplete(
         datetime(2026, 10, 13, 0, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
     )
 
-    send_combined.assert_awaited_once_with(rows, {"quiet": "empty"})
+    assert send_combined.await_args.args == (rows, {"quiet": "empty"})
+    assert send_combined.await_args.kwargs["subscription_text"].startswith(
+        "零点机场订阅节点报告\n"
+    )
+    assert send_combined.await_args.kwargs["status_error"] is False
     assert result["success"] is False
     cleanup_run.assert_not_awaited()
 
