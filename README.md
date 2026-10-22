@@ -77,7 +77,7 @@ bash scripts/install.sh
 
 安装脚本会从本仓库源码构建、启动服务并输出一次性设置码。打开 `http://服务器IP:8080`，输入设置码并设置至少 12 位的管理员密码。对外开放前请配置 [HTTPS 反向代理](docs/deploy/nginx.md)。
 
-> **⚠️ 已有部署升级时不要重新初始化或删除数据。**在原仓库目录运行 `bash scripts/update.sh`；脚本会先备份，再快进拉取、重建并启动。务必保留完整的 `data/`，包括隐藏文件 `data/.app_secret_key`、数据库、账号会话和 TeleBox 数据。详情见下方「数据、升级与备份」。
+> ⚠️ **已有部署升级时不要重新初始化或删除数据。** 在原仓库目录运行 `bash scripts/update.sh`；脚本会先备份，再快进拉取、重建并启动。务必保留完整的 `data/`，包括隐藏文件 `data/.app_secret_key`、数据库、账号会话和 TeleBox 数据。详情见下方「数据、升级与备份」。
 
 <a id="first-use"></a>
 ## 🧭 首次使用
