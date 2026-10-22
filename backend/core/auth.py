@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import threading
@@ -135,6 +136,22 @@ def _resolve_user_from_token(token: str, db: Session) -> Optional[User]:
     user = get_user_by_username(db, username)
     if user is None or payload.get("auth_version", 0) != (user.auth_version or 0):
         return None
+    if payload.get("auth_source") == "telegram_webapp":
+        from backend.services.bot_webapp import menu_url, private_target
+        from backend.services.config import get_config_service
+
+        bot_settings = get_config_service().get_global_settings()
+        bot_token = str(bot_settings.get("telegram_bot_token") or "").strip()
+        try:
+            active_url = menu_url(bot_settings)
+        except ValueError:
+            return None
+        if (
+            not bot_token or not active_url
+            or payload.get("telegram_user_id") != private_target(bot_settings)
+            or payload.get("telegram_bot_fingerprint") != hashlib.sha256(bot_token.encode()).hexdigest()
+        ):
+            return None
     return user
 
 

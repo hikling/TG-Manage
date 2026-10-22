@@ -66,6 +66,7 @@ export interface GlobalSettings {
   telegram_bot_token_set?: boolean;
   telegram_bot_chat_id?: string | null;
   telegram_bot_message_thread_id?: number | null;
+  telegram_bot_web_url?: string | null;
   timezone?: string;
   appearance_accent_color?: string;
   hero_position_x?: number;
@@ -76,7 +77,7 @@ export const getGlobalSettings = (token: string) =>
   request<GlobalSettings>("/config/settings", {}, token);
 
 export const saveGlobalSettings = async (token: string, settings: GlobalSettings) => {
-  const result = await request<{ success: boolean; message: string }>("/config/settings", {
+  const result = await request<{ success: boolean; message: string; telegram_web_menu_synced?: boolean | null }>("/config/settings", {
     method: "POST",
     body: JSON.stringify(settings),
   }, token);

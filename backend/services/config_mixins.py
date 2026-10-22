@@ -94,6 +94,14 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     if "telegram_bot_chat_id" in normalized and normalized["telegram_bot_chat_id"] is not None:
         normalized["telegram_bot_chat_id"] = str(normalized["telegram_bot_chat_id"]).strip() or None
 
+    if "telegram_bot_web_url" in normalized:
+        from backend.services.bot_webapp import menu_url
+
+        raw = str(normalized["telegram_bot_web_url"] or "").strip().rstrip("/")
+        if raw:
+            menu_url({"telegram_bot_web_url": raw})
+        normalized["telegram_bot_web_url"] = raw or None
+
     return normalized
 
 
@@ -139,6 +147,7 @@ class GlobalSettingsMixin:
             "telegram_bot_token": None,
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
+            "telegram_bot_web_url": None,
             "appearance_accent_color": "#3d6fa8",
             "hero_position_x": 50.0,
             "hero_position_y": 50.0,
@@ -184,6 +193,11 @@ class GlobalSettingsMixin:
                 raise ValueError("验证码机器人需要正整数的私人目标 ID")
             if not merged.get("telegram_bot_token"):
                 raise ValueError("验证码机器人需要先设置 Bot Token")
+        if merged.get("telegram_bot_web_url"):
+            from backend.services.bot_webapp import private_target
+
+            if not merged.get("telegram_bot_token") or private_target(merged) is None:
+                raise ValueError("打开WEB需要 Bot Token 和正整数的私人目标 ID")
         for key in list(merged):
             if _is_retired_setting(key):
                 merged.pop(key)

@@ -113,6 +113,12 @@ const isPrivateTarget = (value: string) => {
         <label class="ui-label" for="bot-thread-id">{{ t('settings.threadId') }}</label>
         <input id="bot-thread-id" :value="modelValue.botThreadId" @input="onStringInput('botThreadId', $event)" type="text" :placeholder="t('settings.threadIdPlaceholder')" class="ui-input">
       </div>
+      <div class="space-y-1.5">
+        <label class="ui-label" for="bot-web-url">{{ t('settings.botWebUrl') }}</label>
+        <input id="bot-web-url" :value="modelValue.botWebUrl" @input="onStringInput('botWebUrl', $event)" type="url" inputmode="url" placeholder="https://example.com" class="ui-input">
+        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.botWebUrlHint') }}</p>
+        <p v-if="modelValue.botWebUrl && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
+      </div>
       <div class="flex flex-wrap gap-x-6 gap-y-3 pt-2">
         <label class="flex items-center gap-2 cursor-pointer group">
           <input :checked="modelValue.botLoginNotify" @change="onCheckbox('botLoginNotify', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">

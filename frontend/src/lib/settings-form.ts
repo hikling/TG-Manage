@@ -15,6 +15,7 @@ export type SettingsFormState = {
   botToken: string
   botChatId: string
   botThreadId: string
+  botWebUrl: string
   timezone: string
 }
 
@@ -67,6 +68,7 @@ export function buildBotPayload(s: SettingsFormState) {
     ...(s.botToken ? { telegram_bot_token: s.botToken } : {}),
     telegram_bot_chat_id: s.botChatId || null,
     telegram_bot_message_thread_id: emptyToNull(s.botThreadId),
+    telegram_bot_web_url: s.botWebUrl.trim() || null,
   }
 }
 
@@ -93,6 +95,7 @@ export function snapSection(
         botToken: s.botToken ? '***set***' : '',
         botChatId: s.botChatId,
         botThreadId: s.botThreadId,
+        botWebUrl: s.botWebUrl,
       })
   }
 }
@@ -143,6 +146,7 @@ export function applyGlobalSettingsToForm(
     telegram_bot_token_set?: boolean
     telegram_bot_chat_id?: string | null
     telegram_bot_message_thread_id?: number | null
+    telegram_bot_web_url?: string | null
     timezone?: string
   },
 ): { botTokenSet: boolean } {
@@ -159,6 +163,7 @@ export function applyGlobalSettingsToForm(
   s.botThreadId = res.telegram_bot_message_thread_id
     ? String(res.telegram_bot_message_thread_id)
     : ''
+  s.botWebUrl = res.telegram_bot_web_url || ''
   s.timezone = res.timezone || 'Asia/Hong_Kong'
   return {
     botTokenSet: !!res.telegram_bot_token_set,

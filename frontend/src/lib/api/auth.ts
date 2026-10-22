@@ -17,6 +17,12 @@ export const login = (payload: {
 export const getSetupStatus = () =>
   request<{ setup_required: boolean }>("/auth/setup-status");
 
+export const loginFromTelegram = (initData: string) =>
+  request<TokenResponse>("/auth/telegram-webapp", {
+    method: "POST",
+    body: JSON.stringify({ init_data: initData }),
+  });
+
 export const completeInitialSetup = (payload: { setup_token: string; password: string }) =>
   request<TokenResponse>("/auth/setup", {
     method: "POST",

@@ -50,10 +50,11 @@ export function useSettingsSave(options: {
     return withToken(async (token) => {
       botLoading.value = true
       try {
-        await saveGlobalSettings(token, options.buildBotPayload())
+        const result = await saveGlobalSettings(token, options.buildBotPayload())
         options.afterBotTokenSaved()
         options.markSectionClean('bot')
         notifySuccess('settings.saveSuccess')
+        if (result.telegram_web_menu_synced === false) notifyError(t('settings.botWebMenuSyncFailed'))
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {
@@ -66,7 +67,7 @@ export function useSettingsSave(options: {
     return withToken(async (token) => {
       saveAllLoading.value = true
       try {
-        await saveGlobalSettings(token, {
+        const result = await saveGlobalSettings(token, {
           ...options.buildGeneralPayload(),
           ...options.buildBotPayload(),
         })
@@ -76,6 +77,7 @@ export function useSettingsSave(options: {
         options.markSectionClean('general')
         options.markSectionClean('bot')
         notifySuccess('settings.saveAllSuccess')
+        if (result.telegram_web_menu_synced === false) notifyError(t('settings.botWebMenuSyncFailed'))
       } catch (e: unknown) {
         notifyError(resolveApiErrorMessage(e, 'settings.saveFailed'))
       } finally {

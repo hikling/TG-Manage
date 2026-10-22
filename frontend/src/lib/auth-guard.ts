@@ -21,7 +21,7 @@ export function resolveAuthRedirect(
   auth: AuthLike,
 ): GuardResult {
   // 404 页面放行：访客与登录用户均可访问 404 提示，若 token 已过期则清理
-  if (toName === 'not-found') {
+  if (toName === 'not-found' || toName === 'telegram-entry') {
     if (auth.token && auth.isTokenExpired()) {
       auth.clearToken()
     }
