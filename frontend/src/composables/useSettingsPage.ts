@@ -52,6 +52,7 @@ export function useSettingsPage() {
     botToken: '',
     botChatId: '',
     botThreadId: '',
+    botWebUrl: '',
     timezone: 'Asia/Hong_Kong',
   })
 

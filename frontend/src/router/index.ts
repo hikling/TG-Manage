@@ -23,6 +23,11 @@ const router = createRouter({
       component: () => import('../views/Login.vue')
     },
     {
+      path: '/bot',
+      name: 'telegram-entry',
+      component: () => import('../views/TelegramEntry.vue')
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('../views/NotFound.vue')

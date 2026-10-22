@@ -18,6 +18,7 @@ const settingsState = (): SettingsFormState => ({
   botToken: '',
   botChatId: '',
   botThreadId: '',
+  botWebUrl: '',
   timezone: 'Asia/Hong_Kong',
 })
 

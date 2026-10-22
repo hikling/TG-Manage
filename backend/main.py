@@ -450,6 +450,23 @@ async def on_startup() -> None:
         logger=logging.getLogger("backend.official_code_bot"),
         description="private code bot",
     )
+    async def _restore_bot_menu() -> None:
+        try:
+            from backend.services.bot_webapp import sync_menu_button
+            from backend.services.config import get_config_service
+
+            if not await sync_menu_button(get_config_service().get_global_settings()):
+                logging.getLogger("backend.bot_webapp").warning("机器人 Web 菜单恢复未完成")
+        except Exception as exc:
+            logging.getLogger("backend.bot_webapp").warning(
+                "机器人 Web 菜单恢复失败（%s）", type(exc).__name__
+            )
+
+    app.state.bot_menu_task = create_logged_task(
+        _restore_bot_menu(),
+        logger=logging.getLogger("backend.bot_webapp"),
+        description="private bot web menu",
+    )
 
     # Pre-export session strings from .session files to avoid SQLite locks during task execution
     # sqlite 打开/锁等待是同步阻塞调用，挪到线程池执行：
@@ -572,6 +589,11 @@ async def _memory_monitor_loop() -> None:
 
 async def on_shutdown() -> None:
     log = logging.getLogger("backend.shutdown")
+    bot_menu_task = getattr(app.state, "bot_menu_task", None)
+    if bot_menu_task is not None and not bot_menu_task.done():
+        bot_menu_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await bot_menu_task
     code_bot_task = getattr(app.state, "code_bot_task", None)
     if code_bot_task is not None and not code_bot_task.done():
         code_bot_task.cancel()

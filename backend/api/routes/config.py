@@ -25,6 +25,7 @@ logger = logging.getLogger("backend.config_api")
 class GlobalSettingsSaveResponse(BaseModel):
     success: bool
     message: str
+    telegram_web_menu_synced: Optional[bool] = None
 
 
 class GlobalSettingsRequest(BaseModel):
@@ -40,6 +41,7 @@ class GlobalSettingsRequest(BaseModel):
     telegram_bot_token: Optional[str] = None
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
+    telegram_bot_web_url: Optional[str] = None
     timezone: Optional[str] = None
     appearance_accent_color: Optional[str] = None
     hero_position_x: Optional[float] = None
@@ -61,6 +63,7 @@ class GlobalSettingsResponse(BaseModel):
     telegram_bot_token_set: bool = False
     telegram_bot_chat_id: Optional[str] = None
     telegram_bot_message_thread_id: Optional[int] = None
+    telegram_bot_web_url: Optional[str] = None
     timezone: str = "Asia/Hong_Kong"
     appearance_accent_color: str = "#3d6fa8"
     hero_position_x: float = 50.0
@@ -166,11 +169,18 @@ async def save_global_settings(
         if not settings:
             return GlobalSettingsSaveResponse(success=True, message="No settings to update")
 
+        previous = dict(get_config_service().get_global_settings())
         if not get_config_service().save_global_settings(settings):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="SETTINGS_SAVE_FAILED",
             )
+        menu_synced = None
+        if {"telegram_bot_token", "telegram_bot_chat_id", "telegram_bot_web_url"} & settings.keys():
+            from backend.services.bot_webapp import sync_menu_button
+
+            # A failed Telegram API call must not make the saved configuration appear unsaved.
+            menu_synced = await sync_menu_button(get_config_service().get_global_settings(), previous)
         # 时区变更时同步调度器（后台执行，不阻塞响应）
         if "timezone" in settings:
             import asyncio
@@ -183,7 +193,9 @@ async def save_global_settings(
                 except Exception as e:
                     logger.warning("设置变更调度同步失败: %s", e)
             asyncio.ensure_future(_safe_tz_sync())
-        return GlobalSettingsSaveResponse(success=True, message="Global settings saved")
+        return GlobalSettingsSaveResponse(
+            success=True, message="Global settings saved", telegram_web_menu_synced=menu_synced,
+        )
     except HTTPException:
         raise
     except ValueError as e:

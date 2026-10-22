@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from datetime import timedelta
@@ -37,6 +38,10 @@ LOGIN_RATE_LIMIT_DETAIL = "Too many login attempts. Please try again later."
 class InitialSetupRequest(BaseModel):
     setup_token: constr(min_length=32, max_length=128)
     password: constr(min_length=12, max_length=128)
+
+
+class TelegramWebAppLoginRequest(BaseModel):
+    init_data: constr(min_length=1, max_length=4096)
 
 
 @router.get("/setup-status")
@@ -195,6 +200,49 @@ def login(
         detail="LOGIN_SUCCESS",
     )
     return TokenResponse(access_token=access_token)
+
+
+@router.post("/telegram-webapp", response_model=TokenResponse)
+def telegram_webapp_login(
+    payload: TelegramWebAppLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Exchange fresh, signed Telegram Mini App data for this site's admin session."""
+    from backend.services.bot_webapp import validate_init_data
+    from backend.services.config import get_config_service
+
+    rate_limiter.hit(
+        scope="auth.telegram-webapp",
+        key=get_client_identifier(request),
+        max_attempts=30,
+        window_seconds=60,
+        block_seconds=300,
+        detail="Too many attempts. Please try again later.",
+    )
+    settings = get_config_service().get_global_settings()
+    if not validate_init_data(payload.init_data, settings):
+        raise HTTPException(status_code=403, detail="TELEGRAM_WEBAPP_FORBIDDEN")
+    users = db.query(User).order_by(User.id).limit(2).all()
+    if len(users) != 1:
+        raise HTTPException(status_code=403, detail="TELEGRAM_WEBAPP_FORBIDDEN")
+    user = users[0]
+    _append_login_log(
+        db, username=user.username, request=request, success=True,
+        detail="TELEGRAM_WEBAPP_LOGIN",
+    )
+    return TokenResponse(access_token=create_access_token(
+        {
+            "sub": user.username,
+            "auth_version": user.auth_version or 0,
+            "auth_source": "telegram_webapp",
+            "telegram_user_id": int(settings["telegram_bot_chat_id"]),
+            "telegram_bot_fingerprint": hashlib.sha256(
+                str(settings["telegram_bot_token"]).encode()
+            ).hexdigest(),
+        },
+        expires_delta=timedelta(hours=1),
+    ))
 
 
 @router.get("/me", response_model=UserOut)

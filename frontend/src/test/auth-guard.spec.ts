@@ -47,4 +47,8 @@ describe('resolveAuthRedirect 纯函数', () => {
     expect(resolveAuthRedirect('not-found', expiredAuth)).toBeUndefined()
     expect(clearToken).toHaveBeenCalled()
   })
+
+  it('Telegram 入口允许无 token 进入以验证签名', () => {
+    expect(resolveAuthRedirect('telegram-entry', makeAuth())).toBeUndefined()
+  })
 })
