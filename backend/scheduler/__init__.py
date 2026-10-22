@@ -110,7 +110,7 @@ async def _job_account_status_report() -> None:
 async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
     """Run the scheduled midnight report for its fixed preceding 24 hours."""
     logger = logging.getLogger("backend.scheduler")
-    subscriptions_ok, subscription_messages = await _refresh_midnight_subscriptions()
+    subscriptions_ok, subscription_text = await _refresh_midnight_subscriptions()
     end = now.astimezone(datetime_timezone.utc)
     start = end - timedelta(hours=24)
     status_rows = None
@@ -154,26 +154,30 @@ async def _run_combined_report(now: datetime) -> dict[str, int | bool]:
         logger.error("官方消息日报失败（%s）", type(exc).__name__)
     sent = 0
     expected_chunks = 0
-    if status_rows is not None:
-        try:
-            from backend.services.account_status_report import (
-                _send_report,
-                report_chunks,
-            )
-            combined_official_status = official_status or {}
-            expected_chunks = len(report_chunks(status_rows, combined_official_status))
-            sent = await _send_report(status_rows, combined_official_status)
-        except Exception as exc:
-            logger.error("合并日报发送失败（%s）", type(exc).__name__)
+    try:
+        from backend.services.account_status_report import _send_report, report_chunks
+
+        combined_official_status = official_status or {}
+        combined_rows = status_rows if not status_failed else []
+        expected_chunks = len(report_chunks(
+            combined_rows, combined_official_status,
+            subscription_text=subscription_text, status_error=status_failed,
+        ))
+        sent = await _send_report(
+            combined_rows, combined_official_status,
+            subscription_text=subscription_text, status_error=status_failed,
+        )
+    except Exception as exc:
+        logger.error("合并日报发送失败（%s）", type(exc).__name__)
     return {
         "success": subscriptions_ok and not status_failed and not official_failed and sent == expected_chunks,
         "checked": len(status_rows or []),
-        "messages_sent": subscription_messages + sent + int((official_result or {}).get("messages_sent") or 0),
+        "messages_sent": sent + int((official_result or {}).get("messages_sent") or 0),
     }
 
 
-async def _refresh_midnight_subscriptions() -> tuple[bool, int]:
-    """Refresh both sources before account checks and report their saved counts."""
+async def _refresh_midnight_subscriptions() -> tuple[bool, str]:
+    """Refresh both sources before account checks; format their saved counts."""
     logger = logging.getLogger("backend.scheduler")
     try:
         from backend.services.account_routes import get_route_service
@@ -181,7 +185,7 @@ async def _refresh_midnight_subscriptions() -> tuple[bool, int]:
         route_service = get_route_service()
     except Exception as exc:
         logger.error("零点订阅服务不可用（%s）", type(exc).__name__)
-        return False, 0
+        return False, "零点机场订阅节点报告\n订阅服务不可用，无法读取节点数量"
 
     refresh_interrupted = False
     try:
@@ -194,19 +198,23 @@ async def _refresh_midnight_subscriptions() -> tuple[bool, int]:
         settings = await route_service.get_subscription_settings()
     except Exception as exc:
         logger.error("零点订阅状态读取失败（%s）", type(exc).__name__)
-        return False, 0
+        return False, "零点机场订阅节点报告\n订阅状态读取失败，无法显示节点数量"
 
-    sources_ready = all(
-        not (settings.get(source) or {}).get("configured")
-        or (settings.get(source) or {}).get("status") == "ready"
-        for source in ("primary", "fallback")
-    )
-    from backend.services.account_status_report import _send_subscription_report
+    from backend.services.account_status_report import subscription_report_text
 
-    sent = await _send_subscription_report(
-        settings, refresh_interrupted=refresh_interrupted,
-    )
-    return not refresh_interrupted and sources_ready, sent
+    try:
+        sources_ready = all(
+            not (settings.get(source) or {}).get("configured")
+            or (settings.get(source) or {}).get("status") == "ready"
+            for source in ("primary", "fallback")
+        )
+        text = subscription_report_text(
+            settings, refresh_interrupted=refresh_interrupted,
+        )
+    except Exception as exc:
+        logger.error("零点订阅报告生成失败（%s）", type(exc).__name__)
+        return False, "零点机场订阅节点报告\n订阅报告生成失败，无法显示节点数量"
+    return not refresh_interrupted and sources_ready, text
 
 
 def _sync_account_status_report_job() -> None:
