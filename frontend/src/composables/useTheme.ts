@@ -16,14 +16,14 @@ const savedTheme = storageGet('theme')
 const prefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
 const initDark = savedTheme === 'dark' || (savedTheme === null && prefersDark)
 const isDark = ref(initDark)
-export const DEFAULT_ACCENT = '#2b6cb0'
+export const DEFAULT_ACCENT = '#2d6cdf'
 export const ACCENT_PRESETS = [
-  { nameKey: 'appearance.presetBlue', color: '#2b6cb0' },
-  { nameKey: 'appearance.presetTidal', color: '#1f7a73' },
-  { nameKey: 'appearance.presetViolet', color: '#8a4b76' },
-  { nameKey: 'appearance.presetMist', color: '#5c6494' },
-  { nameKey: 'appearance.presetCocoa', color: '#82573c' },
-  { nameKey: 'appearance.presetSand', color: '#9c6f28' },
+  { nameKey: 'appearance.presetBlue', color: '#2d6cdf' },
+  { nameKey: 'appearance.presetTidal', color: '#0f8b8d' },
+  { nameKey: 'appearance.presetViolet', color: '#9d3f89' },
+  { nameKey: 'appearance.presetMist', color: '#6658c8' },
+  { nameKey: 'appearance.presetCocoa', color: '#a85d38' },
+  { nameKey: 'appearance.presetSand', color: '#b57d1f' },
 ] as const
 const validHex = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value)
 const savedAccent = storageGet('tg-manage-accent-color')
@@ -53,22 +53,23 @@ function applyAccent(color: string) {
   const channels = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16))
   const luminance = luminanceOf(channels)
   const foreground = 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.05 ? '#ffffff' : '#000000'
-  // 兼顾浅色纸面、暗色炭灰及回归测试底色，确保强调色文字满足 WCAG AA。
+  // 兼顾浅色带色调表面、暗色深石板灰及回归测试底色，确保强调色文字满足 WCAG AA。
   const surfaces = isDark.value
     ? [
-        [24, 24, 27],
-        [32, 32, 36],
+        [21, 28, 39],
+        [27, 36, 51],
         [25, 40, 50],
         [30, 48, 58],
-        mixRgb(channels, [24, 24, 27], 0.16),
+        mixRgb(channels, [21, 28, 39], 0.16),
         mixRgb(channels, [25, 40, 50], 0.15),
         mixRgb(channels, [16, 27, 36], 0.14),
       ]
     : [
         [255, 255, 255],
-        [245, 245, 243],
+        [238, 243, 250],
         mixRgb(channels, [255, 255, 255], 0.15),
         mixRgb(channels, [248, 250, 252], 0.09),
+        mixRgb(channels, [238, 243, 250], 0.14),
       ]
   const surfaceLuminance = isDark.value
     ? Math.max(...surfaces.map(luminanceOf))

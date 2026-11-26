@@ -268,6 +268,7 @@
     "checkOkCount": "正常",
     "checkFailedCount": "异常",
     "total": "账号总数",
+    "filterAll": "全部",
     "tasks": "任务",
     "viewTasks": "查看任务",
     "logs": "日志",

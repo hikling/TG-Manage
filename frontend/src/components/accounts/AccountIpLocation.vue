@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Globe } from 'lucide-vue-next'
 import type { AccountInfo } from '../../lib/api/accounts'
 import { useI18n } from '../../composables/useI18n'
 import { formatDateTime } from '../../lib/datetime'
@@ -12,6 +13,13 @@ const source = computed(() => {
   return mode === 'primary' || mode === 'fallback' || mode === 'direct' || mode === 'setup_required'
     ? t(`accounts.ipLocation.sources.${mode}`)
     : t('accounts.ipLocation.sources.unknown')
+})
+const sourceTone = computed(() => {
+  const mode = props.account.route_mode
+  if (mode === 'primary') return 'is-primary'
+  if (mode === 'fallback') return 'is-fallback'
+  if (mode === 'direct') return 'is-direct'
+  return 'is-muted'
 })
 const location = computed(() => {
   if (props.account.exit_lookup_status === 'failed') return t('accounts.ipLocation.failedLocation')
@@ -37,17 +45,20 @@ const details = computed(() => {
 
 <template>
   <div class="account-ip-signal" :title="details">
-    <div class="account-ip-heading">
-      <span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span>
-      <span class="account-ip-route">{{ source }}</span>
+    <div class="account-ip-top">
+      <div class="account-ip-heading">
+        <Globe class="w-3.5 h-3.5 shrink-0 opacity-75" aria-hidden="true" /><span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span><span class="account-ip-route" :class="sourceTone">{{ source }}</span>
+      </div>
+      <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
     </div>
-    <span class="account-tile-status" :class="{
-      'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
-      'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
-    }">
-      <span class="account-status-dot" aria-hidden="true" />{{ location }}
-    </span>
-    <span class="account-ip-address">{{ address }}</span>
-    <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
+    <div class="account-ip-bottom">
+      <span class="account-tile-status" :class="{
+        'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
+        'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
+      }">
+        <span class="account-status-dot" aria-hidden="true" />{{ location }}
+      </span>
+      <span class="account-ip-address">{{ address }}</span>
+    </div>
   </div>
 </template>
