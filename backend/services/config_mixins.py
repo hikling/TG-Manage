@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Any, Dict
@@ -76,13 +77,16 @@ def normalize_global_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
                 raise ValueError("封面位置必须是 0 到 100 之间的数字")
             normalized[key] = round(max(0.0, min(value, 100.0)), 2)
 
-    # Token 空串不修改；非空去空白（与原路由行为一致）
+    # Token 空串不修改；非空去空白并拒绝 URL 注入字符
     if "telegram_bot_token" in normalized:
         tok = normalized["telegram_bot_token"]
         if tok is None or str(tok).strip() == "":
             normalized.pop("telegram_bot_token")
         else:
-            normalized["telegram_bot_token"] = str(tok).strip()
+            cleaned_token = str(tok).strip()
+            if not re.fullmatch(r"[A-Za-z0-9:_-]{1,256}", cleaned_token):
+                raise ValueError("Bot Token 格式无效")
+            normalized["telegram_bot_token"] = cleaned_token
 
     if "telegram_bot_code_enabled" in normalized:
         value = normalized["telegram_bot_code_enabled"]
@@ -149,7 +153,7 @@ class GlobalSettingsMixin:
             "telegram_bot_chat_id": None,
             "telegram_bot_message_thread_id": None,
             "telegram_bot_web_url": None,
-            "appearance_accent_color": "#3d6fa8",
+            "appearance_accent_color": "#3367a6",
             "hero_position_x": 50.0,
             "hero_position_y": 50.0,
             "hero_height": 360,
@@ -213,19 +217,28 @@ class GlobalSettingsMixin:
             except Exception:
                 raise ValueError(f"无效的时区: {tz_value}")
 
-        data_dir_value = merged.get("data_dir")
-        if isinstance(data_dir_value, str):
-            data_dir_value = data_dir_value.strip()
-        if data_dir_value:
-            resolved = Path(str(data_dir_value)).expanduser()
-            resolved.mkdir(parents=True, exist_ok=True)
-            if not is_writable_dir(resolved):
-                raise ValueError(f"数据路径不可写: {resolved}")
-            save_data_dir_override(resolved)
-            merged["data_dir"] = str(resolved)
-        elif data_dir_value is None or data_dir_value == "":
-            clear_data_dir_override()
-            merged["data_dir"] = None
+        if "data_dir" in settings:
+            data_dir_value = merged.get("data_dir")
+            if isinstance(data_dir_value, str):
+                data_dir_value = data_dir_value.strip()
+            if data_dir_value:
+                if (os.getenv("APP_DATA_DIR") or "").strip():
+                    raise ValueError("数据路径已由环境变量 APP_DATA_DIR 锁定，请通过部署配置修改")
+                try:
+                    resolved = Path(str(data_dir_value)).expanduser()
+                    resolved.mkdir(parents=True, exist_ok=True)
+                    if not is_writable_dir(resolved):
+                        raise ValueError(f"数据路径不可写: {resolved}")
+                    save_data_dir_override(resolved)
+                except OSError as exc:
+                    raise ValueError(f"无法设置数据路径: {exc}") from None
+                merged["data_dir"] = str(resolved)
+            else:
+                try:
+                    clear_data_dir_override()
+                except OSError as exc:
+                    raise ValueError(f"无法重置数据路径: {exc}") from None
+                merged["data_dir"] = None
 
         # Keep the old on-disk value for rollback, but never project or update it.
         stored = self._read_json_file(config_file)

@@ -297,6 +297,7 @@ export function useSettingsPage() {
 
     try {
       const res = await getGlobalSettings(token)
+      if (disposed) return
       const flags = applyGlobalSettingsToForm(settings.value, res)
       botTokenSet.value = flags.botTokenSet
       botCodeStatus.value = res.telegram_bot_code_status || ''
@@ -346,6 +347,7 @@ export function useSettingsPage() {
     // 同步注册 beforeunload：避免异步加载期间卸载导致监听器永久泄漏
     window.addEventListener('beforeunload', onBeforeUnload)
     await loadAllSettings()
+    if (disposed) return
     botStatusTimer = setInterval(async () => {
       const token = getAuthToken()
       if (!token || disposed || document.hidden) return

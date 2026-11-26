@@ -87,8 +87,7 @@ async def media_upload_admission(account: str):
 def timestamp(value: Any) -> str | None:
     if not isinstance(value, datetime):
         return None
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+    # Kurigram 返回的 naive datetime 为本地时间，直接 astimezone(utc) 转换避免产生时区偏移
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 

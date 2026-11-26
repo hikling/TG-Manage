@@ -358,6 +358,7 @@ onUnmounted(() => {
 const viewLoaders: Record<string, () => Promise<unknown>> = {
   dashboard: () => import('../views/Dashboard.vue'),
   accounts: () => import('../views/Accounts.vue'),
+  chats: () => import('../views/Chats.vue'),
   settings: () => import('../views/Settings.vue'),
 }
 

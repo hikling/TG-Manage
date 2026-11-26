@@ -71,7 +71,7 @@ def main() -> int:
         "data_dir": str(settings.resolve_base_dir()),
         "models_removed": True,
         "routes_removed": True,
-        "preferred_api": "/api/sign-tasks",
+        "preferred_api": "/api/accounts",
         "tables": tables,
         "has_residual_tables": any_table,
         "has_residual_rows": residual,

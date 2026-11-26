@@ -79,5 +79,23 @@ describe('authStore', () => {
       store.setToken(`header.${payload}.signature`)
       expect(store.isTokenExpired()).toBeFalsy()
     })
+
+    it('支持 Base64URL 字符 (- / _) 解码而不崩溃', () => {
+      const store = useAuthStore()
+      // 含 '+' 和 '/' 映射为 '-' 和 '_' 且去掉 '=' 的 Base64URL payload
+      const futureRaw = btoa(JSON.stringify({ sub: 'u?>?', exp: 4956508800 }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      const pastRaw = btoa(JSON.stringify({ sub: 'u?>?', exp: 1577836800 }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '')
+      expect(futureRaw).toMatch(/[-_]/)
+      store.setToken(`header.${futureRaw}.sig`)
+      expect(store.isTokenExpired()).toBe(false)
+      store.setToken(`header.${pastRaw}.sig`)
+      expect(store.isTokenExpired()).toBe(true)
+    })
   })
 })

@@ -149,7 +149,7 @@ class TelegramPhoneLoginMixin:
         # 1. 清理全局 _login_sessions 中可能存在的残留连接
         # _login_sessions key 格式: f"{account_name}_{phone_number}"
         for key, value in list(_login_sessions.items()):
-            if key.startswith(f"{account_name}_"):
+            if value.get("account_name") == account_name:
                 old_lock = value.get("lock")
                 def release_old_lock(lock=old_lock):
                     if lock and lock.locked():

@@ -375,10 +375,6 @@ summary,
   gap: 20px;
 }
 
-.panel-columns {
-  gap: 16px;
-}
-
 .panel-title {
   font-size: clamp(1.18rem, 1.5vw, 1.4rem);
   font-weight: 700;
@@ -572,12 +568,6 @@ summary,
   border-color: var(--tg-border);
 }
 
-.ui-form-section-accent,
-.dark .ui-form-section-accent {
-  border-color: var(--tg-border-strong);
-  background: var(--tg-bg-elevated-2);
-}
-
 .ui-section-icon {
   width: 2.15rem;
   height: 2.15rem;
@@ -633,22 +623,6 @@ summary,
   box-shadow: var(--tg-shadow-sm);
 }
 
-.ui-fab,
-.dark .ui-fab {
-  width: 48px;
-  height: 48px;
-  background: var(--tg-accent);
-  border: 0;
-  color: var(--tg-on-accent);
-  border-radius: 999px;
-  box-shadow: 0 10px 24px -4px rgb(15 23 42 / 0.25);
-}
-
-.ui-fab:hover {
-  background: var(--tg-accent-hover);
-  transform: translateY(-1px);
-}
-
 .ui-skeleton {
   border-radius: 10px;
   background: var(--tg-bg-muted);
@@ -688,20 +662,6 @@ summary,
   color: #fda4af;
   background: rgb(244 63 94 / 0.12);
   border-color: rgb(244 63 94 / 0.24);
-}
-
-.panel-success {
-  color: #047857;
-  background: rgb(5 150 105 / 0.07);
-  border: 1px solid rgb(5 150 105 / 0.2);
-  border-radius: 12px;
-  font-size: 0.84rem;
-}
-
-.dark .panel-success {
-  color: #6ee7b7;
-  background: rgb(16 185 129 / 0.12);
-  border-color: rgb(16 185 129 / 0.25);
 }
 
 .panel-empty,
@@ -1802,116 +1762,6 @@ summary,
   font-size: 0.72rem;
   color: var(--tg-text-muted);
   overflow-wrap: anywhere;
-}
-
-/* Simplified Single-Line TeleBox Row */
-.account-pass-telebox {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 2px;
-}
-
-.account-pass-tb-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.account-pass-tb-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--tg-text-muted);
-}
-
-.account-tb-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.81rem;
-  font-weight: 600;
-  color: var(--tg-text-muted);
-  white-space: nowrap;
-}
-
-.account-tb-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--tg-text-muted);
-  opacity: 0.45;
-  flex: none;
-}
-
-.account-tb-status.is-running {
-  color: #0e7c5a;
-}
-
-.account-tb-status.is-running .account-tb-dot {
-  background: #10b981;
-  opacity: 1;
-}
-
-.account-tb-status.is-error {
-  color: #be123c;
-}
-
-.account-tb-status.is-error .account-tb-dot {
-  background: #f43f5e;
-  opacity: 1;
-}
-
-.account-tb-status.is-starting {
-  color: #b45309;
-}
-
-.account-tb-status.is-starting .account-tb-dot {
-  background: #f59e0b;
-  opacity: 1;
-}
-
-.dark .account-tb-status.is-running { color: #6ee7b7; }
-.dark .account-tb-status.is-error { color: #fda4af; }
-.dark .account-tb-status.is-starting { color: #fcd34d; }
-
-.account-tb-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--tg-border-strong);
-  background: var(--tg-bg-elevated-2);
-  color: var(--tg-text);
-  font-size: 0.73rem;
-  font-weight: 600;
-  white-space: nowrap;
-  flex: none;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
-}
-
-.account-tb-btn:hover:not(:disabled) {
-  border-color: var(--tg-accent-border);
-  background: var(--tg-accent-soft);
-  color: var(--tg-accent-text);
-}
-
-.account-tb-btn.is-on:hover:not(:disabled) {
-  border-color: rgb(244 63 94 / 0.35);
-  background: rgb(244 63 94 / 0.08);
-  color: #be123c;
-}
-
-.dark .account-tb-btn.is-on:hover:not(:disabled) {
-  color: #fda4af;
-}
-
-.account-tb-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Optional 2FA Password Prompt inside Card */
@@ -3244,13 +3094,11 @@ summary,
   .dashboard-hero,
   .dashboard-metric,
   .account-pass,
-  .panel-button,
-  .ui-fab {
+  .panel-button {
     transition: none;
   }
   .dashboard-metric:hover,
-  .account-pass:hover,
-  .ui-fab:hover {
+  .account-pass:hover {
     transform: none;
   }
 }

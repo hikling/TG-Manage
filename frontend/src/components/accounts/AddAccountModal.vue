@@ -93,35 +93,22 @@ const loginId = ref('')
 /** 二维码加载失败/已过期：清空图片后展示错误占位与重新获取入口 */
 const qrLoadFailed = ref(false)
 let pollHandle: ChainPollHandle | null = null
+let sessionGen = 0
 
 const handleQrImageError = () => {
   qrImage.value = ''
   qrLoadFailed.value = true
 }
 
-const reset = async () => {
+const reset = () => {
+  sessionGen += 1
   pollHandle?.stop()
   pollHandle = null
-  if (phoneCodeHash.value) {
-    try {
-      const token = getAuthToken()
-      if (token) await cancelAccountLogin(token, {
-        account_name: form.value.account_name,
-        phone_number: form.value.phone_number,
-        phone_code_hash: phoneCodeHash.value,
-      })
-    } catch (e: unknown) {
-      devLog.warn('cancelAccountLogin failed:', getLocalizedErrorMessage(e, t))
-    }
-  }
-  if (loginId.value) {
-    try {
-      const token = getAuthToken()
-      if (token) await cancelQrLogin(token, loginId.value)
-    } catch (e: unknown) {
-      devLog.warn('cancelQrLogin failed:', getLocalizedErrorMessage(e, t))
-    }
-  }
+  const prevPhoneHash = phoneCodeHash.value
+  const prevAccountName = form.value.account_name
+  const prevPhoneNumber = form.value.phone_number
+  const prevLoginId = loginId.value
+
   form.value = { account_name: props.initialAccountName || '', api_id: '', api_hash: '', remark: '', phone_number: '', phone_code: '', password: '' }
   enableTelebox.value = false
   phoneCodeHash.value = ''
@@ -136,6 +123,31 @@ const reset = async () => {
   qrLoadFailed.value = false
   loginId.value = ''
   loading.value = false
+
+  if (prevPhoneHash || prevLoginId) {
+    void (async () => {
+      const token = getAuthToken()
+      if (!token) return
+      if (prevPhoneHash) {
+        try {
+          await cancelAccountLogin(token, {
+            account_name: prevAccountName,
+            phone_number: prevPhoneNumber,
+            phone_code_hash: prevPhoneHash,
+          })
+        } catch (e: unknown) {
+          devLog.warn('cancelAccountLogin failed:', getLocalizedErrorMessage(e, t))
+        }
+      }
+      if (prevLoginId) {
+        try {
+          await cancelQrLogin(token, prevLoginId)
+        } catch (e: unknown) {
+          devLog.warn('cancelQrLogin failed:', getLocalizedErrorMessage(e, t))
+        }
+      }
+    })()
+  }
 }
 
 watch(() => props.isOpen, (val) => {
@@ -166,25 +178,24 @@ watch(loginMethod, () => {
 })
 
 const handleClose = () => {
-  reset()
   emit('close')
 }
 
 /** 登录成功后保存备注：失败仅告警，不阻断登录流程 */
-const saveRemarkIfPresent = async (token: string) => {
-  if (!form.value.remark) return
+const saveRemarkIfPresent = async (token: string, accountName: string, remark: string) => {
+  if (!remark) return
   try {
-    await updateAccount(token, form.value.account_name, { remark: form.value.remark })
+    await updateAccount(token, accountName, { remark })
   } catch (err) {
     devLog.warn('登录成功但备注保存失败', err)
   }
 }
 
-const applyTeleboxPreference = async () => {
-  const name = encodeURIComponent(form.value.account_name)
+const applyTeleboxPreference = async (accountName: string, enableTb: boolean) => {
+  const name = encodeURIComponent(accountName)
   try {
-    await panelRequest(`/telebox/${name}/${enableTelebox.value ? 'start' : 'stop'}`, 'POST')
-    if (enableTelebox.value) toast.info(t('addAccount.teleboxStarted'))
+    await panelRequest(`/telebox/${name}/${enableTb ? 'start' : 'stop'}`, 'POST')
+    if (enableTb) toast.info(t('addAccount.teleboxStarted'))
   } catch (err) {
     toast.error(t('addAccount.teleboxSetupFailed', { error: getLocalizedErrorMessage(err, t) }))
   }
@@ -192,14 +203,18 @@ const applyTeleboxPreference = async () => {
 
 // ============ QR Login Logic ============
 
-const pollStatus = async (token: string, lid: string) => {
+const pollStatus = async (token: string, lid: string, gen = sessionGen) => {
   try {
     const res = await getQrLoginStatus(token, lid)
+    if (!props.isOpen || gen !== sessionGen) return
     if (res.status === 'success') {
+      const accountName = form.value.account_name
+      const remark = form.value.remark
+      const enableTb = enableTelebox.value
       pollHandle?.stop()
       pollHandle = null
-      await saveRemarkIfPresent(token)
-      await applyTeleboxPreference()
+      await saveRemarkIfPresent(token, accountName, remark)
+      await applyTeleboxPreference(accountName, enableTb)
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
@@ -209,7 +224,7 @@ const pollStatus = async (token: string, lid: string) => {
       if (form.value.password) {
         pollHandle?.stop()
         pollHandle = null
-        handleQrPasswordSubmit(token, lid)
+        void handleQrPasswordSubmit(token, lid, gen)
       } else {
         error.value = t('addAccount.needPassword')
         pollHandle?.stop()
@@ -229,7 +244,10 @@ const pollStatus = async (token: string, lid: string) => {
   }
 }
 
-const handleQrPasswordSubmit = async (token: string, lid: string) => {
+const handleQrPasswordSubmit = async (token: string, lid: string, gen = sessionGen) => {
+  const accountName = form.value.account_name
+  const remark = form.value.remark
+  const enableTb = enableTelebox.value
   loading.value = true
   error.value = ''
   try {
@@ -237,10 +255,11 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
       login_id: lid,
       password: form.value.password
     })
+    if (!props.isOpen || gen !== sessionGen) return
     // 如果后端直接返回 success，说明登录已完成，无需再轮询
     if (res.success) {
-      await saveRemarkIfPresent(token)
-      await applyTeleboxPreference()
+      await saveRemarkIfPresent(token, accountName, remark)
+      await applyTeleboxPreference(accountName, enableTb)
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
@@ -249,8 +268,9 @@ const handleQrPasswordSubmit = async (token: string, lid: string) => {
     }
     // 否则继续轮询等待最终状态
     pollHandle?.stop()
-    pollHandle = startChainPoll(() => pollStatus(token, lid), { intervalMs: 3000 })
+    pollHandle = startChainPoll(() => pollStatus(token, lid, gen), { intervalMs: 3000 })
   } catch (e: unknown) {
+    if (!props.isOpen || gen !== sessionGen) return
     error.value = getLocalizedErrorMessage(e, t, t('addAccount.passwordFailed'))
     loading.value = false
   }
@@ -268,6 +288,7 @@ const handleGetQr = async () => {
   const token = getAuthToken()
   if (!token) return
 
+  const gen = sessionGen
   loading.value = true
   error.value = ''
   try {
@@ -276,16 +297,21 @@ const handleGetQr = async () => {
       api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
       api_hash: form.value.api_hash.trim() || undefined
     })
+    if (!props.isOpen || gen !== sessionGen) {
+      if (res.login_id) void cancelQrLogin(token, res.login_id).catch(() => {})
+      return
+    }
     loginId.value = res.login_id
     qrImage.value = res.qr_image || ''
     qrLoadFailed.value = false
-    
+
     pollHandle?.stop()
-    pollHandle = startChainPoll(() => pollStatus(token, res.login_id), { intervalMs: 3000 })
+    pollHandle = startChainPoll(() => pollStatus(token, res.login_id, gen), { intervalMs: 3000 })
   } catch (e: unknown) {
+    if (!props.isOpen || gen !== sessionGen) return
     error.value = getLocalizedErrorMessage(e, t, t('addAccount.getQrFailed'))
   } finally {
-    loading.value = false
+    if (gen === sessionGen) loading.value = false
   }
 }
 
@@ -303,21 +329,34 @@ const handleSendCode = async () => {
   const token = getAuthToken()
   if (!token) return
 
+  const gen = sessionGen
+  const targetAccount = form.value.account_name
+  const targetPhone = form.value.phone_number
   loading.value = true
   error.value = ''
   try {
     const res = codeSent.value
       ? await resendAccountLogin(token, {
-        account_name: form.value.account_name,
-        phone_number: form.value.phone_number,
+        account_name: targetAccount,
+        phone_number: targetPhone,
         phone_code_hash: phoneCodeHash.value,
       })
       : await startAccountLogin(token, {
-        account_name: form.value.account_name,
+        account_name: targetAccount,
         api_id: form.value.api_id ? Number(form.value.api_id) : undefined,
         api_hash: form.value.api_hash.trim() || undefined,
-        phone_number: form.value.phone_number
+        phone_number: targetPhone
       })
+    if (!props.isOpen || gen !== sessionGen) {
+      if (res.phone_code_hash) {
+        void cancelAccountLogin(token, {
+          account_name: targetAccount,
+          phone_number: targetPhone,
+          phone_code_hash: res.phone_code_hash,
+        }).catch(() => {})
+      }
+      return
+    }
     phoneCodeHash.value = res.phone_code_hash
     codeSent.value = true
     codeDeliveryType.value = res.delivery_type ?? null
@@ -326,9 +365,10 @@ const handleSendCode = async () => {
     toast.info(codeDeliveryNotice.value)
     startCodeCountdown(res.retry_after ?? 60)
   } catch (e: unknown) {
+    if (!props.isOpen || gen !== sessionGen) return
     error.value = getLocalizedErrorMessage(e, t, t('addAccount.sendCodeFailed'))
   } finally {
-    loading.value = false
+    if (gen === sessionGen) loading.value = false
   }
 }
 
@@ -336,6 +376,7 @@ const handleSave = async () => {
   const token = getAuthToken()
   if (!token) return
 
+  const gen = sessionGen
   loading.value = true
   error.value = ''
 
@@ -350,21 +391,26 @@ const handleSave = async () => {
       loading.value = false
       return
     }
+    const accountName = form.value.account_name
+    const remark = form.value.remark
+    const enableTb = enableTelebox.value
     try {
       await verifyAccountLogin(token, {
-        account_name: form.value.account_name,
+        account_name: accountName,
         phone_number: form.value.phone_number,
         phone_code: form.value.phone_code,
         phone_code_hash: phoneCodeHash.value,
         password: form.value.password || undefined
       })
-      await saveRemarkIfPresent(token)
-      await applyTeleboxPreference()
+      if (!props.isOpen || gen !== sessionGen) return
+      await saveRemarkIfPresent(token, accountName, remark)
+      await applyTeleboxPreference(accountName, enableTb)
       loading.value = false
       toast.success(t('addAccount.loginSuccess'))
       emit('success')
       handleClose()
     } catch (e: unknown) {
+      if (!props.isOpen || gen !== sessionGen) return
       // 按后端稳定错误码区分「首次需要 2FA 密码」与「2FA 密码错误」，
       // 不按本地化文案匹配（英文界面下中文子串永不命中）
       const code = getErrorCode(e)
@@ -385,7 +431,7 @@ const handleSave = async () => {
       return
     }
     if (form.value.password) {
-      await handleQrPasswordSubmit(token, loginId.value)
+      await handleQrPasswordSubmit(token, loginId.value, gen)
     } else if (pollHandle?.active) {
       // 没有密码但轮询仍在运行：保留轮询等待扫码完成，
       // 停掉后扫码完成不会再被 pollStatus 检测到
@@ -400,7 +446,7 @@ const handleSave = async () => {
 }
 
 onUnmounted(() => {
-  void reset()
+  reset()
 })
 </script>
 

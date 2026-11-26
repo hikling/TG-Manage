@@ -80,6 +80,24 @@ class SubscriptionImportTests(unittest.TestCase):
         with self.assertRaises(SubscriptionError):
             parse_subscription(b"x" * (1024 * 1024 + 1), "primary")
 
+    def test_private_nat64_and_internal_node_hosts_are_rejected(self):
+        import ipaddress
+        from backend.services.subscription_import import _is_public_ip
+
+        self.assertFalse(_is_public_ip(ipaddress.ip_address("64:ff9b::127.0.0.1")))
+        self.assertFalse(_is_public_ip(ipaddress.ip_address("::ffff:10.0.0.1")))
+        self.assertTrue(_is_public_ip(ipaddress.ip_address("93.184.215.14")))
+
+        payload = "\n".join([
+            "trojan://secret@127.0.0.1:443?security=tls",
+            "trojan://secret@[64:ff9b::10.0.0.1]:443?security=tls",
+            "trojan://secret@redis.internal:443?security=tls",
+            "trojan://secret@localhost.:443?security=tls",
+        ]).encode("utf-8")
+        imported = parse_subscription(payload, "primary")
+        self.assertEqual(len(imported.nodes), 0)
+        self.assertEqual(imported.unsupported_count, 4)
+
     def test_xray_config_has_no_default_direct_exit(self):
         node = parse_subscription(b"trojan://secret@example.org:443?security=tls", "primary").nodes[0]
         config = build_xray_config([node], [23456])

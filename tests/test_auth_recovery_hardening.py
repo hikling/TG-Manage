@@ -1,6 +1,8 @@
 """Credential changes revoke older sessions and recovery stays on the host."""
 from __future__ import annotations
 
+import hashlib
+
 import pyotp
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -110,3 +112,45 @@ def test_host_recovery_upgrades_legacy_schema_before_web_start(monkeypatch):
             "SELECT totp_secret, auth_version FROM users WHERE id = 1"
         )).one() == (None, 1)
     engine.dispose()
+
+
+def test_webapp_token_rejected_on_user_credential_endpoints(api_client, monkeypatch):
+    from backend.core.auth import create_access_token
+    from backend.services import bot_webapp
+
+    class _Cfg:
+        def get_global_settings(self):
+            return {"telegram_bot_token": "123:ABC"}
+
+    monkeypatch.setattr("backend.services.config.get_config_service", lambda: _Cfg())
+    monkeypatch.setattr(bot_webapp, "menu_url", lambda _settings: "https://panel.example.com/tg")
+    monkeypatch.setattr(bot_webapp, "private_target", lambda _settings: "1001")
+
+    token = create_access_token({
+        "sub": "admin",
+        "auth_version": 0,
+        "auth_source": "telegram_webapp",
+        "telegram_user_id": "1001",
+        "telegram_bot_fingerprint": hashlib.sha256(b"123:ABC").hexdigest(),
+    })
+    assert api_client.get("/api/auth/me", headers=_auth(token)).status_code == 200
+    response = api_client.put(
+        "/api/user/password",
+        headers=_auth(token),
+        json={"old_password": "admin123", "new_password": "new-strong-password"},
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "TELEGRAM_WEBAPP_ADMIN_ACTION_FORBIDDEN"
+    assert api_client.get("/api/user/totp/status", headers=_auth(token)).status_code == 200
+    assert api_client.post("/api/user/totp/setup", headers=_auth(token)).status_code == 403
+
+
+def test_password_change_rejects_over_72_utf8_bytes(api_client):
+    token = _login(api_client)
+    response = api_client.put(
+        "/api/user/password",
+        headers=_auth(token),
+        json={"old_password": "admin123", "new_password": "密" * 25},
+    )
+    assert response.status_code == 400
+    assert "72" in response.json()["detail"]

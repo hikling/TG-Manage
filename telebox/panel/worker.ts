@@ -12,9 +12,15 @@ for (const level of ["log", "info", "warn", "error", "debug"] as const) {
 }
 let passwordResolve: ((value: string) => void) | undefined;
 let initialized = false;
+let runtimeStarted = false;
 let stop = false;
 let queue = Promise.resolve();
 let privateValues: string[] = [];
+function writeConfigAtomic(config: Record<string, unknown>) {
+  const tmpPath = `config.json.tmp.${process.pid}`;
+  fs.writeFileSync(tmpPath, JSON.stringify(config), { mode: 0o600 });
+  fs.renameSync(tmpPath, "config.json");
+}
 function safeError(error: unknown): string {
   let value = error instanceof Error ? error.message : String(error);
   for (const secret of privateValues) if (secret) value = value.split(secret).join("[REDACTED]");
@@ -28,14 +34,18 @@ function initializeRuntimeServices() {
   require("../src/utils/coreDumpCleaner").cleanCoreDumps();
   const proxyValue = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
   if (proxyValue) {
-    const url = new URL(proxyValue);
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      require("axios").defaults.proxy = {
-        host: url.hostname,
-        port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
-        protocol: url.protocol.slice(0, -1),
-        ...(url.username ? { auth: { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) } } : {}),
-      };
+    try {
+      const url = new URL(proxyValue);
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        require("axios").defaults.proxy = {
+          host: url.hostname,
+          port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
+          protocol: url.protocol.slice(0, -1),
+          ...(url.username ? { auth: { username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) } } : {}),
+        };
+      }
+    } catch {
+      console.warn("[WARN] Ignoring unparseable HTTP proxy environment variable");
     }
   }
 }
@@ -44,7 +54,7 @@ process.on("uncaughtException", (error) => console.error("[ERROR] Uncaught excep
 async function shutdown(code = 0) {
   if (stop) return;
   stop = true;
-  try { if (initialized) await require("../src/utils/runtimeManager").shutdownRuntime(); }
+  try { if (runtimeStarted) await require("../src/utils/runtimeManager").shutdownRuntime(); }
   finally { process.exit(code); }
 }
 process.on("SIGTERM", () => void shutdown());
@@ -61,7 +71,7 @@ async function initialize(input: any) {
   const old = fs.existsSync("config.json") ? JSON.parse(fs.readFileSync("config.json", "utf8")) : {};
   privateValues = [String(input.api_hash || ""), String(old.session || ""), String(input.proxy?.password || "")];
   const config = { ...old, api_id: input.api_id, api_hash: input.api_hash, proxy: input.proxy || undefined };
-  fs.writeFileSync("config.json", JSON.stringify(config), { mode: 0o600 });
+  writeConfigAtomic(config);
   const client = new TelegramClient(new StringSession(old.session || ""), input.api_id, input.api_hash, {
     connectionRetries: 3, deviceModel: "TG Manage TeleBox", proxy: config.proxy,
   });
@@ -83,7 +93,7 @@ async function initialize(input: any) {
       });
     }
     config.session = (client.session as InstanceType<typeof StringSession>).save();
-    fs.writeFileSync("config.json", JSON.stringify(config), { mode: 0o600 });
+    writeConfigAtomic(config);
   } finally { await client.destroy(); }
   stage = "加载插件";
   initializeRuntimeServices();
@@ -92,6 +102,7 @@ async function initialize(input: any) {
   require("../src/hook/patches/telegram.patch");
   stage = "启动运行时";
   await require("../src/utils/runtimeManager").startRuntime();
+  runtimeStarted = true;
   stage = "运行中";
   emit({ event: "state", status: "running" });
 }
@@ -107,6 +118,7 @@ input.on("line", (line) => {
   if (line.length > 65536) return;
   let command: any;
   try { command = JSON.parse(line); } catch { return; }
+  if (!command || typeof command !== "object" || Array.isArray(command)) return;
   if (command.action === "password") { passwordResolve?.(String(command.password || "")); return; }
   queue = queue.then(async () => {
     try {

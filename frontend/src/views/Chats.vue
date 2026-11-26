@@ -5,6 +5,7 @@ import { usePanelAccount, errorText } from '../composables/usePanelAccount'
 import { useConfirm } from '../composables/useConfirm'
 import { useToast } from '../composables/useToast'
 import { copyToClipboard } from '../lib/clipboard'
+import { downloadBlob } from '../lib/download'
 import { accountAvatarToneClass } from '../lib/avatar-palette'
 import { listDialogs, listMessages, sendMessage, uploadMedia, downloadMedia, editMessage, deleteMessage, dialogAction, type Dialog, type Message } from '../lib/api/communications'
 import ChatAvatar from '../components/ChatAvatar.vue'
@@ -131,8 +132,13 @@ onMounted(async () => {
   finally { if (active) settingsReady.value = true }
 })
 
-const dialogs = ref<Dialog[]>([]), messages = ref<Message[]>([]), selected = ref<Dialog | null>(null), query = ref(''), archived = ref(false), text = ref(''), busy = ref(false), loading = ref(false), moreDialogs = ref(false), moreMessages = ref(false), reply = ref<Message | null>(null), editing = ref<Message | null>(null), file = ref<File | null>(null)
+const dialogs = ref<Dialog[]>([]), messages = ref<Message[]>([]), selected = ref<Dialog | null>(null), query = ref(''), archived = ref(false), text = ref(''), busy = ref(false), loading = ref(false), moreDialogs = ref(false), moreMessages = ref(false), reply = ref<Message | null>(null), editing = ref<Message | null>(null), file = ref<File | null>(null), fileInput = ref<HTMLInputElement | null>(null)
 let generation = 0, messageGeneration = 0, nextOffset = 0, before = 0, timer: ReturnType<typeof setTimeout> | undefined
+
+function clearSelectedFile() {
+  file.value = null
+  if (fileInput.value) fileInput.value.value = ''
+}
 
 async function loadDialogs(append = false) {
   if (!active || !enabled.value || !account.value) return
@@ -173,10 +179,11 @@ function choose(dialog: Dialog) {
   selected.value = dialog
   messages.value = []
   text.value = ''
-  file.value = null
+  clearSelectedFile()
   reply.value = null
   editing.value = null
   moreMessages.value = false
+  before = 0
   void loadMessages()
 }
 
@@ -186,6 +193,11 @@ watch(account, () => {
   selected.value = null
   messages.value = []
   dialogs.value = []
+  moreDialogs.value = false
+  moreMessages.value = false
+  nextOffset = 0
+  before = 0
+  clearSelectedFile()
   ++messageGeneration
   if (settingsReady.value && !enabled.value) void loadOfficialMessages()
   else void loadDialogs()
@@ -218,7 +230,7 @@ async function submit() {
     else if (file.value) await uploadMedia(acc, chat, file.value, text.value, reply.value?.id)
     else await sendMessage(acc, chat, text.value, reply.value?.id)
     if (ownsSelection()) {
-      text.value = ''; file.value = null; reply.value = null; editing.value = null
+      text.value = ''; clearSelectedFile(); reply.value = null; editing.value = null
       await loadMessages()
     }
     if (active && account.value === acc) await loadDialogs()
@@ -253,13 +265,8 @@ async function download(message: Message) {
   try {
     const blob = await downloadMedia(account.value, message.chat_id, message.id)
     if (!active) return
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `telegram-${message.id}`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  } catch (e) { error.value = errorText(e) }
+    downloadBlob(blob, `telegram-${message.id}`)
+  } catch (e) { if (active) error.value = errorText(e) }
 }
 
 function selectFile(event: Event) {
@@ -482,7 +489,7 @@ function selectFile(event: Event) {
               <p class="panel-muted text-sm">{{ selected.type }} <span v-if="selected.username">· @{{ selected.username }}</span></p>
             </div>
             <button class="panel-button" :title="t('chats.markRead')" :aria-label="t('chats.markRead')" @click="action('read')"><CheckCheck :size="18" /></button>
-            <button class="panel-button" :title="archived ? t('chats.unarchive') : t('chats.archive')" :aria-label="archived ? t('chats.unarchive') : t('chats.archive')" @click="action(archived ? 'unarchive' : 'archive')"><Archive :size="18" /></button>
+            <button class="panel-button" :title="selected.archived ? t('chats.unarchive') : t('chats.archive')" :aria-label="selected.archived ? t('chats.unarchive') : t('chats.archive')" @click="action(selected.archived ? 'unarchive' : 'archive')"><Archive :size="18" /></button>
             <button class="panel-button" :title="t('chats.refreshMessages')" :aria-label="t('chats.refreshMessages')" @click="loadMessages()"><RefreshCw :size="18" /></button>
           </header>
           <div class="chat-messages">
@@ -495,7 +502,7 @@ function selectFile(event: Event) {
               <div class="chat-message-tools">
                 <time>{{ new Date(m.date).toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN') }}</time>
                 <button :aria-label="t('chats.reply')" :title="t('chats.reply')" @click="reply = m; editing = null"><Reply :size="14" /></button>
-                <button v-if="m.outgoing" :aria-label="t('chats.edit')" :title="t('chats.edit')" @click="editing = m; text = m.text; reply = null"><Pencil :size="14" /></button>
+                <button v-if="m.outgoing" :aria-label="t('chats.edit')" :title="t('chats.edit')" @click="editing = m; text = m.text; reply = null; clearSelectedFile()"><Pencil :size="14" /></button>
                 <button :aria-label="t('chats.delete')" :title="t('chats.delete')" @click="remove(m)"><Trash2 :size="14" /></button>
               </div>
             </article>
@@ -503,12 +510,12 @@ function selectFile(event: Event) {
           <form class="chat-compose" @submit.prevent="submit">
             <div v-if="reply || editing || file" class="panel-row mb-2 text-sm">
               <span class="truncate">{{ editing ? t('chats.editMessage') : reply ? t('chats.replyTo', { name: reply.sender_name }) : file?.name }}</span>
-              <button type="button" @click="reply = null; editing = null; file = null; text = ''">{{ t('common.cancel') }}</button>
+              <button type="button" @click="reply = null; editing = null; clearSelectedFile(); text = ''">{{ t('common.cancel') }}</button>
             </div>
             <div class="flex gap-3 items-end">
               <label v-if="!editing" class="panel-button" :title="t('chats.addAttachment')">
                 <Paperclip :size="20" />
-                <input type="file" class="sr-only" :aria-label="t('chats.addAttachment')" @change="selectFile" />
+                <input ref="fileInput" type="file" class="sr-only" :aria-label="t('chats.addAttachment')" @change="selectFile" />
               </label>
               <textarea v-model="text" class="panel-input flex-1" rows="2" :placeholder="t('chats.messagePlaceholder')" :disabled="busy" @keydown.enter.exact.prevent="submit" />
               <button class="panel-button primary" :disabled="busy || (!text.trim() && !file)" :aria-label="t('chats.send')">

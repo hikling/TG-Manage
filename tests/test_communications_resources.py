@@ -350,3 +350,26 @@ async def test_canceled_upload_waiter_closes_file_without_reading():
             assert upload_slots.locked()
     file.read.assert_not_awaited()
     file.close.assert_awaited_once()
+
+
+def test_timestamp_interprets_naive_and_aware_datetimes_in_utc(monkeypatch):
+    import os
+    import time
+    from datetime import datetime, timedelta, timezone
+    from backend.services.communications import timestamp
+
+    aware = datetime(2026, 5, 1, 12, 0, 0, tzinfo=timezone(timedelta(hours=8)))
+    assert timestamp(aware) == "2026-05-01T04:00:00Z"
+
+    if hasattr(time, "tzset"):
+        old_tz = os.environ.get("TZ")
+        monkeypatch.setenv("TZ", "Asia/Shanghai")
+        time.tzset()
+        try:
+            assert timestamp(datetime(2026, 5, 1, 12, 0, 0)) == "2026-05-01T04:00:00Z"
+        finally:
+            if old_tz is None:
+                monkeypatch.delenv("TZ", raising=False)
+            else:
+                monkeypatch.setenv("TZ", old_tz)
+            time.tzset()

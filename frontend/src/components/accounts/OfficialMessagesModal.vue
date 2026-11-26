@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { Copy, RefreshCw, ShieldCheck } from 'lucide-vue-next'
 import Modal from '../Modal.vue'
 import { listAccountOfficialMessages, type OfficialMessageInfo } from '../../lib/api'
@@ -8,6 +8,8 @@ import { useI18n } from '../../composables/useI18n'
 import { useToast } from '../../composables/useToast'
 import { copyToClipboard } from '../../lib/clipboard'
 import { formatDateTime } from '../../lib/datetime'
+import { useLatestResponseGuard } from '../../lib/latest-response'
+import { getLocalizedErrorMessage } from '../../lib/types'
 
 const props = defineProps<{
   isOpen: boolean
@@ -18,11 +20,12 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const toast = useToast()
 const loading = ref(false)
 const error = ref('')
 const messages = ref<OfficialMessageInfo[]>([])
+const messagesGuard = useLatestResponseGuard()
 
 const extractLoginCode = (text?: string | null): string => {
   if (!text) return ''
@@ -38,21 +41,25 @@ const copyLoginCode = async (code: string) => {
 
 const title = computed(() => `${t('accounts.officialMessages')} · ${props.accountName || '-'}`)
 
-const formatTime = (value?: string | null) => formatDateTime(value)
+const formatTime = (value?: string | null) => formatDateTime(value, locale.value === 'en' ? 'en-US' : 'zh-CN')
 
 const loadMessages = async () => {
   const token = getAuthToken()
-  if (!token || !props.accountName) return
+  const targetAccount = props.accountName
+  if (!token || !targetAccount || !props.isOpen) return
 
+  const seq = messagesGuard.next()
   loading.value = true
   error.value = ''
   try {
-    const res = await listAccountOfficialMessages(token, props.accountName, 20)
+    const res = await listAccountOfficialMessages(token, targetAccount, 20)
+    if (!messagesGuard.isCurrent(seq) || !props.isOpen || props.accountName !== targetAccount) return
     messages.value = res.messages || []
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : t('accounts.officialMessagesFailed')
+    if (!messagesGuard.isCurrent(seq) || !props.isOpen || props.accountName !== targetAccount) return
+    error.value = getLocalizedErrorMessage(e, t, t('accounts.officialMessagesFailed'))
   } finally {
-    loading.value = false
+    if (messagesGuard.isCurrent(seq)) loading.value = false
   }
 }
 
@@ -60,14 +67,20 @@ watch(
   () => props.isOpen,
   (open) => {
     if (open) {
-      loadMessages()
+      void loadMessages()
     } else {
+      messagesGuard.invalidate()
       // 关闭时清空数据：换账号重开不应闪现上一账号的消息（与 DeviceManagerModal 对齐）
       messages.value = []
       error.value = ''
+      loading.value = false
     }
   }
 )
+
+onUnmounted(() => {
+  messagesGuard.invalidate()
+})
 </script>
 
 <template>

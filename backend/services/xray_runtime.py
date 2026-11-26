@@ -117,11 +117,11 @@ class XrayRuntime:
             fd, raw_path = tempfile.mkstemp(prefix="xray-", suffix=".json", dir=self.directory)
             path = Path(raw_path)
             try:
-                if hasattr(os, "fchmod"):
-                    os.fchmod(fd, 0o600)
-                else:
-                    os.chmod(path, 0o600)
                 with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    if hasattr(os, "fchmod"):
+                        os.fchmod(handle.fileno(), 0o600)
+                    else:
+                        os.chmod(path, 0o600)
                     json.dump(config, handle, ensure_ascii=False)
                     handle.flush()
                     os.fsync(handle.fileno())
@@ -154,6 +154,7 @@ class XrayRuntime:
             return True
 
     async def _validate(self, path: Path) -> None:
+        process: asyncio.subprocess.Process | None = None
         try:
             process = await asyncio.create_subprocess_exec(
                 self.binary, "run", "-test", "-config", str(path),
@@ -162,9 +163,13 @@ class XrayRuntime:
             )
             code = await asyncio.wait_for(process.wait(), timeout=8)
         except (OSError, asyncio.TimeoutError):
-            if "process" in locals():
+            if process is not None:
                 await self._stop_process(process)
             raise XrayRuntimeError("XRAY_VALIDATE_FAILED") from None
+        except BaseException:
+            if process is not None:
+                await self._stop_process(process)
+            raise
         if code:
             raise XrayRuntimeError("XRAY_VALIDATE_FAILED")
 

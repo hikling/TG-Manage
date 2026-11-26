@@ -103,7 +103,9 @@ def get_writable_base_dir() -> Path:
 
     legacy_fallback = Path(tempfile.gettempdir()) / "tg-signpulse"
     fallback = legacy_fallback if legacy_fallback.exists() else Path(tempfile.gettempdir()) / "tg-manage"
-    fallback.mkdir(parents=True, exist_ok=True)
+    if fallback.is_symlink():
+        raise PermissionError(f"Refusing symlink fallback directory: {fallback}")
+    fallback.mkdir(mode=0o700, parents=True, exist_ok=True)
     message = (
         f"WARNING: /data is not writable. Falling back to {fallback}; "
         "data may be non-persistent."

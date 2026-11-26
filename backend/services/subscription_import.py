@@ -58,11 +58,61 @@ def _safe_b64(value: str) -> bytes:
         raise SubscriptionError("SUBSCRIPTION_FORMAT_INVALID") from None
 
 
+_NAT64_WELL_KNOWN = ipaddress.ip_network("64:ff9b::/96")
+_NAT64_LOCAL_USE = ipaddress.ip_network("64:ff9b:1::/48")
+_IPV4_TRANSLATED = ipaddress.ip_network("::ffff:0:0:0/96")
+
+
+def _is_public_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if (
+        not ip.is_global
+        or ip.is_multicast
+        or ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_unspecified
+    ):
+        return False
+    if isinstance(ip, ipaddress.IPv6Address):
+        if ip in _NAT64_WELL_KNOWN or ip in _NAT64_LOCAL_USE or ip in _IPV4_TRANSLATED:
+            embedded_v4 = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+            return _is_public_ip(embedded_v4)
+        if ip.ipv4_mapped is not None and not _is_public_ip(ip.ipv4_mapped):
+            return False
+        if ip.sixtofour is not None and not _is_public_ip(ip.sixtofour):
+            return False
+        if ip.teredo is not None and not all(_is_public_ip(part) for part in ip.teredo):
+            return False
+    return True
+
+
+def _safe_token(value: Any, *, max_len: int = 255) -> str:
+    text = str(value or "").strip()
+    if len(text) > max_len or any(ord(c) < 32 or ord(c) == 127 for c in text):
+        raise SubscriptionError("NODE_INVALID")
+    return text
+
+
 def _host(value: Any) -> str:
     host = str(value or "").strip()
-    if not host or len(host) > 253 or any(c in host for c in "/@\\\r\n\x00"):
+    if (
+        not host
+        or len(host) > 253
+        or any(ord(c) <= 32 or ord(c) == 127 or c in "/@\\" for c in host)
+    ):
         raise SubscriptionError("NODE_INVALID")
-    return host
+    bare = host[1:-1] if host.startswith("[") and host.endswith("]") else host
+    lowered = bare.rstrip(".").lower()
+    if lowered == "localhost" or lowered.endswith((".localhost", ".local", ".internal")):
+        raise SubscriptionError("NODE_INVALID")
+    try:
+        ip = ipaddress.ip_address(bare)
+    except ValueError:
+        return bare
+    if not _is_public_ip(ip):
+        raise SubscriptionError("NODE_INVALID")
+    return bare
 
 
 def _port(value: Any) -> int:
@@ -87,32 +137,31 @@ def _stream(network: str, security: str, fields: dict[str, Any]) -> dict[str, An
         raise SubscriptionError("NODE_UNSUPPORTED")
     settings: dict[str, Any] = {"network": network}
     if network == "ws":
-        path = str(fields.get("path") or "/")
-        if not path.startswith("/") or len(path) > 1024:
+        path = _safe_token(fields.get("path") or "/", max_len=1024)
+        if not path.startswith("/"):
             raise SubscriptionError("NODE_INVALID")
-        settings["wsSettings"] = {"path": path, "headers": {"Host": str(fields.get("host") or "")}}
+        ws_host = _safe_token(fields.get("host") or "", max_len=253)
+        settings["wsSettings"] = {"path": path, "headers": {"Host": ws_host}}
     elif network == "grpc":
-        service = str(fields.get("serviceName") or "")
-        if len(service) > 255:
-            raise SubscriptionError("NODE_INVALID")
+        service = _safe_token(fields.get("serviceName") or "", max_len=255)
         settings["grpcSettings"] = {"serviceName": service}
     if security == "tls":
         settings["security"] = "tls"
         settings["tlsSettings"] = {
-            "serverName": str(fields.get("serverName") or ""),
+            "serverName": _safe_token(fields.get("serverName") or "", max_len=253),
             "allowInsecure": False,
         }
         if fields.get("alpn"):
-            settings["tlsSettings"]["alpn"] = [str(item) for item in fields["alpn"]][:5]
+            settings["tlsSettings"]["alpn"] = [_safe_token(item, max_len=32) for item in fields["alpn"]][:5]
     elif security == "reality":
         if network not in ("tcp", "grpc"):
             raise SubscriptionError("NODE_UNSUPPORTED")
         settings["security"] = "reality"
         settings["realitySettings"] = {
-            "serverName": _nonempty(fields.get("serverName")),
-            "fingerprint": str(fields.get("fingerprint") or "chrome"),
-            "publicKey": _nonempty(fields.get("publicKey")),
-            "shortId": str(fields.get("shortId") or ""),
+            "serverName": _safe_token(_nonempty(fields.get("serverName")), max_len=253),
+            "fingerprint": _safe_token(fields.get("fingerprint") or "chrome", max_len=64),
+            "publicKey": _safe_token(_nonempty(fields.get("publicKey")), max_len=256),
+            "shortId": _safe_token(fields.get("shortId") or "", max_len=64),
         }
     return settings
 
@@ -269,7 +318,7 @@ async def _validate_public_url(url: str) -> list[tuple[int, str]]:
         raise SubscriptionError("SUBSCRIPTION_URL_INVALID") from None
     if parsed.scheme != "https" or not hostname or parsed.username or parsed.password or port not in (None, 443):
         raise SubscriptionError("SUBSCRIPTION_URL_INVALID")
-    if len(url) > 4096 or any(ord(char) < 32 for char in url):
+    if len(url) > 4096 or any(ord(char) <= 32 or ord(char) >= 127 for char in url):
         raise SubscriptionError("SUBSCRIPTION_URL_INVALID")
     try:
         addresses = await asyncio.wait_for(
@@ -278,7 +327,7 @@ async def _validate_public_url(url: str) -> list[tuple[int, str]]:
         )
     except (OSError, asyncio.TimeoutError):
         raise SubscriptionError("SUBSCRIPTION_DNS_FAILED") from None
-    if not addresses or any(not ipaddress.ip_address(item[4][0]).is_global for item in addresses):
+    if not addresses or any(not _is_public_ip(ipaddress.ip_address(item[4][0])) for item in addresses):
         raise SubscriptionError("SUBSCRIPTION_URL_FORBIDDEN")
     return list(dict.fromkeys((item[0], item[4][0]) for item in addresses))
 
@@ -305,7 +354,8 @@ async def _request_https(url: str, addresses: list[tuple[int, str]]) -> tuple[in
         target = parsed.path or "/"
         if parsed.query:
             target += "?" + parsed.query
-        request = f"GET {target} HTTP/1.1\r\nHost: {parsed.hostname}\r\nAccept: text/plain, application/yaml, */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n"
+        host_header = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+        request = f"GET {target} HTTP/1.1\r\nHost: {host_header}\r\nAccept: text/plain, application/yaml, */*\r\nAccept-Encoding: identity\r\nConnection: close\r\n\r\n"
         writer.write(request.encode("ascii"))
         await writer.drain()
         head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=12)

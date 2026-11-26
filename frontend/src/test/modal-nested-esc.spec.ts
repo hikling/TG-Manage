@@ -55,4 +55,26 @@ describe('Modal nested Esc', () => {
     outer.unmount()
     inner.unmount()
   })
+
+  it('三层弹窗中间层先关闭时，Esc 仍由最顶层响应且释放后底层接管', async () => {
+    const bottom = mount(Modal, { props: { title: 'bottom', isOpen: true } })
+    const middle = mount(Modal, { props: { title: 'middle', isOpen: true } })
+    const top = mount(Modal, { props: { title: 'top', isOpen: true } })
+
+    // 中间层先关闭，不应使顶层丧失或误释放顶层 token
+    await middle.setProps({ isOpen: false })
+    emitKeydown('Escape')
+    await Promise.all([bottom.vm.$nextTick(), top.vm.$nextTick()])
+    expect(top.emitted('close')).toHaveLength(1)
+    expect(bottom.emitted('close')).toBeFalsy()
+
+    await top.setProps({ isOpen: false })
+    emitKeydown('Escape')
+    await bottom.vm.$nextTick()
+    expect(bottom.emitted('close')).toHaveLength(1)
+
+    bottom.unmount()
+    middle.unmount()
+    top.unmount()
+  })
 })

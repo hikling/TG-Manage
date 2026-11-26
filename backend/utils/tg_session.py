@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -23,6 +24,7 @@ _SESSION_MODE_STRING = "string"
 
 _MAX_CONCURRENT_MEDIA_UPLOADS = 2
 _PROFILE_UNSET = object()
+_STORE_LOCK = threading.RLock()
 
 
 class _ResizableSemaphore(asyncio.Semaphore):
@@ -278,17 +280,18 @@ def set_account_api_credentials(account_name: str, api_id: int, api_hash: str) -
     from backend.services.telegram.credentials import validate_telegram_api_credentials
 
     api_id, api_hash = validate_telegram_api_credentials(api_id, api_hash)
-    data = _load_account_store()
-    entry = data["accounts"].get(account_name)
-    if not isinstance(entry, dict):
-        entry = {}
     encrypted = _account_cipher().encrypt(
         json.dumps({"api_id": api_id, "api_hash": api_hash}).encode("utf-8")
     )
-    entry["api_credentials"] = encrypted.decode("ascii")
-    entry["updated_at"] = utc_now_iso()
-    data["accounts"][account_name] = entry
-    _save_account_store(data)
+    with _STORE_LOCK:
+        data = _load_account_store()
+        entry = data["accounts"].get(account_name)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["api_credentials"] = encrypted.decode("ascii")
+        entry["updated_at"] = utc_now_iso()
+        data["accounts"][account_name] = entry
+        _save_account_store(data)
 
 
 def get_account_api_credentials(account_name: str) -> tuple[int, str]:
@@ -340,46 +343,48 @@ def get_account_session_string(account_name: str) -> Optional[str]:
 
 
 def set_account_session_string(account_name: str, session_string: str) -> None:
-    data = _load_account_store()
-    accounts = data["accounts"]
-    entry = accounts.get(account_name)
-    if not isinstance(entry, dict):
-        entry = {}
     cleaned = session_string.strip()
     if not is_valid_session_string(cleaned):
         raise ValueError("invalid pyrogram session_string")
-    entry["session_string"] = cleaned
-    entry["updated_at"] = utc_now_iso()
-    accounts[account_name] = entry
-    _save_account_store(data)
+    with _STORE_LOCK:
+        data = _load_account_store()
+        accounts = data["accounts"]
+        entry = accounts.get(account_name)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["session_string"] = cleaned
+        entry["updated_at"] = utc_now_iso()
+        accounts[account_name] = entry
+        _save_account_store(data)
 
 
 def delete_account_session_string(account_name: str) -> None:
-    data = _load_account_store()
-    accounts = data["accounts"]
-    if account_name in accounts:
-        accounts.pop(account_name, None)
-        _save_account_store(data)
+    with _STORE_LOCK:
+        data = _load_account_store()
+        accounts = data["accounts"]
+        if account_name in accounts:
+            accounts.pop(account_name, None)
+            _save_account_store(data)
 
 
 def rename_account_entry(old_account_name: str, new_account_name: str) -> None:
     if old_account_name == new_account_name:
         return
 
-    data = _load_account_store()
-    accounts = data["accounts"]
+    with _STORE_LOCK:
+        data = _load_account_store()
+        accounts = data["accounts"]
+        if old_account_name not in accounts:
+            return
+        if new_account_name in accounts:
+            raise ValueError(f"account_name {new_account_name} already exists")
 
-    entry = accounts.pop(old_account_name, None)
-    if entry is None:
-        return
-    if new_account_name in accounts:
-        raise ValueError(f"account_name {new_account_name} already exists")
-
-    if not isinstance(entry, dict):
-        entry = {}
-    entry["updated_at"] = utc_now_iso()
-    accounts[new_account_name] = entry
-    _save_account_store(data)
+        entry = accounts.pop(old_account_name, None)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["updated_at"] = utc_now_iso()
+        accounts[new_account_name] = entry
+        _save_account_store(data)
 
 
 def get_account_profile(account_name: str) -> dict[str, Any]:
@@ -415,27 +420,31 @@ def set_account_profile(
     proxy: Any = _PROFILE_UNSET,
     tags: Optional[list[str]] = None,
 ) -> None:
-    data = _load_account_store()
-    accounts = data["accounts"]
-    entry = accounts.get(account_name)
-    if not isinstance(entry, dict):
-        entry = {}
-    if remark is not None:
-        entry["remark"] = remark.strip() if isinstance(remark, str) else remark
+    cleaned_proxy: Optional[str] = None
     if proxy is not _PROFILE_UNSET:
         from backend.utils.proxy import require_proxy_dict
 
         cleaned_proxy = proxy.strip() if isinstance(proxy, str) else None
         require_proxy_dict(cleaned_proxy)
-        if (entry.get("proxy") or "") != (cleaned_proxy or ""):
-            for field in ("proxy_status", "proxy_status_code", "proxy_checked_at"):
-                entry.pop(field, None)
-        entry["proxy"] = cleaned_proxy or None
-    if tags is not None:
-        entry["tags"] = [str(t).strip() for t in tags if str(t).strip()]
-    entry["updated_at"] = utc_now_iso()
-    accounts[account_name] = entry
-    _save_account_store(data)
+
+    with _STORE_LOCK:
+        data = _load_account_store()
+        accounts = data["accounts"]
+        entry = accounts.get(account_name)
+        if not isinstance(entry, dict):
+            entry = {}
+        if remark is not None:
+            entry["remark"] = remark.strip() if isinstance(remark, str) else remark
+        if proxy is not _PROFILE_UNSET:
+            if (entry.get("proxy") or "") != (cleaned_proxy or ""):
+                for field in ("proxy_status", "proxy_status_code", "proxy_checked_at"):
+                    entry.pop(field, None)
+            entry["proxy"] = cleaned_proxy or None
+        if tags is not None:
+            entry["tags"] = [str(t).strip() for t in tags if str(t).strip()]
+        entry["updated_at"] = utc_now_iso()
+        accounts[account_name] = entry
+        _save_account_store(data)
 
 
 def get_account_proxy_status(account_name: str) -> dict[str, Any]:
@@ -459,16 +468,19 @@ def set_account_proxy_status(
     """Save only while the account still has the route that was probed."""
     if status not in {"healthy", "error"}:
         raise ValueError("invalid proxy status")
-    data = _load_account_store()
-    entry = data.get("accounts", {}).get(account_name)
-    if not isinstance(entry, dict) or not expected_proxy:
+    if not expected_proxy:
         return False
-    if str(entry.get("proxy") or "").strip() != expected_proxy.strip():
-        return False
-    entry.update(proxy_status=status, proxy_status_code=code, proxy_checked_at=checked_at)
-    entry["updated_at"] = utc_now_iso()
-    _save_account_store(data)
-    return True
+    with _STORE_LOCK:
+        data = _load_account_store()
+        entry = data.get("accounts", {}).get(account_name)
+        if not isinstance(entry, dict):
+            return False
+        if str(entry.get("proxy") or "").strip() != expected_proxy.strip():
+            return False
+        entry.update(proxy_status=status, proxy_status_code=code, proxy_checked_at=checked_at)
+        entry["updated_at"] = utc_now_iso()
+        _save_account_store(data)
+        return True
 
 
 def get_account_status(account_name: str) -> dict[str, Any]:
@@ -493,23 +505,24 @@ def set_account_status(
     needs_relogin: bool = False,
     invalid_notified_at: Optional[str] = None,
 ) -> None:
-    data = _load_account_store()
-    accounts = data["accounts"]
-    entry = accounts.get(account_name)
-    if not isinstance(entry, dict):
-        entry = {}
-    entry["status"] = status
-    entry["status_message"] = message or ""
-    entry["status_code"] = code
-    entry["status_checked_at"] = utc_now_iso()
-    entry["needs_relogin"] = bool(needs_relogin)
-    if invalid_notified_at is not None:
-        entry["invalid_notified_at"] = invalid_notified_at
-    if status != "invalid":
-        entry.pop("invalid_notified_at", None)
-    entry["updated_at"] = utc_now_iso()
-    accounts[account_name] = entry
-    _save_account_store(data)
+    with _STORE_LOCK:
+        data = _load_account_store()
+        accounts = data["accounts"]
+        entry = accounts.get(account_name)
+        if not isinstance(entry, dict):
+            entry = {}
+        entry["status"] = status
+        entry["status_message"] = message or ""
+        entry["status_code"] = code
+        entry["status_checked_at"] = utc_now_iso()
+        entry["needs_relogin"] = bool(needs_relogin)
+        if invalid_notified_at is not None:
+            entry["invalid_notified_at"] = invalid_notified_at
+        if status != "invalid":
+            entry.pop("invalid_notified_at", None)
+        entry["updated_at"] = utc_now_iso()
+        accounts[account_name] = entry
+        _save_account_store(data)
 
 
 # 与 kurigram/pyrogram Storage 保持一致的 session_string 格式
@@ -596,29 +609,29 @@ def _export_session_string_from_file(session_dir: Path, account_name: str) -> Op
     try:
         conn = sqlite3.connect(str(session_file), timeout=10, check_same_thread=False)
         try:
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=10000")
-        except Exception:
-            pass
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA busy_timeout=10000")
+            except Exception:
+                pass
 
-        try:
-            row = conn.execute(
-                "SELECT dc_id, api_id, test_mode, auth_key, user_id, is_bot FROM sessions"
-            ).fetchone()
-        except Exception as exc:
-            # 未登录的 .session 无 sessions 表属常态，仅 debug；表损坏也会被归入此类
-            _logger.debug(
-                "读取 sessions 表失败 account=%s: %s", account_name, exc
-            )
+            try:
+                row = conn.execute(
+                    "SELECT dc_id, api_id, test_mode, auth_key, user_id, is_bot FROM sessions"
+                ).fetchone()
+            except Exception as exc:
+                # 未登录的 .session 无 sessions 表属常态，仅 debug；表损坏也会被归入此类
+                _logger.debug(
+                    "读取 sessions 表失败 account=%s: %s", account_name, exc
+                )
+                return None
+
+            if not row:
+                return None
+
+            dc_id, api_id, test_mode, auth_key, user_id, is_bot = row
+        finally:
             conn.close()
-            return None
-
-        if not row:
-            conn.close()
-            return None
-
-        dc_id, api_id, test_mode, auth_key, user_id, is_bot = row
-        conn.close()
 
         if not auth_key or not user_id:
             return None

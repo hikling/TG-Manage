@@ -39,6 +39,18 @@ class TestSafeMsgTruncate:
         assert cut.count("<b>") == cut.count("</b>")
         assert cut.count("<code>") == cut.count("</code>")
 
+    def test_html_truncate_strips_trailing_incomplete_tag_when_stack_empty(self):
+        text = "<b>ok</b> " + ("x" * 3888) + "<code>tail</code>"
+        cut = _safe_msg_truncate(text, "HTML")
+        assert len(cut) <= 3900
+        assert cut == "<b>ok</b> " + ("x" * 3888)
+
+    def test_html_truncate_strips_trailing_incomplete_entity(self):
+        text = "<b>ok</b> " + ("x" * 3888) + "&amp;tail"
+        cut = _safe_msg_truncate(text, "HTML")
+        assert len(cut) <= 3900
+        assert cut == "<b>ok</b> " + ("x" * 3888)
+
 
 class TestHtmlEscape:
     def test_escapes_special_chars(self):

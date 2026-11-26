@@ -224,6 +224,7 @@ const loadAccounts = async () => {
   try {
     loadError.value = false
     const list = await accountsStore.refreshAccounts()
+    if (disposed) return
     const labels = {
       loginExpired: t('accounts.loginExpired'),
       checking: t('accounts.checking'),
@@ -406,6 +407,7 @@ onMounted(async () => {
     window.addEventListener('resize', scheduleFallbackAvatarScan, { passive: true })
   }
   await loadAccounts()
+  if (disposed) return
   void loadTeleBoxStates()
   statusTimer = setInterval(() => void loadTeleBoxStates(), 10000)
   routeStatusTimer = setInterval(() => void loadSavedRouteStates(), 30000)

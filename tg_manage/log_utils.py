@@ -52,62 +52,6 @@ def safe_text_preview(text: Any, max_chars: int = 120) -> str:
     return s
 
 
-def safe_ai_request_meta(
-    *,
-    method: str,
-    model: str,
-    has_image: bool = False,
-    image_bytes: int = 0,
-    query_chars: int = 0,
-    options_count: int = 0,
-    custom_prompt: bool = False,
-    question_preview: str = "",
-    options_preview: list[str] = None,
-) -> str:
-    """
-    安全的 AI 请求元数据，用于 INFO 日志
-    增强版：包含问题预览和选项预览，便于调试
-    """
-    parts = [
-        f"method={method}",
-        f"model={model}",
-    ]
-    if has_image:
-        parts.append("has_image=true")
-        if image_bytes > 0:
-            parts.append(f"image_bytes={image_bytes}")
-    if query_chars > 0:
-        parts.append(f"query_chars={query_chars}")
-    if options_count > 0:
-        parts.append(f"options_count={options_count}")
-    if custom_prompt:
-        parts.append("custom_prompt=true")
-
-    # 增强：添加问题预览
-    if question_preview:
-        safe_question = safe_text_preview(question_preview, max_chars=80)
-        parts.append(f"question=[{safe_question}]")
-
-    # 增强：添加选项预览
-    if options_preview:
-        safe_options = [safe_text_preview(opt, max_chars=30) for opt in options_preview[:5]]
-        options_str = ", ".join(safe_options)
-        if len(options_preview) > 5:
-            options_str += f", ...+{len(options_preview) - 5}"
-        parts.append(f"options=[{options_str}]")
-
-    return " | ".join(parts)
-
-
-def safe_exception_summary(exc: Exception, max_chars: int = 300) -> str:
-    """
-    安全的异常摘要：脱敏异常消息，用于任务日志流
-    不泄露 session_string、proxy URL、API key 等敏感信息
-    """
-    text = safe_text_preview(str(exc), max_chars)
-    return f"{type(exc).__name__}: {text}"
-
-
 def safe_traceback_preview(tb: str, max_lines: int = 6, max_line_chars: int = 200) -> str:
     """
     安全的 traceback 预览：脱敏每行内容，限制行数
@@ -128,38 +72,3 @@ def safe_traceback_preview(tb: str, max_lines: int = 6, max_line_chars: int = 20
         safe_content = safe_text_preview(content, max_line_chars)
         safe_lines.append(f"{indent}{safe_content}")
     return "\n".join(safe_lines)
-
-
-def safe_ai_result_meta(
-    *,
-    method: str,
-    model: str,
-    elapsed_ms: float,
-    result_type: str = "",
-    result_count: int = 0,
-    response_chars: int = 0,
-    selected_options: list[str] = None,
-) -> str:
-    """
-    安全的 AI 响应元数据，用于 INFO 日志
-    增强版：包含选中的选项内容预览
-    """
-    parts = [
-        f"method={method}",
-        f"model={model}",
-        f"elapsed_ms={elapsed_ms:.0f}",
-    ]
-    if result_type:
-        parts.append(f"result_type={result_type}")
-    if result_count > 0:
-        parts.append(f"result_count={result_count}")
-    if response_chars > 0:
-        parts.append(f"response_chars={response_chars}")
-
-    # 增强：添加选中的选项预览
-    if selected_options:
-        safe_selected = [safe_text_preview(opt, max_chars=40) for opt in selected_options]
-        selected_str = ", ".join(safe_selected)
-        parts.append(f"selected=[{selected_str}]")
-
-    return " | ".join(parts)

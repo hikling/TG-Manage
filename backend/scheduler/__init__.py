@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 scheduler: AsyncIOScheduler | None = None
@@ -13,15 +12,6 @@ ACCOUNT_STATUS_REPORT_JOB_ID = "system-account-status-report"
 ROUTE_HEALTH_JOB_ID = "system-account-route-health"
 SUBSCRIPTION_REFRESH_JOB_ID = "system-account-subscription-refresh"
 _midnight_workflow_running = False
-
-
-def _parse_clock_time(value: str):
-    for fmt in ("%H:%M:%S", "%H:%M"):
-        try:
-            return datetime.strptime(value, fmt).time()
-        except ValueError:
-            continue
-    raise ValueError(f"Invalid clock time: {value}")
 
 
 def _resolve_scheduler_timezone():
@@ -42,51 +32,6 @@ def _resolve_scheduler_timezone():
             "解析调度器时区失败，使用本地时区: %s", exc
         )
         return None
-
-
-def create_cron_trigger(cron_str: str, timezone: str = "") -> CronTrigger:
-    """自动解析格式并创建 CronTrigger，支持 5位和6位 cron 表达式以及 HH:MM 或 HH:MM:SS"""
-    if ":" in cron_str:
-        parts = cron_str.split(":")
-        try:
-            if len(parts) == 2:
-                hour, minute = parts
-                cron_str = f"0 {int(minute)} {int(hour)} * * *"
-            elif len(parts) == 3:
-                hour, minute, second = parts
-                cron_str = f"{int(second)} {int(minute)} {int(hour)} * * *"
-        except ValueError as exc:
-            logging.getLogger("backend.scheduler").debug(
-                "clock-time cron parse failed for %r: %s", cron_str, exc
-            )
-
-    # 获取有效时区：优先使用传入参数，否则从全局配置回退到环境变量
-    tz = timezone
-    if not tz:
-        try:
-            from backend.core.config import get_settings
-            from backend.services.config import get_config_service
-            saved_settings = get_config_service().get_global_settings()
-            tz = saved_settings.get("timezone") or get_settings().timezone
-        except (ImportError, AttributeError, ValueError, KeyError) as exc:
-            logging.getLogger("backend.scheduler").debug(
-                "读取全局时区配置失败，使用调度器默认时区: %s", exc
-            )
-            tz = ""
-
-    parts = cron_str.split()
-    if len(parts) == 6:
-        return CronTrigger(
-            second=parts[0],
-            minute=parts[1],
-            hour=parts[2],
-            day=parts[3],
-            month=parts[4],
-            day_of_week=parts[5],
-            timezone=tz or None,
-        )
-    return CronTrigger.from_crontab(cron_str, timezone=tz or None)
-
 
 
 async def _job_account_status_report() -> None:

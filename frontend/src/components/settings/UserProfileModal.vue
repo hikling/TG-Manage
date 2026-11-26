@@ -138,19 +138,29 @@ const checkTOTP = async () => {
   }
 }
 
-watch(() => props.isOpen, (val) => {
-  if (val) {
-    checkTOTP()
+watch([() => props.isOpen, activeTab], ([open, tab]) => {
+  if (open) {
+    if (tab === 'totp' && !qrUrl.value && !totpEnabled.value) {
+      void checkTOTP()
+    }
   } else {
     // 关闭时使在途 TOTP 响应失效，并重置状态
     totpGuard.invalidate()
     revokeQrUrl()
+    totpEnabled.value = false
     totpCode.value = ''
     totpSecret.value = ''
+    form.value = { old_password: '', new_password: '' }
+    usernameForm.value = { new_username: '', password: '' }
     activeTab.value = 'username'
     error.value = ''
     successMessage.value = ''
   }
+})
+
+onUnmounted(() => {
+  totpGuard.invalidate()
+  revokeQrUrl()
 })
 
 const handleEnableTOTP = async () => {

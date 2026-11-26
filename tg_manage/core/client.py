@@ -10,36 +10,17 @@ import sqlite3
 import weakref
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
-from typing import (
-    Union,
-)
-
-from pydantic import BaseModel
-
-from tg_manage.private_file import write_private_text
-
-try:
-    from pydantic import ConfigDict
-except ImportError:  # pragma: no cover - pydantic v1 compatibility
-    ConfigDict = None
-
-
-_PYDANTIC_V2 = hasattr(BaseModel, "model_validate")
+from typing import Union
 
 from tg_manage.compat import (  # noqa: E402
     _PYROGRAM_IMPORT_ERROR,
     BaseClient,
-    Chat,
-    ChatType,
-    InlineKeyboardMarkup,
     MemoryStorage,
-    Message,
-    ReplyKeyboardMarkup,
     Session,
     _raise_pyrogram_import_error,
     raw,
 )
+from tg_manage.private_file import write_private_text
 
 # Monkeypatch sqlite3.connect to increase default timeout
 _original_sqlite3_connect = sqlite3.connect
@@ -138,59 +119,17 @@ BaseClient.invoke = _patched_invoke
 
 logger = logging.getLogger("tg-manage")
 
-DICE_EMOJIS = ("🎲", "🎯", "🏀", "⚽", "🎳", "🎰")
-
 Session.START_TIMEOUT = 5  # 原始超时时间为2秒，但一些代理访问会超时，所以这里调大一点
 
-OPENAI_USE_PROMPT = "当前任务需要配置大模型，请确保运行前正确设置 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL` 等环境变量，或通过 TG Manage 设置页保存配置。"
 
-
-def _is_callback_data_invalid(exc: BaseException) -> bool:
-    text = str(exc).lower()
-    return "data_invalid" in text or "encrypted data is invalid" in text
-
-
-def _is_callback_confirmation_unavailable(exc: BaseException) -> bool:
-    text = str(exc).lower()
-    return "channel_invalid" in text or "peer_id_invalid" in text
-
-
-def readable_message(message: Message):
-    s = "\nMessage: "
-    s += f"\n  text: {message.text or ''}"
-    if message.photo:
-        s += f"\n  图片: [({message.photo.width}x{message.photo.height}) {message.caption}]"
-    if message.reply_markup:
-        if isinstance(message.reply_markup, InlineKeyboardMarkup):
-            s += "\n  InlineKeyboard: "
-            for row in message.reply_markup.inline_keyboard:
-                s += "\n   "
-                for button in row:
-                    s += f"{button.text} | "
-        elif isinstance(message.reply_markup, ReplyKeyboardMarkup):
-            s += "\n  ReplyKeyboard: "
-            for row in message.reply_markup.keyboard:
-                s += "\n   "
-                for button in row:
-                    s += f"{getattr(button, 'text', str(button))} | "
-    return s
-
-
-def readable_chat(chat: Chat):
-    if chat.type == ChatType.BOT:
-        type_ = "BOT"
-    elif chat.type == ChatType.GROUP:
-        type_ = "群组"
-    elif chat.type == ChatType.SUPERGROUP:
-        type_ = "超级群组"
-    elif chat.type == ChatType.CHANNEL:
-        type_ = "频道"
-    else:
-        type_ = "个人"
-
-    none_or_dash = lambda x: x or "-"  # noqa: E731
-
-    return f"id: {chat.id}, username: {none_or_dash(chat.username)}, title: {none_or_dash(chat.title)}, type: {type_}, name: {none_or_dash(chat.first_name)}"
+async def _shutdown_client_instance(client) -> None:
+    if getattr(client, "is_initialized", False):
+        await client.stop()
+    elif getattr(client, "is_connected", False):
+        if hasattr(client, "disconnect"):
+            await client.disconnect()
+        else:
+            await client.stop()
 
 
 # Do not keep a client alive solely because get_client() constructed it.
@@ -316,8 +255,7 @@ class Client(BaseClient):
                             if is_locked and attempt < max_retries - 1:
                                 # Cleanup before retry
                                 try:
-                                    if self.is_connected:
-                                        await self.stop()
+                                    await _shutdown_client_instance(self)
                                 except Exception:
                                     pass
 
@@ -342,8 +280,7 @@ class Client(BaseClient):
                         if _CLIENT_REFS[self.key] <= 0:
                             _CLIENT_REFS.pop(self.key, None)
                             try:
-                                if getattr(self, "is_connected", False):
-                                    await self.stop()
+                                await _shutdown_client_instance(self)
                             except Exception:
                                 pass
                     raise exc
@@ -387,10 +324,6 @@ class Client(BaseClient):
         await super().log_out()
         if self.session_string_file.is_file():
             os.remove(self.session_string_file)
-
-
-def get_api_config():
-    raise ValueError("Telegram API 凭据按账号保存，请通过账号登录页面设置")
 
 
 def get_proxy(proxy: str = None):
@@ -482,38 +415,10 @@ async def close_client_by_name(name: str, workdir: Union[str, pathlib.Path] = ".
                 client._tg_manage_closed = True
                 _CLIENT_INSTANCES.pop(key, None)
                 try:
-                    if getattr(client, "is_connected", False):
-                        await client.stop()
+                    await _shutdown_client_instance(client)
                 except Exception as e:
                     logger.warning("停止客户端 %s 失败 (%s)", name, type(e).__name__)
                 finally:
                     _CLIENT_REFS.pop(key, None)
             else:
                 _CLIENT_REFS.pop(key, None)
-
-
-def get_task_timezone():
-    """任务时区：TZ / APP_TIMEZONE，默认 Asia/Hong_Kong（与 UTC+8 一致）。"""
-    tz_name = (
-        (os.environ.get("TZ") or os.environ.get("APP_TIMEZONE") or "Asia/Hong_Kong")
-        .strip()
-        or "Asia/Hong_Kong"
-    )
-    try:
-        from zoneinfo import ZoneInfo
-
-        return ZoneInfo(tz_name)
-    except Exception:
-        return timezone(timedelta(hours=8))
-
-
-def get_now():
-    """当前任务时区时间（默认香港/UTC+8，可被 TZ/APP_TIMEZONE 覆盖）。"""
-    return datetime.now(tz=get_task_timezone())
-
-
-def make_dirs(path: pathlib.Path, exist_ok=True):
-    path = pathlib.Path(path)
-    if not path.is_dir():
-        os.makedirs(path, exist_ok=exist_ok)
-    return path

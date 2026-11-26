@@ -14,7 +14,6 @@ from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 
 # Monkeypatch sqlite3.connect to increase default timeout
 _original_sqlite3_connect = sqlite3.connect
@@ -263,7 +262,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allow_origins,
-    allow_credentials=True,
+    allow_credentials="*" not in settings.cors_allow_origins,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
@@ -306,29 +305,19 @@ def ready_check(response: Response) -> dict:
 
 
 # 静态前端托管（Mode A: 单容器，FastAPI 提供静态文件）
-# 挂载 Next.js 静态资源
 web_dir = Path("/web")
-next_static_dir = web_dir / "_next"
-frontend_dev_url = os.getenv("FRONTEND_DEV_SERVER_URL", "http://127.0.0.1:3000")
-
-if next_static_dir.exists():
-    app.mount(
-        "/_next",
-        StaticFiles(directory=str(next_static_dir)),
-        name="nextjs_static",
-    )
 
 
 def _resolve_web_file(full_path: str) -> Path | None:
     """安全解析文件路径，防止路径遍历攻击"""
-    web_root = web_dir.resolve()
-    candidate = (web_root / full_path).resolve()
     try:
+        web_root = web_dir.resolve()
+        candidate = (web_root / full_path).resolve()
         candidate.relative_to(web_root)
-    except ValueError:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    except (ValueError, OSError):
         return None
-    if candidate.exists() and candidate.is_file():
-        return candidate
     return None
 
 
@@ -351,6 +340,9 @@ async def serve_spa(full_path: str):
     SPA fallback: 对于所有非 API 路由，返回 index.html
     这样刷新页面时不会 404
     """
+    if full_path == "api" or full_path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
     # 检查是否是静态文件请求（带路径遍历防护）
     file_path = _resolve_web_file(full_path)
     if file_path is not None:
@@ -367,12 +359,13 @@ async def serve_spa(full_path: str):
         return FileResponse(index_path)
 
     # 如果 index.html 也不存在，开发模式下重定向到前端开发服务器，生产环境返回 404
-    if os.getenv("FRONTEND_DEV_SERVER_URL"):
+    dev_url = os.getenv("FRONTEND_DEV_SERVER_URL")
+    if dev_url:
         normalized_path = full_path if full_path.startswith("/") else f"/{full_path}"
         if not normalized_path:
             normalized_path = "/"
 
-        parsed_frontend = urlsplit(frontend_dev_url)
+        parsed_frontend = urlsplit(dev_url)
         redirect_target = urlunsplit(
             (
                 parsed_frontend.scheme,
@@ -599,6 +592,12 @@ async def on_shutdown() -> None:
         code_bot_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await code_bot_task
+    # 先终止延迟启动协程，避免在 shutdown 之后继续拉起 TeleBox 子进程
+    startup_task = getattr(app.state, "startup_task", None)
+    if startup_task is not None and not startup_task.done():
+        startup_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await startup_task
     try:
         from backend.services.telegram.sessions import cleanup_all_login_sessions
 
@@ -611,11 +610,6 @@ async def on_shutdown() -> None:
         await get_telebox_service().shutdown()
     except Exception:
         log.exception("TeleBox shutdown failed")
-    startup_task = getattr(app.state, "startup_task", None)
-    if startup_task is not None and not startup_task.done():
-        startup_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await startup_task
 
     memory_task = getattr(app.state, "memory_monitor_task", None)
     if memory_task is not None and not memory_task.done():

@@ -649,24 +649,24 @@ class TelegramQrLoginMixin:
                 await self._cleanup_qr_login(login_id)
             else:
                 await _close_qr_client(client)
-            cleanup_pending_session(pending_path)
-            _release_account_lock()
+                cleanup_pending_session(pending_path)
+                _release_account_lock()
             raise ValueError("连接 Telegram 超时，请检查当前账户代理或网络，稍后再试") from None
         except asyncio.CancelledError:
             if 'login_id' in locals() and login_id in _qr_login_sessions:
                 await self._cleanup_qr_login(login_id)
             else:
                 await _close_qr_client(client)
-            cleanup_pending_session(pending_path)
-            _release_account_lock()
+                cleanup_pending_session(pending_path)
+                _release_account_lock()
             raise
         except Exception:
             if 'login_id' in locals() and login_id in _qr_login_sessions:
                 await self._cleanup_qr_login(login_id)
             else:
                 await _close_qr_client(client)
-            cleanup_pending_session(pending_path)
-            _release_account_lock()
+                cleanup_pending_session(pending_path)
+                _release_account_lock()
             raise ValueError("获取二维码失败，请检查账号代理或网络后重试") from None
 
 

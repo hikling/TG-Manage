@@ -22,19 +22,12 @@ def _get_sc_client() -> AsyncClient:
     return client
 
 
-async def close_sc_client() -> None:
-    global _sc_client, _sc_loop
-    client = _sc_client
-    _sc_client = None
-    _sc_loop = None
-    if client and not getattr(client, "is_closed", True):
-        await client.aclose()
-
-
 async def sc_send(sendkey, title, desp="", options=None):
     key = str(sendkey or "").strip()
     if not key:
         raise ValueError("sendkey cannot be empty")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", key):
+        raise ValueError("Invalid sendkey format")
     safe_title = str(title or "").strip()[:256] or "TG Manage Notification"
     safe_options = options if isinstance(options, dict) else {}
 

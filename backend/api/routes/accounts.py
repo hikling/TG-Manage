@@ -227,6 +227,11 @@ async def resend_account_login(
             request.account_name, request.phone_number, request.phone_code_hash,
         ), timeout=25)
         return LoginStartResponse(**result)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Telegram 重发请求超时，请稍后重试",
+        ) from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
@@ -284,6 +289,8 @@ async def verify_account_login(
             message="登录成功",
         )
 
+    except HTTPException:
+        raise
     except ValueError as e:
         message = str(e)
         lowered = message.lower()
@@ -416,6 +423,8 @@ async def submit_qr_login_password(
             first_name=result.get("first_name"),
             username=result.get("username"),
         )
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.warning("QR 密码校验失败 login_id=%s error=%s", request.login_id, type(e).__name__)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -484,10 +493,25 @@ async def check_accounts_status(
     service = get_telegram_service()
     try:
         fallback = [item.get("name", "") for item in service.list_accounts()]
-        names = normalize_unique_account_names(
+        raw_names = normalize_unique_account_names(
             request.account_names,
             fallback_names=fallback,
         )
+        if len(raw_names) > 200:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="单次最多检测 200 个账号",
+            )
+        try:
+            names = [
+                validate_storage_name(name, field_name="account_name")
+                for name in raw_names
+            ]
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from None
         if request.refresh_avatar and len(names) != 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -782,8 +806,6 @@ async def get_account_avatar(
     account_name: str, current_user: User = Depends(get_current_user)
 ):
     """获取账号 Telegram 头像（带本地缓存）"""
-    from fastapi.responses import Response
-
     from backend.core.config import get_settings
     from backend.services import avatar_cache
 
@@ -840,7 +862,19 @@ async def update_account(
             request.new_account_name,
         )
         if renamed:
+            from backend.core.config import get_settings
             from backend.services.telebox import get_telebox_service
+
+            target_account_name = validate_storage_name(
+                target_account_name, field_name="new_account_name"
+            )
+            if any(
+                str(item.get("name") or "").strip().casefold()
+                == target_account_name.casefold()
+                and str(item.get("name") or "").strip() != actual_account_name
+                for item in accounts
+            ):
+                raise ValueError(f"账号 {target_account_name} 已存在")
 
             telebox_svc = get_telebox_service()
             if telebox_svc.directory(target_account_name).exists():
@@ -854,6 +888,15 @@ async def update_account(
             get_telebox_service().rename_account_data(
                 actual_account_name, target_account_name
             )
+            avatar_dir = get_settings().resolve_workdir() / "avatars"
+            for suffix in (".jpg", ".no_avatar"):
+                old_avatar = avatar_dir / f"{actual_account_name}{suffix}"
+                new_avatar = avatar_dir / f"{target_account_name}{suffix}"
+                if old_avatar.exists() and not new_avatar.exists():
+                    try:
+                        old_avatar.replace(new_avatar)
+                    except OSError:
+                        pass
 
         set_account_profile(
             target_account_name,

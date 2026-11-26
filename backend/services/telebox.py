@@ -300,8 +300,19 @@ class TeleBoxService:
         for folder in ["plugins", "plugins/node_modules", "assets", "home", "cache", "temp"]:
             (directory / folder).mkdir(exist_ok=True, mode=0o700)
         dependencies = directory / "node_modules"
-        if not dependencies.exists():
-            dependencies.symlink_to((self.source / "node_modules").resolve(), target_is_directory=True)
+        expected_modules = (self.source / "node_modules").resolve()
+        if dependencies.is_symlink():
+            try:
+                matches = dependencies.resolve() == expected_modules
+            except OSError:
+                matches = False
+            if not matches:
+                dependencies.unlink()
+                dependencies.symlink_to(expected_modules, target_is_directory=True)
+        elif dependencies.exists():
+            raise ValueError("TeleBox 依赖目录异常，请检查账户目录")
+        else:
+            dependencies.symlink_to(expected_modules, target_is_directory=True)
         return directory
 
     def status(self, account: str):
@@ -311,7 +322,10 @@ class TeleBoxService:
         enabled = False
         marker = directory / "panel-state.json"
         if marker.exists():
-            enabled = bool(json.loads(marker.read_text()).get("enabled"))
+            try:
+                enabled = bool(json.loads(marker.read_text()).get("enabled"))
+            except (OSError, ValueError, AttributeError):
+                enabled = False
         config = directory / "config.json"
         try:
             authorized = bool(json.loads(config.read_text()).get("session")) if config.exists() else False
@@ -356,7 +370,12 @@ class TeleBoxService:
             raise
         try:
             directory = self._prepare(account)
-            lock_handle = (directory / "runtime.lock").open("a")
+            lock_path = directory / "runtime.lock"
+            if self._is_link(lock_path):
+                raise ValueError("TeleBox 锁文件不能是链接")
+            lock_flags = os.O_CREAT | os.O_APPEND | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
+            lock_fd = os.open(lock_path, lock_flags, 0o600)
+            lock_handle = os.fdopen(lock_fd, "a")
             try:
                 fcntl.flock(lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -557,6 +576,7 @@ class TeleBoxService:
                 except ProcessLookupError:
                     pass
                 await worker["process"].wait()
+        if worker and worker.get("readers"):
             await asyncio.gather(*worker["readers"], return_exceptions=True)
         if worker and worker["process"].returncode is not None:
             worker["status"] = "stopped"
@@ -606,20 +626,21 @@ class TeleBoxService:
 
     async def password(self, account: str, password: str):
         account = self._account(account)
-        worker = self.workers.get(account)
-        if not worker or worker["status"] != "password_required":
-            raise ValueError("当前账号没有等待两步验证密码")
-        if not password or len(password) > 1024:
-            raise ValueError("密码长度无效")
-        # Keep only a small recent set for output redaction, never an unbounded
-        # history of submitted two-step passwords in process memory.
-        secrets = self.secrets.setdefault(account, [])
-        secrets.append(password)
-        if len(secrets) > 8:
-            del secrets[2:-6]
-        await self._send(worker, {"action": "password", "password": password})
-        worker["status"] = "starting"
-        return self.status(account)
+        async with self.locks.setdefault(account, asyncio.Lock()):
+            worker = self.workers.get(account)
+            if not worker or worker["status"] != "password_required":
+                raise ValueError("当前账号没有等待两步验证密码")
+            if not password or len(password) > 1024:
+                raise ValueError("密码长度无效")
+            # Keep only a small recent set for output redaction, never an unbounded
+            # history of submitted two-step passwords in process memory.
+            secrets = self.secrets.setdefault(account, [])
+            secrets.append(password)
+            if len(secrets) > 8:
+                del secrets[2:-6]
+            await self._send(worker, {"action": "password", "password": password})
+            worker["status"] = "starting"
+            return self.status(account)
 
     async def startup(self):
         self.closing = False
@@ -639,7 +660,15 @@ class TeleBoxService:
 
     async def shutdown(self):
         self.closing = True
-        await asyncio.gather(*(self.stop(account, disable=False) for account in self.workers), return_exceptions=True)
+
+        async def _terminate_account(account: str) -> None:
+            async with self.locks.setdefault(account, asyncio.Lock()):
+                await self._terminate_worker(account)
+
+        await asyncio.gather(
+            *(_terminate_account(account) for account in list(self.workers)),
+            return_exceptions=True,
+        )
 
 
 _service: TeleBoxService | None = None
