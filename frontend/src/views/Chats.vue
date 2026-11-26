@@ -145,7 +145,7 @@ function selectFile(event:Event){const input=event.target as HTMLInputElement;co
         <p class="panel-muted mt-1">{{ t('chats.description') }}</p>
       </div>
       <button type="button" class="panel-button" role="switch" :aria-label="t('chats.enabled')" :aria-checked="enabled" :disabled="!settingsReady || settingsBusy" @click="toggleChatCenter">
-        <span class="w-2 h-2 rounded-full" :class="enabled ? 'bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.2)]' : 'bg-[var(--tg-text-muted)] opacity-50'" aria-hidden="true" />
+        <span class="w-2 h-2 rounded-full" :class="enabled ? 'bg-emerald-500' : 'bg-[var(--tg-text-muted)] opacity-45'" aria-hidden="true" />
         {{ settingsBusy ? t('common.saving') : enabled ? t('chats.disable') : t('chats.enable') }}
       </button>
     </header>

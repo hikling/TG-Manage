@@ -71,6 +71,7 @@ export interface GlobalSettings {
   appearance_accent_color?: string;
   hero_position_x?: number;
   hero_position_y?: number;
+  hero_height?: number;
 }
 
 export const getGlobalSettings = (token: string) =>

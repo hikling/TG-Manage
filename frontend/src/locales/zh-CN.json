@@ -30,6 +30,7 @@
     "coverPreviewHint": "拖动或使用方向键调整位置",
     "horizontalPosition": "水平位置",
     "verticalPosition": "垂直位置",
+    "coverHeight": "封面高度",
     "replaceCover": "更换封面",
     "uploadCover": "上传封面",
     "resetCover": "恢复默认",

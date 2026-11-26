@@ -132,8 +132,8 @@ watch(() => props.isOpen, open => {
         </button>
       </div>
 
-      <div class="flex gap-2.5 rounded-xl bg-[var(--tg-accent-soft)] border border-[var(--tg-accent-border)] p-3.5 text-xs leading-relaxed text-[var(--tg-accent-text)]">
-        <ShieldCheck class="w-4 h-4 shrink-0 mt-0.5" />
+      <div class="flex gap-2.5 rounded-xl bg-[var(--tg-bg-elevated-2)] border border-[var(--tg-border)] p-3.5 text-xs leading-relaxed text-[var(--tg-text-muted)]">
+        <ShieldCheck class="w-4 h-4 shrink-0 mt-0.5 text-[var(--tg-text)]" />
         <p>{{ t('accounts.loginBackupScope') }}</p>
       </div>
       <p v-if="mode === 'import'" class="text-xs leading-relaxed text-amber-800 dark:text-amber-300" role="note">

@@ -1,6 +1,8 @@
 """Authenticated dashboard appearance endpoints."""
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -15,12 +17,22 @@ HEADERS = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
 class HeroSettingsRequest(BaseModel):
     position_x: float = Field(default=50.0, ge=0.0, le=100.0)
     position_y: float = Field(default=50.0, ge=0.0, le=100.0)
+    height: Optional[int] = Field(
+        default=None,
+        ge=appearance.MIN_HERO_HEIGHT,
+        le=appearance.MAX_HERO_HEIGHT,
+    )
 
 
 class HeroSettingsResponse(BaseModel):
     present: bool
     position_x: float = Field(default=50.0, ge=0.0, le=100.0)
     position_y: float = Field(default=50.0, ge=0.0, le=100.0)
+    height: int = Field(
+        default=appearance.DEFAULT_HERO_HEIGHT,
+        ge=appearance.MIN_HERO_HEIGHT,
+        le=appearance.MAX_HERO_HEIGHT,
+    )
 
 
 @router.get("/hero-image")
@@ -49,6 +61,7 @@ async def put_hero_image(file: UploadFile = File(...)):
 def delete_hero_image():
     appearance.delete_hero()
     appearance.save_hero_position(*appearance.DEFAULT_HERO_POSITION)
+    appearance.save_hero_height(appearance.DEFAULT_HERO_HEIGHT)
     return Response(status_code=204, headers=HEADERS)
 
 
@@ -59,14 +72,18 @@ def get_hero_settings():
         present=appearance.read_hero() is not None,
         position_x=x,
         position_y=y,
+        height=appearance.get_hero_height(),
     )
 
 
 @router.put("/hero-settings", response_model=HeroSettingsResponse)
 def put_hero_settings(request: HeroSettingsRequest):
     appearance.save_hero_position(request.position_x, request.position_y)
+    if request.height is not None:
+        appearance.save_hero_height(request.height)
     return HeroSettingsResponse(
         present=appearance.read_hero() is not None,
         position_x=request.position_x,
         position_y=request.position_y,
+        height=appearance.get_hero_height(),
     )

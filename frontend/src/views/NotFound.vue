@@ -44,9 +44,9 @@ const openGithub = () => {
 
 <template>
   <main class="login-shell min-h-screen flex flex-col items-center justify-center font-sans px-4 py-10" role="main">
-    <div class="w-full max-w-sm ui-card !rounded-3xl shadow-[var(--tg-shadow-lg)] px-8 py-10 text-center">
-      <div class="w-14 h-14 bg-[var(--tg-accent-soft)] border border-[var(--tg-accent-border)] mx-auto flex items-center justify-center text-[var(--tg-accent-text)] mb-6 rounded-2xl">
-        <FileQuestion class="w-7 h-7 stroke-[1.6]" />
+    <div class="w-full max-w-sm ui-card !rounded-2xl shadow-[var(--tg-shadow-md)] px-8 py-10 text-center">
+      <div class="w-12 h-12 bg-[var(--tg-bg-muted)] border border-[var(--tg-border)] mx-auto flex items-center justify-center text-[var(--tg-text-muted)] mb-6 rounded-xl">
+        <FileQuestion class="w-6 h-6 stroke-[1.6]" />
       </div>
 
       <div class="text-5xl font-mono font-extrabold tracking-tight text-[var(--tg-text)] mb-2">404</div>

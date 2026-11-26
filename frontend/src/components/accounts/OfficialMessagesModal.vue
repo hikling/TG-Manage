@@ -73,12 +73,12 @@ watch(
 <template>
   <Modal :isOpen="isOpen" :title="title" @close="emit('close')">
     <div class="space-y-4">
-      <div class="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-[var(--tg-accent-soft)] border border-[var(--tg-accent-border)]">
+      <div class="flex items-start justify-between gap-3 p-3.5 rounded-xl bg-[var(--tg-bg-elevated-2)] border border-[var(--tg-border)]">
         <div class="flex items-start gap-2.5 min-w-0">
-          <ShieldCheck class="w-4 h-4 text-[var(--tg-accent-text)] mt-0.5 shrink-0" />
-          <div class="text-xs text-[var(--tg-accent-text)] leading-relaxed">
-            <div class="font-semibold">{{ t('accounts.officialMessagesHintTitle') }}</div>
-            <div class="mt-0.5 opacity-90">{{ t('accounts.officialMessagesHint') }}</div>
+          <ShieldCheck class="w-4 h-4 text-[var(--tg-text-muted)] mt-0.5 shrink-0" />
+          <div class="text-xs text-[var(--tg-text-muted)] leading-relaxed">
+            <div class="font-semibold text-[var(--tg-text)]">{{ t('accounts.officialMessagesHintTitle') }}</div>
+            <div class="mt-0.5">{{ t('accounts.officialMessagesHint') }}</div>
           </div>
         </div>
         <button

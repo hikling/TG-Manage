@@ -25,12 +25,13 @@ import { lockBodyScroll, unlockBodyScroll } from '../lib/body-scroll-lock'
 import UserProfileModal from '../components/settings/UserProfileModal.vue'
 import Modal from '../components/Modal.vue'
 import HeroCover from '../components/HeroCover.vue'
-import { clampCoverPosition, type CoverFrame } from '../lib/cover-frame'
+import { clampCoverHeight, clampCoverPosition, DEFAULT_COVER_HEIGHT, MAX_COVER_HEIGHT, MIN_COVER_HEIGHT, type CoverFrame } from '../lib/cover-frame'
 import { createCoalescedSave } from '../lib/coalesced-save'
 import { createViewPrefetcher } from '../lib/view-prefetch'
 import { deleteHeroImage, getHeroImage, getHeroSettings, MAX_HERO_IMAGE_BYTES, saveHeroSettings, uploadHeroImage } from '../lib/api/appearance'
 import { getGlobalSettings, saveGlobalSettings } from '../lib/api/settings'
 import { getAuthToken } from '../lib/api/core'
+import { storageGet, storageSet } from '../lib/safe-storage'
 
 const route = useRoute()
 const { isDark, toggleTheme, accentColor, setAccentColor } = useTheme()
@@ -48,6 +49,9 @@ const heroPreviewUrl = ref('')
 const heroPreview = ref<HTMLElement | null>(null)
 const heroPositionX = ref(50)
 const heroPositionY = ref(50)
+const savedHeroHeight = Number(storageGet('tg-manage-hero-height'))
+const heroHeight = ref(Number.isFinite(savedHeroHeight) && savedHeroHeight >= MIN_COVER_HEIGHT ? clampCoverHeight(savedHeroHeight) : DEFAULT_COVER_HEIGHT)
+const heroPreviewHeight = computed(() => `${Math.round(heroHeight.value * 0.44)}px`)
 const heroDragging = ref(false)
 let heroPointerId: number | null = null
 let heroDragOrigin = { clientX: 0, clientY: 0, x: 50, y: 50 }
@@ -55,11 +59,14 @@ let heroFrame: CoverFrame = { width: 0, height: 0, overflowX: 0, overflowY: 0 }
 let appearanceActive = true
 let accentEdited = false
 let heroPositionEdited = false
+let heroHeightEdited = false
 let heroMutationVersion = 0
 let heroPositionDirty = false
+let heroHeightDirty = false
 let accentDirty = false
 let accentSaveTimer: ReturnType<typeof setTimeout> | undefined
 let heroPositionSaveTimer: ReturnType<typeof setTimeout> | undefined
+let heroHeightSaveTimer: ReturnType<typeof setTimeout> | undefined
 const sidebarCollapsed = ref(true)
 const menuButtonRef = ref<HTMLButtonElement | null>(null)
 const drawerCloseButtonRef = ref<HTMLButtonElement | null>(null)
@@ -86,6 +93,10 @@ const positionSaves = createCoalescedSave<{ x: number; y: number }>(
   position => saveHeroSettings(position.x, position.y),
   () => feedback('positionSaveFailed', 'error'),
 )
+const heightSaves = createCoalescedSave<number>(
+  height => saveGlobalSettings(getAuthToken(), { hero_height: height }),
+  () => feedback('positionSaveFailed', 'error'),
+)
 function flushAccentSave() {
   if (accentSaveTimer) clearTimeout(accentSaveTimer)
   accentSaveTimer = undefined
@@ -100,6 +111,13 @@ function flushHeroPositionSave() {
   heroPositionDirty = false
   void positionSaves.enqueue({ x: heroPositionX.value, y: heroPositionY.value })
 }
+function flushHeroHeightSave() {
+  if (heroHeightSaveTimer) clearTimeout(heroHeightSaveTimer)
+  heroHeightSaveTimer = undefined
+  if (!heroHeightDirty) return
+  heroHeightDirty = false
+  void heightSaves.enqueue(heroHeight.value)
+}
 
 async function refreshHeroPresence() {
   if (!appearanceActive) return
@@ -113,6 +131,10 @@ async function refreshHeroPresence() {
     if (!heroPositionEdited) {
       heroPositionX.value = settings.position_x
       heroPositionY.value = settings.position_y
+    }
+    if (!heroHeightEdited && typeof settings.height === 'number') {
+      heroHeight.value = clampCoverHeight(settings.height)
+      storageSet('tg-manage-hero-height', String(heroHeight.value))
     }
   } catch {
     if (!appearanceActive || version !== heroMutationVersion) return
@@ -130,6 +152,10 @@ async function loadAppearanceSettings() {
     if (!heroPositionEdited) {
       heroPositionX.value = settings.hero_position_x ?? heroPositionX.value
       heroPositionY.value = settings.hero_position_y ?? heroPositionY.value
+    }
+    if (!heroHeightEdited && typeof settings.hero_height === 'number') {
+      heroHeight.value = clampCoverHeight(settings.hero_height)
+      storageSet('tg-manage-hero-height', String(heroHeight.value))
     }
   } catch {
     // Keep the browser-local fallback when the settings endpoint is unavailable.
@@ -155,6 +181,18 @@ function persistHeroPosition() {
   }))
   if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
   heroPositionSaveTimer = setTimeout(flushHeroPositionSave, 250)
+}
+
+function persistHeroHeight() {
+  heroHeightEdited = true
+  heroHeight.value = clampCoverHeight(heroHeight.value)
+  storageSet('tg-manage-hero-height', String(heroHeight.value))
+  heroHeightDirty = true
+  window.dispatchEvent(new CustomEvent('tg-manage:hero-height-changed', {
+    detail: { height: heroHeight.value },
+  }))
+  if (heroHeightSaveTimer) clearTimeout(heroHeightSaveTimer)
+  heroHeightSaveTimer = setTimeout(flushHeroHeightSave, 250)
 }
 
 function setHeroPositionFromPointer(event: PointerEvent) {
@@ -200,7 +238,7 @@ function moveHeroWithKeyboard(event: KeyboardEvent) {
 }
 
 watch(showAppearanceModal, open => {
-  if (!open) { stopHeroDrag(); flushAccentSave() }
+  if (!open) { stopHeroDrag(); flushAccentSave(); flushHeroHeightSave() }
 })
 
 async function onHeroSelected(event: Event) {
@@ -233,6 +271,7 @@ async function onHeroSelected(event: Event) {
 async function resetHeroImage() {
   ++heroMutationVersion
   heroPositionEdited = true
+  heroHeightEdited = true
   heroBusy.value = true
   feedback('resettingCover')
   stopHeroDrag()
@@ -240,13 +279,22 @@ async function resetHeroImage() {
   heroPositionSaveTimer = undefined
   heroPositionDirty = false
   positionSaves.discard()
+  if (heroHeightSaveTimer) clearTimeout(heroHeightSaveTimer)
+  heroHeightSaveTimer = undefined
+  heroHeightDirty = false
+  heightSaves.discard()
   try {
-    await positionSaves.whenIdle()
+    await Promise.all([positionSaves.whenIdle(), heightSaves.whenIdle()])
     await deleteHeroImage()
     if (!appearanceActive) return
     heroPresent.value = false
     heroPositionX.value = 50
     heroPositionY.value = 50
+    heroHeight.value = DEFAULT_COVER_HEIGHT
+    storageSet('tg-manage-hero-height', String(DEFAULT_COVER_HEIGHT))
+    window.dispatchEvent(new CustomEvent('tg-manage:hero-height-changed', {
+      detail: { height: DEFAULT_COVER_HEIGHT },
+    }))
     if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
     heroPreviewUrl.value = ''
     feedback('coverReset')
@@ -293,6 +341,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopHeroDrag()
   flushAccentSave()
+  flushHeroHeightSave()
   appearanceActive = false
   window.removeEventListener('keydown', onKeydown)
   mobileQuery.removeEventListener('change', onViewportChange)
@@ -302,6 +351,7 @@ onUnmounted(() => {
   }
   if (accentSaveTimer) clearTimeout(accentSaveTimer)
   if (heroPositionSaveTimer) clearTimeout(heroPositionSaveTimer)
+  if (heroHeightSaveTimer) clearTimeout(heroHeightSaveTimer)
   if (heroPreviewUrl.value) URL.revokeObjectURL(heroPreviewUrl.value)
 })
 
@@ -508,13 +558,14 @@ const handleNavClick = () => {
             <h3 class="text-sm font-medium">{{ t('appearance.coverTitle') }}</h3>
             <p class="text-xs">{{ t('appearance.coverDescription') }}</p>
             <input ref="heroInput" class="sr-only" type="file" accept="image/jpeg,image/png,image/webp" tabindex="-1" :aria-label="t('appearance.chooseCover')" @change="onHeroSelected" />
-            <div v-if="heroPreviewUrl" ref="heroPreview" class="appearance-cover-preview" :class="{ 'appearance-cover-preview--dragging': heroDragging }" :aria-label="t('appearance.coverPreviewPosition', { x: heroPositionX, y: heroPositionY })" role="group" tabindex="0" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" :aria-busy="heroBusy" @keydown="moveHeroWithKeyboard" @pointerdown="startHeroDrag" @pointermove="moveHeroDrag" @pointerup="stopHeroDrag" @pointercancel="stopHeroDrag">
+            <div v-if="heroPreviewUrl" ref="heroPreview" class="appearance-cover-preview" :class="{ 'appearance-cover-preview--dragging': heroDragging }" :style="{ height: heroPreviewHeight }" :aria-label="t('appearance.coverPreviewPosition', { x: heroPositionX, y: heroPositionY })" role="group" tabindex="0" aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown" :aria-busy="heroBusy" @keydown="moveHeroWithKeyboard" @pointerdown="startHeroDrag" @pointermove="moveHeroDrag" @pointerup="stopHeroDrag" @pointercancel="stopHeroDrag">
               <HeroCover :src="heroPreviewUrl" :position-x="heroPositionX" :position-y="heroPositionY" @geometry="heroFrame = $event" />
               <span>{{ t('appearance.coverPreviewHint') }}</span>
             </div>
-            <div v-if="heroPreviewUrl" class="appearance-cover-position">
-              <label>{{ t('appearance.horizontalPosition') }} <input v-model.number="heroPositionX" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.horizontalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionX }}%</output></label>
-              <label>{{ t('appearance.verticalPosition') }} <input v-model.number="heroPositionY" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.verticalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionY }}%</output></label>
+            <div class="appearance-cover-position">
+              <label v-if="heroPreviewUrl">{{ t('appearance.horizontalPosition') }} <input v-model.number="heroPositionX" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.horizontalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionX }}%</output></label>
+              <label v-if="heroPreviewUrl">{{ t('appearance.verticalPosition') }} <input v-model.number="heroPositionY" type="range" min="0" max="100" step="1" :disabled="heroBusy" :aria-label="t('appearance.verticalPosition')" @input="persistHeroPosition" @change="flushHeroPositionSave" /><output>{{ heroPositionY }}%</output></label>
+              <label>{{ t('appearance.coverHeight') }} <input v-model.number="heroHeight" type="range" :min="MIN_COVER_HEIGHT" :max="MAX_COVER_HEIGHT" step="10" :disabled="heroBusy" :aria-label="t('appearance.coverHeight')" @input="persistHeroHeight" @change="flushHeroHeightSave" /><output>{{ heroHeight }}px</output></label>
             </div>
             <div class="flex flex-wrap gap-2">
               <button type="button" class="ui-btn-secondary min-h-11 inline-flex items-center gap-2" :disabled="heroBusy" :aria-describedby="heroFeedback ? 'hero-cover-feedback' : undefined" @click="heroInput?.click()"><ImagePlus :size="16" aria-hidden="true" />{{ heroPresent ? t('appearance.replaceCover') : t('appearance.uploadCover') }}</button>

@@ -36,6 +36,7 @@ def _is_retired_setting(key: str) -> bool:
 # 全局设置数值钳制表：字段名 -> (下限, 上限)；值为 None 的字段保持 None
 _GLOBAL_SETTING_INT_CLAMPS = {
     "device_keepalive_interval_days": (1, 170),
+    "hero_height": (160, 520),
 }
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-f]{6}$", re.IGNORECASE)
 _GLOBAL_SETTING_POSITION_FIELDS = ("hero_position_x", "hero_position_y")
@@ -151,6 +152,7 @@ class GlobalSettingsMixin:
             "appearance_accent_color": "#3d6fa8",
             "hero_position_x": 50.0,
             "hero_position_y": 50.0,
+            "hero_height": 360,
         }
 
         settings = self._read_json_file(config_file)

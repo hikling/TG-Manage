@@ -131,6 +131,25 @@ describe('cover framing controls', () => {
     expect(wrapper.find('.appearance-cover-preview').exists()).toBe(true)
   })
 
+  it('updates and persists dashboard cover height from the height slider', async () => {
+    const wrapper = showLayout()
+    await flushPromises()
+    const heightEvents: number[] = []
+    const onHeight = (event: Event) => {
+      heightEvents.push((event as CustomEvent<{ height: number }>).detail.height)
+    }
+    window.addEventListener('tg-manage:hero-height-changed', onHeight)
+    try {
+      const heightSlider = wrapper.find('input[aria-label="Cover height"]')
+      await heightSlider.setValue(420)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(heightEvents.at(-1)).toBe(420)
+      expect(api.saveGlobalSettings).toHaveBeenLastCalledWith(expect.any(String), { hero_height: 420 })
+    } finally {
+      window.removeEventListener('tg-manage:hero-height-changed', onHeight)
+    }
+  })
+
   it('does not start cover requests if settings reject after the layout unmounts', async () => {
     let fail!: (reason: Error) => void
     api.getGlobalSettings.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))

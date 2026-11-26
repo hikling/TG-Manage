@@ -665,13 +665,13 @@ const openAddModal = (method: 'code' | 'qr') => {
 
     <!-- FAB for Adding Account -->
     <div class="fixed ui-safe-fab z-40 flex flex-col items-end gap-2">
-      <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-2 scale-95" enter-to-class="opacity-100 translate-y-0 scale-100" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100 translate-y-0 scale-100" leave-to-class="opacity-0 translate-y-2 scale-95">
-        <div v-if="showAddMenu" class="flex flex-col gap-2 mb-1">
-          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-lg)]" @click="openAddModal('qr')">
-            <span class="w-7 h-7 rounded-lg grid place-items-center bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)]"><QrCode class="w-4 h-4" /></span> {{ t('accounts.qrLogin') }}
+      <transition enter-active-class="transition duration-150 ease-out" enter-from-class="opacity-0 translate-y-1.5" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-120 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 translate-y-1.5">
+        <div v-if="showAddMenu" class="flex flex-col gap-1.5 mb-1">
+          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-md)]" @click="openAddModal('qr')">
+            <QrCode class="w-4 h-4 text-[var(--tg-text-muted)]" /> {{ t('accounts.qrLogin') }}
           </button>
-          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-lg)]" @click="openAddModal('code')">
-            <span class="w-7 h-7 rounded-lg grid place-items-center bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)]"><Phone class="w-4 h-4" /></span> {{ t('accounts.codeLogin') }}
+          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-md)]" @click="openAddModal('code')">
+            <Phone class="w-4 h-4 text-[var(--tg-text-muted)]" /> {{ t('accounts.codeLogin') }}
           </button>
         </div>
       </transition>

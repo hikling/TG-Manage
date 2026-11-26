@@ -162,7 +162,7 @@ onUnmounted(() => {
       >
         <!-- Backdrop -->
         <div
-          class="absolute inset-0 bg-slate-950/45 dark:bg-black/70 backdrop-blur-md"
+          class="absolute inset-0 bg-black/35 dark:bg-black/60 backdrop-blur-[2px]"
           aria-hidden="true"
           @click="emit('close')"
         />

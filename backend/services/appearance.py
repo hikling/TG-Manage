@@ -11,6 +11,9 @@ from backend.core.config import get_settings
 MAX_HERO_UPLOAD_BYTES = 2 * 1024 * 1024
 MAX_HERO_BYTES = MAX_HERO_UPLOAD_BYTES
 DEFAULT_HERO_POSITION = (50.0, 50.0)
+DEFAULT_HERO_HEIGHT = 360
+MIN_HERO_HEIGHT = 160
+MAX_HERO_HEIGHT = 520
 
 
 def image_media_type(data: bytes) -> str | None:
@@ -97,4 +100,29 @@ def save_hero_position(x: float, y: float) -> None:
 
     get_config_service().save_global_settings(
         {"hero_position_x": x, "hero_position_y": y}
+    )
+
+
+def _normalize_height(value: object, fallback: int = DEFAULT_HERO_HEIGHT) -> int:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    if not math.isfinite(parsed):
+        return fallback
+    return max(MIN_HERO_HEIGHT, min(int(round(parsed)), MAX_HERO_HEIGHT))
+
+
+def get_hero_height() -> int:
+    from backend.services.config import get_config_service
+
+    settings = get_config_service().get_global_settings()
+    return _normalize_height(settings.get("hero_height"), DEFAULT_HERO_HEIGHT)
+
+
+def save_hero_height(height: int) -> None:
+    from backend.services.config import get_config_service
+
+    get_config_service().save_global_settings(
+        {"hero_height": _normalize_height(height)}
     )

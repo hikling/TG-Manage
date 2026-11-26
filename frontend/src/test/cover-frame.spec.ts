@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coverFrame } from '../lib/cover-frame'
+import { clampCoverHeight, coverFrame, DEFAULT_COVER_HEIGHT, MAX_COVER_HEIGHT, MIN_COVER_HEIGHT } from '../lib/cover-frame'
 
 describe('cover crop geometry', () => {
   it.each([[1600, 700], [300, 1200], [2000, 250]])('leaves drag space on both axes for a %sx%s image', (imageWidth, imageHeight) => {
@@ -16,5 +16,12 @@ describe('cover crop geometry', () => {
     expect(dashboard.height).toBeCloseTo(preview.height * 3)
     expect(dashboard.overflowX).toBeCloseTo(preview.overflowX * 3)
     expect(dashboard.overflowY).toBeCloseTo(preview.overflowY * 3)
+  })
+
+  it('clamps dashboard cover height within valid bounds', () => {
+    expect(clampCoverHeight(Number.NaN)).toBe(DEFAULT_COVER_HEIGHT)
+    expect(clampCoverHeight(80)).toBe(MIN_COVER_HEIGHT)
+    expect(clampCoverHeight(900)).toBe(MAX_COVER_HEIGHT)
+    expect(clampCoverHeight(400)).toBe(400)
   })
 })

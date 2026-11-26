@@ -30,6 +30,7 @@
     "coverPreviewHint": "Drag or use arrow keys to reposition",
     "horizontalPosition": "Horizontal position",
     "verticalPosition": "Vertical position",
+    "coverHeight": "Cover height",
     "replaceCover": "Replace cover",
     "uploadCover": "Upload cover",
     "resetCover": "Reset cover",

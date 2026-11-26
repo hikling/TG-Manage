@@ -97,7 +97,7 @@ const memoryHealthText = computed(() => {
             </div>
             <div class="about-telemetry-row">
               <span class="about-telemetry-key">{{ t('settings.currentVersion') }}</span>
-              <span class="about-telemetry-val font-mono px-2 py-0.5 rounded-md bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)] font-semibold">v{{ appVersion.version }}</span>
+              <span class="about-telemetry-val font-mono px-2 py-0.5 rounded-md bg-[var(--tg-bg-muted)] text-[var(--tg-text)] font-semibold">v{{ appVersion.version }}</span>
             </div>
             <div class="about-telemetry-row">
               <span class="about-telemetry-key">{{ t('settings.osPlatform') }}</span>
