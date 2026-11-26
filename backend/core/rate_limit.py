@@ -22,6 +22,7 @@ class InMemoryRateLimiter:
     def __init__(self) -> None:
         self._lock = Lock()
         self._attempts: Dict[BucketKey, Deque[float]] = {}
+        self._attempt_expires: Dict[BucketKey, float] = {}
         self._blocked_until: Dict[BucketKey, float] = {}
         self._hits_since_sweep = 0
 
@@ -29,6 +30,7 @@ class InMemoryRateLimiter:
         bucket = (scope, key)
         with self._lock:
             self._attempts.pop(bucket, None)
+            self._attempt_expires.pop(bucket, None)
             self._blocked_until.pop(bucket, None)
 
     def discard_latest_attempt(self, scope: str, key: str) -> None:
@@ -41,10 +43,12 @@ class InMemoryRateLimiter:
             attempts.pop()
             if not attempts:
                 self._attempts.pop(bucket, None)
+                self._attempt_expires.pop(bucket, None)
 
     def reset_all(self) -> None:
         with self._lock:
             self._attempts.clear()
+            self._attempt_expires.clear()
             self._blocked_until.clear()
             self._hits_since_sweep = 0
 
@@ -52,8 +56,14 @@ class InMemoryRateLimiter:
         """机会式清理过期桶，防止 (scope, key) 组合随请求数无限增长。"""
         stale = now - self._STALE_BUCKET_AGE
         for bucket, attempts in list(self._attempts.items()):
-            if not attempts or attempts[-1] <= stale:
+            expires_at = self._attempt_expires.get(bucket)
+            if (
+                not attempts
+                or (expires_at is not None and expires_at <= now)
+                or attempts[-1] <= stale
+            ):
                 self._attempts.pop(bucket, None)
+                self._attempt_expires.pop(bucket, None)
         for bucket, blocked_until in list(self._blocked_until.items()):
             if blocked_until <= now:
                 self._blocked_until.pop(bucket, None)
@@ -95,21 +105,24 @@ class InMemoryRateLimiter:
                         raise HTTPException(
                             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                             detail=detail,
-                            headers={"Retry-After": str(self._STALE_BUCKET_AGE)},
+                            headers={"Retry-After": str(int(self._STALE_BUCKET_AGE))},
                         )
 
             attempts = self._attempts.setdefault(bucket, deque())
-            cutoff = now - max(window_seconds, 1)
+            window = max(window_seconds, 1)
+            cutoff = now - window
             while attempts and attempts[0] <= cutoff:
                 attempts.popleft()
 
             attempts.append(now)
+            self._attempt_expires[bucket] = now + window
             if len(attempts) <= max(max_attempts, 1):
                 return
 
             retry_after = max(int(block_seconds), 1)
             self._blocked_until[bucket] = now + retry_after
-            attempts.clear()
+            self._attempts.pop(bucket, None)
+            self._attempt_expires.pop(bucket, None)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=detail,

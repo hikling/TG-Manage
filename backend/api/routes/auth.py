@@ -69,6 +69,8 @@ def initial_setup(payload: InitialSetupRequest, request: Request, db: Session = 
             raise HTTPException(503, "首次设置凭据尚未生成，请重启服务") from None
         if not expected or not secrets.compare_digest(expected, payload.setup_token):
             raise HTTPException(403, "初始化凭据无效")
+        if len(payload.password.encode("utf-8")) > 72:
+            raise HTTPException(400, "密码长度不能超过 72 字节")
         user = User(username="admin", password_hash=hash_password(payload.password))
         db.add(user)
         db.commit()
@@ -176,7 +178,6 @@ def login(
     rate_limiter.reset("auth.login", login_key)
     access_token = create_access_token(
         data={"sub": user.username, "auth_version": user.auth_version or 0},
-        expires_delta=timedelta(hours=12),
     )
     try:
         from backend.services.config import get_config_service
@@ -238,7 +239,7 @@ def telegram_webapp_login(
             "auth_source": "telegram_webapp",
             "telegram_user_id": int(settings["telegram_bot_chat_id"]),
             "telegram_bot_fingerprint": hashlib.sha256(
-                str(settings["telegram_bot_token"]).encode()
+                str(settings["telegram_bot_token"]).strip().encode()
             ).hexdigest(),
         },
         expires_delta=timedelta(hours=1),

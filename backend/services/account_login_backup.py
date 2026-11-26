@@ -19,6 +19,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from backend.services.telegram.credentials import validate_telegram_api_credentials
 from backend.utils.names import validate_storage_name
 from backend.utils.tg_session import (
+    _STORE_LOCK,
     _account_cipher,
     _load_account_store,
     _save_account_store,
@@ -174,14 +175,17 @@ def import_login_backup(blob: bytes, password: str, *, service: object) -> dict[
     skipped = [record["name"] for record in records if record["name"].casefold() in existing]
     restore = [record for record in records if record["name"].casefold() not in existing]
     staged: list[tuple[Path, Path, str]] = []
+    temp_paths: list[Path] = []
     published: list[Path] = []
     try:
+        pending_entries: dict[str, dict[str, str]] = {}
         for record in restore:
             suffix = ".session_string" if get_session_mode() == "string" else ".session"
             final = session_dir / f"{record['name']}{suffix}"
             fd, temp_name = tempfile.mkstemp(prefix=".login-restore-", dir=session_dir)
             os.close(fd)
             temporary = Path(temp_name)
+            temp_paths.append(temporary)
             if suffix == ".session":
                 _new_session_file(temporary, record["fields"])
             else:
@@ -189,14 +193,17 @@ def import_login_backup(blob: bytes, password: str, *, service: object) -> dict[
                 temporary.chmod(0o600)
             staged.append((temporary, final, record["name"]))
             token = _account_cipher().encrypt(json.dumps({"api_id": record["api_id"], "api_hash": record["api_hash"]}).encode("utf-8"))
-            store.setdefault("accounts", {})[record["name"]] = {"api_credentials": token.decode("ascii")}
+            pending_entries[record["name"]] = {"api_credentials": token.decode("ascii")}
         for temporary, final, name in staged:
             if final.exists():
                 raise LoginBackupError(f"账户 {name} 已存在，恢复已取消")
             os.link(temporary, final)  # atomic create; never replace an existing session
             published.append(final)
         if published:
-            _save_account_store(store)
+            with _STORE_LOCK:
+                latest_store = copy.deepcopy(_load_account_store())
+                latest_store.setdefault("accounts", {}).update(pending_entries)
+                _save_account_store(latest_store)
             service._accounts_cache = None
         return {"restored": len(restore), "skipped": len(skipped)}
     except Exception:
@@ -204,5 +211,5 @@ def import_login_backup(blob: bytes, password: str, *, service: object) -> dict[
             path.unlink(missing_ok=True)
         raise
     finally:
-        for temporary, _, _ in staged:
+        for temporary in temp_paths:
             temporary.unlink(missing_ok=True)

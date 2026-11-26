@@ -231,4 +231,17 @@ describe('api.request - 401 处理', () => {
       status: 0,
     })
   })
+
+  it('deleteAccount 与 updateAccount 会对含特殊字符的账号名做 URL 编码', async () => {
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok' }, 200))
+      .mockResolvedValueOnce(jsonResponse({ success: true, message: 'ok', account: null }, 200))
+
+    const api = await importApi()
+    await api.deleteAccount('tok', 'acct/1?x=2#y')
+    await api.updateAccount('tok', 'acct/1?x=2#y', { remark: 'note' })
+
+    expect(mockFetch.mock.calls[0]?.[0]).toBe('/api/accounts/acct%2F1%3Fx%3D2%23y')
+    expect(mockFetch.mock.calls[1]?.[0]).toBe('/api/accounts/acct%2F1%3Fx%3D2%23y')
+  })
 })

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import io
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
 
 import pyotp
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -15,9 +16,11 @@ from backend.core.auth import (
     create_access_token,
     get_current_user,
     get_user_by_username,
+    require_standard_admin_user,
     verify_totp,
 )
 from backend.core.database import get_db
+from backend.core.rate_limit import compose_rate_limit_key, get_rate_limiter
 from backend.core.security import hash_password, verify_password
 from backend.models.user import User
 
@@ -27,6 +30,7 @@ except Exception:  # pragma: no cover - optional dependency fallback
     qrcode = None
 
 router = APIRouter()
+rate_limiter = get_rate_limiter()
 
 _FALLBACK_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -42,10 +46,11 @@ class PendingTOTPSecret:
     created_at: float
 
 
+_pending_totp_lock = threading.Lock()
 _pending_totp_secrets: dict[int, PendingTOTPSecret] = {}
 
 
-def _cleanup_expired_pending_totp_secrets(now: Optional[float] = None) -> None:
+def _cleanup_expired_pending_totp_secrets_locked(now: Optional[float] = None) -> None:
     current = time.monotonic() if now is None else now
     expired_user_ids = [
         user_id
@@ -57,23 +62,26 @@ def _cleanup_expired_pending_totp_secrets(now: Optional[float] = None) -> None:
 
 
 def _set_pending_totp_secret(user_id: int, secret: str) -> None:
-    _cleanup_expired_pending_totp_secrets()
-    _pending_totp_secrets[user_id] = PendingTOTPSecret(
-        secret=secret,
-        created_at=time.monotonic(),
-    )
+    with _pending_totp_lock:
+        _cleanup_expired_pending_totp_secrets_locked()
+        _pending_totp_secrets[user_id] = PendingTOTPSecret(
+            secret=secret,
+            created_at=time.monotonic(),
+        )
 
 
 def get_pending_totp_secret(user_id: int) -> Optional[str]:
-    _cleanup_expired_pending_totp_secrets()
-    entry = _pending_totp_secrets.get(user_id)
-    if entry is None:
-        return None
-    return entry.secret
+    with _pending_totp_lock:
+        _cleanup_expired_pending_totp_secrets_locked()
+        entry = _pending_totp_secrets.get(user_id)
+        if entry is None:
+            return None
+        return entry.secret
 
 
 def clear_pending_totp_secret(user_id: int) -> None:
-    _pending_totp_secrets.pop(user_id, None)
+    with _pending_totp_lock:
+        _pending_totp_secrets.pop(user_id, None)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -126,9 +134,19 @@ class TOTPStatusResponse(BaseModel):
 @router.put("/password", response_model=ChangePasswordResponse)
 def change_password(
     request: ChangePasswordRequest,
-    current_user: User = Depends(get_current_user),
+    http_request: Request,
+    current_user: User = Depends(require_standard_admin_user),
     db: Session = Depends(get_db),
 ):
+    limit_key = compose_rate_limit_key(http_request, str(current_user.id))
+    rate_limiter.hit(
+        scope="user.password",
+        key=limit_key,
+        max_attempts=5,
+        window_seconds=300,
+        block_seconds=900,
+        detail="Too many password change attempts. Please try again later.",
+    )
     if not verify_password(request.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -140,10 +158,16 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="新密码长度至少为 6 个字符",
         )
+    if len(request.new_password.encode("utf-8")) > 72:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码长度不能超过 72 字节",
+        )
 
     current_user.password_hash = hash_password(request.new_password)
     current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
+    rate_limiter.reset("user.password", limit_key)
 
     return ChangePasswordResponse(
         success=True, message="密码修改成功",
@@ -154,9 +178,19 @@ def change_password(
 @router.put("/username", response_model=ChangeUsernameResponse)
 def change_username(
     request: ChangeUsernameRequest,
-    current_user: User = Depends(get_current_user),
+    http_request: Request,
+    current_user: User = Depends(require_standard_admin_user),
     db: Session = Depends(get_db),
 ):
+    limit_key = compose_rate_limit_key(http_request, str(current_user.id))
+    rate_limiter.hit(
+        scope="user.username",
+        key=limit_key,
+        max_attempts=5,
+        window_seconds=300,
+        block_seconds=900,
+        detail="Too many username change attempts. Please try again later.",
+    )
     if not verify_password(request.password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -183,9 +217,11 @@ def change_username(
         )
 
     current_user.username = new_username
+    current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
+    rate_limiter.reset("user.username", limit_key)
 
-    new_token = create_access_token(data={"sub": new_username, "auth_version": current_user.auth_version or 0})
+    new_token = create_access_token(data={"sub": new_username, "auth_version": current_user.auth_version})
     return ChangeUsernameResponse(
         success=True,
         message="用户名修改成功",
@@ -202,7 +238,7 @@ def get_totp_status(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/totp/setup", response_model=TOTPStatusResponse)
-def setup_totp(current_user: User = Depends(get_current_user)):
+def setup_totp(current_user: User = Depends(require_standard_admin_user)):
     if current_user.totp_secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -216,7 +252,7 @@ def setup_totp(current_user: User = Depends(get_current_user)):
 
 @router.get("/totp/qrcode")
 def get_totp_qrcode(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_standard_admin_user),
 ):
     secret = get_pending_totp_secret(current_user.id)
     if not secret:
@@ -239,15 +275,33 @@ def get_totp_qrcode(
         img.save(img_io, "PNG")
         img_io.seek(0)
 
-    return StreamingResponse(img_io, media_type="image/png")
+    return StreamingResponse(
+        img_io,
+        media_type="image/png",
+        headers={
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.post("/totp/enable", response_model=EnableTOTPResponse)
 def enable_totp(
     request: EnableTOTPRequest,
-    current_user: User = Depends(get_current_user),
+    http_request: Request,
+    current_user: User = Depends(require_standard_admin_user),
     db: Session = Depends(get_db),
 ):
+    limit_key = compose_rate_limit_key(http_request, str(current_user.id))
+    rate_limiter.hit(
+        scope="user.totp.enable",
+        key=limit_key,
+        max_attempts=5,
+        window_seconds=300,
+        block_seconds=900,
+        detail="Too many 2FA attempts. Please try again later.",
+    )
     pending_secret = get_pending_totp_secret(current_user.id)
     if not pending_secret:
         raise HTTPException(
@@ -265,6 +319,7 @@ def enable_totp(
     current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
     clear_pending_totp_secret(current_user.id)
+    rate_limiter.reset("user.totp.enable", limit_key)
 
     return EnableTOTPResponse(
         success=True, message="两步验证已启用",
@@ -273,7 +328,7 @@ def enable_totp(
 
 
 @router.post("/totp/cancel", response_model=DisableTOTPResponse)
-def cancel_totp_setup(current_user: User = Depends(get_current_user)):
+def cancel_totp_setup(current_user: User = Depends(require_standard_admin_user)):
     clear_pending_totp_secret(current_user.id)
     return DisableTOTPResponse(success=True, message="2FA 设置已取消")
 
@@ -281,9 +336,19 @@ def cancel_totp_setup(current_user: User = Depends(get_current_user)):
 @router.post("/totp/disable", response_model=DisableTOTPResponse)
 def disable_totp(
     request: DisableTOTPRequest,
-    current_user: User = Depends(get_current_user),
+    http_request: Request,
+    current_user: User = Depends(require_standard_admin_user),
     db: Session = Depends(get_db),
 ):
+    limit_key = compose_rate_limit_key(http_request, str(current_user.id))
+    rate_limiter.hit(
+        scope="user.totp.disable",
+        key=limit_key,
+        max_attempts=5,
+        window_seconds=300,
+        block_seconds=900,
+        detail="Too many 2FA attempts. Please try again later.",
+    )
     if not current_user.totp_secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -300,6 +365,7 @@ def disable_totp(
     current_user.auth_version = (current_user.auth_version or 0) + 1
     db.commit()
     clear_pending_totp_secret(current_user.id)
+    rate_limiter.reset("user.totp.disable", limit_key)
 
     return DisableTOTPResponse(
         success=True, message="两步验证已禁用",

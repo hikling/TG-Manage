@@ -37,6 +37,8 @@ export function useAccountBatchCheck(options: {
   const lastBatchFailedNames = ref<string[]>([])
   let batchPollHandle: ChainPollHandle | null = null
   let lastLiveRefreshDone = 0
+  let disposed = false
+  let pollInFlight = false
 
   const batchProgressPct = computed(() => {
     const total = Number(batchJob.value?.progress?.total || 0)
@@ -53,6 +55,7 @@ export function useAccountBatchCheck(options: {
   }
 
   onUnmounted(() => {
+    disposed = true
     clearBatchPoll()
   })
 
@@ -151,33 +154,42 @@ export function useAccountBatchCheck(options: {
   }
 
   const pollBatchJob = async (jobId: string) => {
-    return withToken(async (token) => {
-      try {
-        const job = await getAccountStatusCheckJob(token, jobId)
-        batchJob.value = job
-        if (job.status === 'running' || job.status === 'canceling') {
-          const done = Number(job.progress?.done || 0)
-          if (done > lastLiveRefreshDone) {
-            lastLiveRefreshDone = done
-            applyLiveResults(job.results)
+    if (disposed || pollInFlight) return
+    pollInFlight = true
+    try {
+      return await withToken(async (token) => {
+        try {
+          const job = await getAccountStatusCheckJob(token, jobId)
+          if (disposed) return
+          batchJob.value = job
+          if (job.status === 'running' || job.status === 'canceling') {
+            const done = Number(job.progress?.done || 0)
+            if (done > lastLiveRefreshDone) {
+              lastLiveRefreshDone = done
+              applyLiveResults(job.results)
+            }
+            return
           }
-          return
+          clearBatchPoll()
+          batchChecking.value = false
+          await applyBatchJobResult(job)
+          if (disposed) return
+          batchJob.value = null
+          batchResultMap.value = {}
+          lastLiveRefreshDone = 0
+        } catch (e: unknown) {
+          if (disposed) return
+          clearBatchPoll()
+          batchChecking.value = false
+          batchJob.value = null
+          batchResultMap.value = {}
+          lastLiveRefreshDone = 0
+          notifyApiError(e, 'accounts.checkFailed')
         }
-        clearBatchPoll()
-        batchChecking.value = false
-        await applyBatchJobResult(job)
-        batchJob.value = null
-        batchResultMap.value = {}
-        lastLiveRefreshDone = 0
-      } catch (e: unknown) {
-        clearBatchPoll()
-        batchChecking.value = false
-        batchJob.value = null
-        batchResultMap.value = {}
-        lastLiveRefreshDone = 0
-        notifyApiError(e, 'accounts.checkFailed')
-      }
-    })
+      })
+    } finally {
+      pollInFlight = false
+    }
   }
 
   const startPollingJob = (jobId: string) => {
@@ -195,6 +207,7 @@ export function useAccountBatchCheck(options: {
     return withToken(async (token) => {
       try {
         const res = await listAccountStatusCheckJobs(token, 5)
+        if (disposed) return
         const active = (res.jobs || []).find(
           (j) => j.status === 'running' || j.status === 'canceling',
         )
@@ -293,6 +306,7 @@ export function useAccountBatchCheck(options: {
       const res = await checkAccountsStatus(token, {
         account_names: names, timeout_seconds: 8, inspect_resources: opts.inspectResources,
       })
+      if (disposed) return
       lastBatchFailedNames.value = res.results
         .filter((item) => !item.ok && item.account_name)
         .map((item) => item.account_name)

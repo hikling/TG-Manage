@@ -88,6 +88,7 @@ export const useToast = () => {
       removeToast(id)
       return
     }
+    expiresAtMap.set(id, Date.now() + remaining)
     const timer = setTimeout(() => {
       removeToast(id)
     }, remaining)
@@ -119,6 +120,7 @@ export const useToast = () => {
     if (merged) {
       merged.count += 1
       if (duration > 0) {
+        remainingMap.delete(merged.id)
         expiresAtMap.set(merged.id, Date.now() + duration)
         const oldTimer = timers.get(merged.id)
         if (oldTimer) clearTimeout(oldTimer)

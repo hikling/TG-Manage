@@ -27,7 +27,7 @@ function mixHex(color: string, background: string, amount: number): string {
 
 describe('custom accent theme', () => {
   afterEach(() => {
-    useTheme().setAccentColor('#3d6fa8')
+    useTheme().setAccentColor('#3367a6')
     localStorage.removeItem('tg-manage-accent-color')
   })
 

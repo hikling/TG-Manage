@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 from backend.core.config import get_settings
 from backend.utils.account_locks import get_account_lock
+from backend.utils.tg_session import get_global_semaphore
 from backend.utils.time import utc_from_timestamp_iso_z
 
 settings = get_settings()
@@ -31,13 +32,13 @@ class TelegramDevicesMixin:
         timeout_seconds = max(1.0, min(float(timeout_seconds or 12.0), 30.0))
         lock = get_account_lock(account_name)
         async with lock:
-            client, _ = self._build_account_client(account_name, no_updates=True)
-            if not getattr(client, "is_connected", False):
-                await client.connect()
-            result = await asyncio.wait_for(
-                client.invoke(raw.functions.account.GetAuthorizations()),
-                timeout=timeout_seconds,
-            )
+            async with get_global_semaphore():
+                client, _ = self._build_account_client(account_name, no_updates=True)
+                async with client:
+                    result = await asyncio.wait_for(
+                        client.invoke(raw.functions.account.GetAuthorizations()),
+                        timeout=timeout_seconds,
+                    )
 
         devices = []
         for item in getattr(result, "authorizations", []) or []:
@@ -100,13 +101,13 @@ class TelegramDevicesMixin:
         timeout_seconds = max(1.0, min(float(timeout_seconds or 12.0), 30.0))
         lock = get_account_lock(account_name)
         async with lock:
-            client, _ = self._build_account_client(account_name, no_updates=True)
-            if not getattr(client, "is_connected", False):
-                await client.connect()
-            result = await asyncio.wait_for(
-                client.invoke(raw.functions.account.ResetAuthorization(hash=parsed_hash)),
-                timeout=timeout_seconds,
-            )
+            async with get_global_semaphore():
+                client, _ = self._build_account_client(account_name, no_updates=True)
+                async with client:
+                    result = await asyncio.wait_for(
+                        client.invoke(raw.functions.account.ResetAuthorization(hash=parsed_hash)),
+                        timeout=timeout_seconds,
+                    )
         return bool(result)
 
 

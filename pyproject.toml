@@ -18,13 +18,8 @@ classifiers = [
 ]
 dependencies = [
     "kurigram<=2.2.7",
-    "click",
     # 生产钉死 v1，避免无 lockfile 时 pip 拉到 v2 导致运行差异
-    # 业务已具备 pydantic_compat，后续升级可再放宽到 <3
     "pydantic>=1.10.26,<2",
-    "openai",
-    "croniter",
-    "json_repair",
     "typing-extensions",
     "httpx[socks]",
     "PyYAML>=6,<7",
@@ -35,12 +30,10 @@ dependencies = [
     "pyjwt>=2.8.0",
     "python-multipart",
     "pyotp",
-    "passlib[bcrypt]",
     "bcrypt",
     "qrcode[pil]",
     "cryptography",
     "filelock",
-    "aiofiles",
     "psutil>=5.9.0",
 ]
 

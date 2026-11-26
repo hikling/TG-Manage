@@ -28,6 +28,8 @@ export const useAccountsStore = defineStore('accounts', () => {
     () => auth.token,
     () => {
       ++sessionGeneration
+      inFlight = null
+      loading.value = false
       accounts.value = []
       total.value = 0
       fetchedAt.value = 0
@@ -53,7 +55,7 @@ export const useAccountsStore = defineStore('accounts', () => {
       if (!ownsSession()) return accounts.value
       throw error
     } finally {
-      loading.value = false
+      if (generation === sessionGeneration) loading.value = false
     }
   }
 
@@ -63,9 +65,11 @@ export const useAccountsStore = defineStore('accounts', () => {
       return Promise.resolve(accounts.value)
     }
     if (!inFlight) {
-      inFlight = fetchAccounts().finally(() => {
-        inFlight = null
+      const gen = sessionGeneration
+      const req = fetchAccounts().finally(() => {
+        if (gen === sessionGeneration && inFlight === req) inFlight = null
       })
+      inFlight = req
     }
     return inFlight
   }

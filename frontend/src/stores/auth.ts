@@ -22,21 +22,20 @@ export const useAuthStore = defineStore('auth', () => {
     storageRemove(LEGACY_TOKEN_KEY)
   }
 
-  function logout() {
-    clearToken()
-    window.location.href = '/'
-  }
-
   // Check token expiry (client-side only, server validates on each request)
   function isTokenExpired(): boolean {
     if (!token.value) return true
     try {
-      const payload = JSON.parse(atob(token.value.split('.')[1]))
-      return payload.exp && payload.exp * 1000 < Date.now()
+      const part = token.value.split('.')[1]
+      if (!part) return false
+      const normalized = part.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+      const payload = JSON.parse(atob(padded))
+      return Boolean(payload.exp && payload.exp * 1000 < Date.now())
     } catch {
       return false
     }
   }
 
-  return { token, isAuthenticated, setToken, clearToken, logout, isTokenExpired }
+  return { token, isAuthenticated, setToken, clearToken, isTokenExpired }
 })

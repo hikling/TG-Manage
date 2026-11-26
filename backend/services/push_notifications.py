@@ -86,6 +86,7 @@ def _safe_msg_truncate(text: str, parse_mode: Optional[str] = None) -> str:
     head = text[:_TG_MSG_LIMIT]
     stack: list[str] = []
     safe_pos = 0  # 最后一次标签栈为空（或自闭合）后的位置
+    truncated_tag_pos: Optional[int] = None
     i = 0
     while True:
         lt = head.find("<", i)
@@ -93,6 +94,7 @@ def _safe_msg_truncate(text: str, parse_mode: Optional[str] = None) -> str:
             break
         gt = head.find(">", lt)
         if gt == -1:
+            truncated_tag_pos = lt
             break  # 到头部末尾仍未见闭合，视为残缺，回退
         tag = head[lt : gt + 1]
         if tag.startswith("</"):
@@ -108,14 +110,17 @@ def _safe_msg_truncate(text: str, parse_mode: Optional[str] = None) -> str:
             stack.append(name)
         i = gt + 1
 
-    if not stack:
-        return head
-    if safe_pos == 0:
-        # 没有任何平衡点（头部即为残缺标签），退回纯截断并剥离残缺标签
-        import re as _re
+    import re as _re
 
-        return _re.sub(r"<[^>]*$", "", head)
-    return head[:safe_pos]
+    if not stack:
+        result = head[:truncated_tag_pos] if truncated_tag_pos is not None else head
+    elif safe_pos == 0:
+        # 没有任何平衡点（头部即为残缺标签），退回纯截断并剥离残缺标签
+        result = _re.sub(r"<[^>]*$", "", head)
+    else:
+        result = head[:safe_pos]
+    # 剥离截断边界处残缺的 HTML 字符实体（如 &am / &#12），避免 parse_mode=HTML 报错
+    return _re.sub(r"&(?:[A-Za-z0-9]+|#\d*|#x[0-9A-Fa-f]*)?$", "", result)
 
 
 def build_html_notification(
@@ -259,7 +264,7 @@ async def _http_post_retry_once(
                 raise
             last_exc = exc
             if attempt == 1:
-                logger.warning("%s 通知发送失败，准备重试: %s", channel, exc)
+                logger.warning("%s 通知发送失败，准备重试 (%s)", channel, type(exc).__name__)
                 await asyncio.sleep(1.0)
     assert last_exc is not None
     raise last_exc
@@ -474,25 +479,25 @@ async def dispatch_matrix_notification(
         try:
             await send_wecom_message(wecom_url, title, body_text)
         except Exception as exc:
-            logger.warning("企业微信通知发送失败: %s", exc)
+            logger.warning("企业微信通知发送失败 (%s)", type(exc).__name__)
 
     feishu_url = (settings.get("feishu_webhook_url") or "").strip()
     if feishu_url:
         try:
             await send_feishu_message(feishu_url, title, body_text)
         except Exception as exc:
-            logger.warning("飞书通知发送失败: %s", exc)
+            logger.warning("飞书通知发送失败 (%s)", type(exc).__name__)
 
     dingtalk_url = (settings.get("dingtalk_webhook_url") or "").strip()
     if dingtalk_url:
         try:
             await send_dingtalk_message(dingtalk_url, title, body_text)
         except Exception as exc:
-            logger.warning("钉钉通知发送失败: %s", exc)
+            logger.warning("钉钉通知发送失败 (%s)", type(exc).__name__)
 
     discord_url = (settings.get("discord_webhook_url") or "").strip()
     if discord_url:
         try:
             await send_discord_message(discord_url, title, body_text)
         except Exception as exc:
-            logger.warning("Discord 通知发送失败: %s", exc)
+            logger.warning("Discord 通知发送失败 (%s)", type(exc).__name__)

@@ -22,26 +22,7 @@ class LoginLogItem(BaseModel):
     user_agent: Optional[str] = None
     detail: Optional[str] = None
     success: bool
-    created_at: str
-
-
-class TaskHistoryLogItem(BaseModel):
-    id: int
-    account_name: str
-    task_name: str
-    message: str
-    summary: Optional[str] = None
-    bot_message: Optional[str] = None
-    success: bool
-    created_at: str
-    flow_line_count: int = 0
-    failure_category: Optional[str] = None
-
-
-class TaskHistoryLogDetailItem(TaskHistoryLogItem):
-    flow_logs: list[str] = []
-    flow_truncated: bool = False
-    last_target_message: Optional[str] = None
+    created_at: Optional[str] = None
 
 
 class ClearLogsResponse(BaseModel):

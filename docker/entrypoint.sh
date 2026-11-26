@@ -39,24 +39,30 @@ if [ "$(id -u)" -eq 0 ]; then
     # Repair ownership and write bits for existing historical files.
     # This avoids readonly sqlite and permission denied after image upgrades.
     for p in /data /data/.tg_manage /data/.signer /data/sessions /data/logs /data/plugins /data/db.sqlite /data/.tg_manage_data_dir /data/.tg_signpulse_data_dir; do
-      if [ -e "${p}" ]; then
+      if [ -e "${p}" ] && [ ! -L "${p}" ]; then
         chown -R "${TARGET_UID}:${TARGET_GID}" "${p}" 2>/dev/null || true
         chmod -R u+rwX "${p}" 2>/dev/null || true
       fi
     done
     # Per-account API credentials and the root encryption key stay private
     # even after the recursive compatibility permission repair above.
-    for p in /data/.app_secret_key /data/.admin_setup_token /data/.admin_bootstrap_password /data/sessions/accounts.json; do
-      if [ -f "${p}" ]; then
+    for p in /data/.app_secret_key /data/.admin_setup_token /data/.admin_bootstrap_password /data/db.sqlite /data/.tg_manage/.global_settings.json /data/.signer/.global_settings.json /data/sessions/accounts.json /data/xray/subscriptions.json /data/xray/routes.json; do
+      if [ -f "${p}" ] && [ ! -L "${p}" ]; then
         chown "${TARGET_UID}:${TARGET_GID}" "${p}" 2>/dev/null || true
         chmod 600 "${p}" 2>/dev/null || true
       fi
     done
     # Legacy Telegram sessions may have been created with mode 0644.
-    find /data/sessions -type d -exec chmod 700 {} +
-    find /data/sessions -type f -exec chmod 600 {} +
+    find /data/sessions -type d -exec chmod 700 {} + 2>/dev/null || true
+    find /data/sessions -type f -exec chmod 600 {} + 2>/dev/null || true
   fi
 
+  case "${TARGET_UID}:${TARGET_GID}" in
+    *[!0-9:]*|:|*:|*:)
+      echo "ERROR: invalid TARGET_UID/TARGET_GID: ${TARGET_UID}:${TARGET_GID}" >&2
+      exit 1
+      ;;
+  esac
   if [ "${TARGET_UID}" = "0" ] || [ "${TARGET_GID}" = "0" ]; then
     echo "ERROR: refusing to run the application as root" >&2
     exit 1

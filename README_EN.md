@@ -1,202 +1,148 @@
-<p align="center"><img src="docs/public/logo.svg" width="80" height="80" alt="TG Manage logo"></p>
-<h1 align="center">🚀 TG Manage</h1>
-<p align="center">A focused Telegram multi-account dashboard with an isolated TeleBox runtime.</p>
-<p align="center"><a href="README.md">简体中文</a> · <a href="README_EN.md"><strong>English</strong></a></p>
-<p align="center"><a href="#whats-new">🆕 v2.5.1</a> · <a href="#features">✨ Features</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#midnight-report">📨 Daily report</a> · <a href="#bot-web">🤖 Open Web</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
+<p align="right">
+  <a href="README.md">简体中文</a> | <strong>English</strong>
+</p>
 
+<h1 align="center">TG Manage</h1>
 
-> Based on [Silentely/TG-SignPulse](https://github.com/Silentely/TG-SignPulse) and integrating [TeleBoxOrg/TeleBox](https://github.com/TeleBoxOrg/TeleBox). The current project is [hikling/TG-Manage](https://github.com/hikling/TG-Manage); build from this repository because upstream images do not include these UI and TeleBox changes.
+<p align="center">
+  <em>Self-hosted Telegram Multi-Account Operations, Dedicated Xray Routing &amp; TeleBox Panel</em>
+</p>
+
+<p align="center"><a href="#whats-new">🆕 v2.6.0</a> · <a href="#features">✨ Features</a> · <a href="#quick-start">🚀 Quick start</a> · <a href="#midnight-report">📨 Daily report</a> · <a href="#bot-web">🤖 Open Web</a> · <a href="#guides">📚 Guides</a> · <a href="#reference">🧰 Reference</a></p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white" alt="Docker Compose">
+  <img src="https://img.shields.io/badge/Python-3.10--3.13-3776AB?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Vue-3%20%2B%20FastAPI-42B883?logo=vuedotjs&logoColor=white" alt="Vue 3 and FastAPI">
+  <img src="https://img.shields.io/badge/Release-v2.6.0-16a34a" alt="Release v2.6.0">
+  <img src="https://img.shields.io/badge/License-BSD--3--Clause-0f766e" alt="License">
+</p>
+
+---
+
+**TG Manage** is a lightweight self-hosted web panel built with FastAPI and Vue 3 for managing multiple Telegram accounts, dedicated Xray proxy routes, an on-demand Chat Center (with built-in 777000 verification inbox), per-account TeleBox runtimes, and encrypted login backups.
 
 <a id="whats-new"></a>
-## 🆕 What's new in v2.5.1
+## 🆕 What's new in v2.6.0
 
-- **🌙 Midnight subscription refresh:** Fetch the primary and fallback subscriptions at 00:00 in the panel time zone. Report usable nodes and a combined unusable/unsupported count for each source. Regular hourly refreshes and health checks continue.
-- **🔄 Abnormal account recovery:** Recheck an abnormal account. If a timeout or connection error persists, try an unassigned usable node with a different exit IP and check again. The report includes the action and final result.
-- **📨 One combined summary:** Account status and the preceding 24 hours of official messages appear above subscription node counts. Both headings are bold. A long summary may be split; official message details can still arrive separately.
-- **🤖 Private “打开WEB” menu:** The same notification bot sets a Web entry for the configured private target ID. Telegram-signed data authorizes only that user; other IDs cannot obtain dashboard access or use private code commands.
-- **🛠️ Reliable startup:** Fixed a restart loop caused by permission changes failing on some restricted data volumes.
+1. **Showcase Account Card UI & Customizable Cover Height**:
+   - **Card-first account layout**: Redesigned account cards with 20 cycling multi-stop gradient headers, larger centered avatars straddling the divider, account names above and remarks below the line, streamlined IP location & route source rows, and direct **Start/Stop TeleBox** and **Check Status** footer buttons (including inline 2FA prompt support).
+   - **Theme & Dashboard Cover Control**: Added customizable **dashboard cover height** slider (`120px–420px`) alongside custom accent presets, image upload/focal positioning, and light/dark contrast refinement.
+   - **Dedicated Sidebar Chat Center**: Consolidated Chat Center navigation in the sidebar with searchable account switching and instant 777000 official login-code extraction even when full chat is disabled.
+2. **Full-Repository Security Hardening & Logic Fixes**:
+   - **Auth, SSRF & Boundary Protection**: Blocked short-lived Telegram WebApp tokens from modifying admin password, username, or 2FA settings; added timing-safe bcrypt verification on unknown usernames; enforced bcrypt 72-byte UTF-8 password limits; blocked NAT64 / IPv4-mapped / internal host SSRF vectors in subscription node imports; disabled credentials with wildcard CORS; tightened TOTP replay window cleanup & rate-limiter expiration memory bounds; and guarded Docker entrypoint & TeleBox worker writes against symlink/partial-config hazards.
+   - **Concurrency & UI Reliability**: Added thread-safe locking around `accounts.json` mutations and fixed rename conflict ordering plus avatar/marker migration; corrected naive local timestamp handling in Chat Center; fixed multi-layer `Modal` Escape stack, `AddAccountModal` async session races, `useToast` pause/resume remaining-time calculation, and `encodeURIComponent` account paths.
+3. **Dead Code & Dependency Cleanup**:
+   - Removed legacy task schemas, unused Pydantic v2 compatibility shims, orphaned Vue components (`DatePicker`, `MultiSelect`, `SettingsFieldHint`), unused CSS rules/locale keys, and unused dependencies from [pyproject.toml](pyproject.toml).
 
-See the **[v2.5.1 release notes](docs/releases/v2.5.1.md)**. The [v2.5.0 guide](docs/releases/v2.5.0.md) covers route assignment, login migration, and manual-check scope.
+See the **[v2.6.0 release notes](docs/releases/v2.6.0.md)** and [CHANGELOG.md](CHANGELOG.md). Previous routing and daily-report behavior are covered in [v2.5.1](docs/releases/v2.5.1.md) and [v2.5.0](docs/releases/v2.5.0.md).
 
 <a id="features"></a>
-## ✨ Core features
+## ✨ Features
 
-<table>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>👥 Multi-account management</h3>
-      <p>Sign in by code, QR, or 2FA, and migrate main-account authorization with an encrypted <code>.tglogin</code> file.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🌐 Per-account Xray routes</h3>
-      <p>Each account gets an exclusive healthy node where possible, using primary, fallback, then direct routing.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🔄 Automatic failover</h3>
-      <p>Scheduled checks cover latency, connectivity, and exit IP; two abnormal results switch the route.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🩺 Scoped status checks</h3>
-      <p>Card checks cover one account; manual batch checks cover selected accounts and clean orphaned server data.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>📨 Daily midnight report</h3>
-      <p>At midnight, refresh both subscriptions and recheck abnormal accounts; send a combined account, official-message, and node report when Bot notifications are enabled.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>🤖 Private Bot and Web entry</h3>
-      <p>The target user can request codes with <code>/me</code> and <code>/code</code>, or open the dashboard from the private-chat menu.</p>
-    </td>
-  </tr>
-  <tr>
-    <td valign="top" width="50%">
-      <h3>🔌 Isolated TeleBox</h3>
-      <p>Each account has a separate session, directory, and process; TeleBox logout leaves the main authorization intact.</p>
-    </td>
-    <td valign="top" width="50%">
-      <h3>💬 Chat and panel tools</h3>
-      <p>Includes optional chat, themes and covers, TOTP, backup upgrades, and bounded caches and logs.</p>
-    </td>
-  </tr>
-</table>
+- **Showcase Account Cards & Encrypted Backups**: Phone/code and QR login, encrypted `.tglogin` export/import, cached avatars, active device inspection and termination.
+- **Exclusive Primary & Fallback Xray Routing**: Import primary and fallback subscriptions with one dedicated local SOCKS5 port per account; two failures switch to fallback, two healthy probes recover primary, and excess accounts fall back cleanly to direct routing.
+- **Per-Account TeleBox Isolation**: Dedicated process, working directory, encrypted session, and stdin/stdout JSON IPC control directly from each account card without SQLite session lock contention.
+- **Chat Center & 777000 Inbox**: Unified sidebar entry featuring account switching and a zero-config 777000 verification-code reader; optional full chat supports searching dialogs, sending/editing/deleting messages, and media transfers up to 20 MB.
+- **Midnight Combined Report & Private Bot Entry**: Daily `00:00` health refresh, automatic recovery probing, and one consolidated notification combining account/777000 status with Xray node metrics, plus `/me`, `/code`, and WebApp panel access.
+
 <a id="quick-start"></a>
-
-
 ## 🚀 Quick start
 
-Small deployments support a minimum of 1 vCPU / 1 GiB RAM, with no artificial upper limit. Scale according to account count and actual workload. Install Docker Engine, Docker Compose v2, and Git. Ensure the server can reach Telegram and download build dependencies, then run:
+Requires **Docker Engine 24+**, **Docker Compose v2**, **Git**, and network access to Telegram.
+
+### Option 1: Install script (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hikling/TG-Manage/main/scripts/install.sh -o install.sh
+bash install.sh
+```
+
+Read the first-run setup token from the data directory to set the initial admin password in the browser:
+
+```bash
+cat ./data/.admin_setup_token
+```
+
+### Option 2: Manual Docker Compose
 
 ```bash
 git clone https://github.com/hikling/TG-Manage.git
 cd TG-Manage
-bash scripts/install.sh
+APP_SECRET_KEY=$(openssl rand -hex 32)
+echo "APP_SECRET_KEY=${APP_SECRET_KEY}" > .env
+mkdir -p data/.tg_manage data/sessions data/logs data/plugins
+docker compose up -d --build
 ```
 
-The installer builds from this repository, starts the service, and prints a one-time setup token. Open `http://YOUR_SERVER_IP:8080`, enter the token, and choose an admin password of at least 12 characters. Configure an [HTTPS reverse proxy](docs/deploy/nginx.md) before exposing the service publicly.
+### Update & Backup
 
-> **⚠️ Upgrading an existing installation? Do not reinitialize or delete its data.** Run `bash scripts/update.sh` in the existing checkout. Keep the entire `data/` directory, including the hidden `data/.app_secret_key`, database, account sessions, and TeleBox data. See “Data, upgrades, and backups” below.
+To pull the latest `main` changes on your deployment host and rebuild:
 
-<a id="first-use"></a>
-## 🧭 First use
+```bash
+cd /root/TG-SignPulse-Private # or your deployment directory
+bash scripts/update.sh
+```
 
-1. **🔐 Set up the admin:** Enter the one-time setup token; existing installations keep their current login. Enable panel TOTP if possible.
-2. **🌐 Configure subscriptions:** In Settings, save an HTTPS primary subscription and optionally a fallback, then refresh. Account networking remains in setup-required mode until configured. Each healthy node serves one account; overflow accounts use direct access. See the [Xray deployment notes](docs/deploy/docker.md#机场订阅与-xray).
-3. **➕ Add an account:** Choose code or QR login in Account Management. An ordinary account may omit API ID/Hash; supply account-specific credentials when enabling TeleBox, and complete 2FA if prompted.
-4. **🗂️ Check as needed:** A card check reads that account's Telegram, TeleBox, and IP status; a manual batch check also cleans orphaned server data. At 00:00 the service refreshes subscriptions, checks every account and the previous 24 hours of official messages, then sends the combined summary if Bot notifications are enabled.
-5. **🤖 Configure the bot:** Set the Bot Token and target ID under Settings → Telegram bot notifications. For “打开WEB”, also set a Telegram-accessible HTTPS root URL. The target ID must be a positive private user ID.
-6. **💾 Migrate authorization if needed:** Account Management → Login Backup can export/import an encrypted <code>.tglogin</code> file for primary sessions. It excludes TeleBox and panel settings; stop the old server before using the same authorization elsewhere. See the [login-backup guide](docs/guide/account-login-backup.md) (Chinese).
-
-TeleBox manages its own commands and plugins. System plugins are bundled; community plugins are published in [TeleBox-Plugins](https://github.com/TeleBoxOrg/TeleBox-Plugins). See [TeleBox's README](telebox/README.md) for details.
+See [Docker upgrade guide](docs/deploy/docker.md), [Nginx example](docs/deploy/nginx.md), and [backup script](scripts/backup.sh).
 
 <a id="midnight-report"></a>
-## 📨 Combined midnight report
+## 📨 Midnight combined report
 
-At 00:00 in the **configured panel time zone**, the service refreshes subscriptions, checks accounts and attempts recovery, reads official messages, then sends a combined summary. Example layout (counts are illustrative):
-
-> **零点账户状态与官方消息日报**<br>
-> Total 2 · Healthy 1 · Abnormal 1<br>
-> 🟢 @account_a — healthy · primary · no new official messages<br>
-> 🔴 @account_b — abnormal · fallback · new official messages · still abnormal after switching
->
-> **零点机场订阅节点报告**<br>
-> Primary (refreshed): usable 8 · unusable/unsupported 2<br>
-> Fallback (refreshed): usable 3 · unusable/unsupported 1
-
-The summary is sent only when Bot notifications are enabled. Refresh and check failures are called out, including retained-node status. Telegram's message limit may split the summary; official message details are sent separately where applicable.
+When a private Telegram Bot is configured, the scheduler triggers every day at `00:00` (panel timezone) to refresh subscriptions, re-probe failed accounts, attempt healthy fallback node rotation when appropriate, and send one consolidated summary message containing account/official-message status followed by Xray node health metrics.
 
 <a id="bot-web"></a>
-## 🤖 Bot “打开WEB” entry
+## 🤖 Open Web from your private Bot
 
-This uses the **same notification bot**, independently of TeleBox plugins. In bot notification settings, save the Bot Token, a **positive private target user ID**, and the dashboard's **HTTPS root URL** (for example, <code>https://example.com</code>). The private chat receives the menu entry, and Settings shows the synchronization result. This entry does not depend on the notification delivery switch.
+With a `Bot Token` and single numeric target user ID configured in **Settings → Telegram Bot Notifications**:
 
-When the target user opens it inside Telegram, the backend verifies Telegram's signature and exact target ID before signing them in. Other IDs receive no Web authorization; visiting a public dashboard URL still requires normal administrator login. When private code retrieval is enabled, only the configured target can use <code>/me</code> and <code>/code</code>. Changing the Bot Token, target ID, or Web URL invalidates previous entry authorization.
+1. The bot registers an **Open Web** menu button pointing to your HTTPS public panel URL.
+2. Telegram `initData` HMAC-SHA256 signatures are verified server-side and restricted strictly to the configured target user ID.
+3. Short-lived WebApp tokens can operate routine monitoring and views while remaining blocked from changing admin credentials or 2FA secrets.
+
+See [Device & WebApp reference](docs/reference/device-management.md) for deployment details.
 
 <a id="guides"></a>
 ## 📚 Guides
 
-- **🆕 [v2.5.1 release notes](docs/releases/v2.5.1.md)** — Combined report, Bot Web entry, and upgrade checks (Chinese).
-- **📦 [Docker deployment and upgrades](docs/deploy/docker.md)** — Installation, backups, rollback, and build troubleshooting.
-- **🧭 [Quick-start guide](docs/guide/quick-start.md)** — Initial setup and account onboarding.
-- **📖 [v2.5.0 release guide](docs/releases/v2.5.0.md)** — Route assignment, timing, migration, and verification limits (Chinese).
-- **⚙️ [Configuration reference](docs/reference/configuration.md)** — Environment variables and data paths.
-- **🛠️ [Local development](docs/reference/development.md)** — Source setup and development commands.
+- **[v2.6.0 release notes](docs/releases/v2.6.0.md)** — UI cards redesign, security hardening, and dead code cleanup.
+- **[v2.5.1 release notes](docs/releases/v2.5.1.md)** — Midnight combined report, Bot Web entry, and version checks (Chinese).
+- **[v2.5.0 release guide](docs/releases/v2.5.0.md)** — Subscription routing, timing rules, and login migration (Chinese).
+- **[Quick start](docs/guide/quick-start.md)** · **[Accounts & TeleBox](docs/guide/accounts.md)** · **[Login backup](docs/guide/account-login-backup.md)**
+- **[Ops reference](docs/reference/ops.md)** · **[Configuration](docs/reference/configuration.md)** · **[Features](docs/features.md)** · **[FAQ](docs/faq.md)**
 
 <a id="reference"></a>
-## 🧰 Reference
+## 🧰 Technical reference
 
-Expand a section only when you need its details.
-
-<a id="environment"></a>
-<details>
-<summary><strong>⚙️ Environment variables</strong></summary>
-
-| Variable | Purpose |
-| --- | --- |
-| `TG_MANAGE_TG_API_ID/HASH` | Optional private server credentials for ordinary accounts; use account-specific credentials for TeleBox. |
-| `SIGNPULSE_TG_API_ID/HASH`, `TG_API_ID/HASH` | Legacy aliases still read during upgrades. |
-| `APP_SECRET_KEY` | Authentication and credential encryption key; persisted in `data/.app_secret_key` and essential to backups. |
-| `APP_DATA_DIR` | Database, sessions, logs, and TeleBox data directory; Compose uses `/data`. |
-| `APP_DATABASE_URL` | Override the default SQLite connection. |
-| `TG_GLOBAL_CONCURRENCY` | Limit for concurrent Telegram operations, not the total number of signed-in accounts. |
-| `TELEBOX_NODE` | Select the Node 24 executable for local TeleBox development. |
-
-See [`backend/core/config.py`](backend/core/config.py) and the [configuration reference](docs/reference/configuration.md) for all options. Never commit secrets, sessions, bot tokens, or backups.
-
-</details>
-
-<a id="data-upgrade-backup"></a>
-<details>
-<summary><strong>💾 Data, upgrades, and backups</strong></summary>
-
-Compose bind-mounts host `./data` to container `/data`. This includes the database, account sessions, settings, logs, per-account TeleBox directories, dashboard cover, and `data/.app_secret_key`. Older installations may store the cover in `data/.signer/appearance/`. **Preserve the entire directory, including hidden files.** Without the original secret, encrypted account credentials and bot tokens cannot be decrypted.
-
-From the existing checkout, run:
+- **Backend**: Python 3.10–3.13 · FastAPI · SQLAlchemy · APScheduler · Kurigram · Xray-core
+- **Frontend**: Vue 3 · TypeScript · Pinia · Vite · Tailwind CSS · Vue I18n (`zh-CN` / `en-US`)
+- **Verification**:
 
 ```bash
-bash scripts/update.sh
+# Backend test suite (Python 3.10 / 3.11)
+pytest tests -q
+
+# Frontend typecheck, unit tests & production build
+cd frontend && npm run typecheck && npm run test && npm run build
 ```
 
-The script uses `scripts/backup.sh` to archive the full data directory under `backups/`, runs `git pull --ff-only`, then rebuilds and starts the service. It does not remove older backups. If you changed the data directory, verify that `APP_DATA_DIR` and the Compose mount point to the same location first. Back up external PostgreSQL databases separately. See the [Docker guide](docs/deploy/docker.md#无损升级与回退) for manual steps and rollback.
-
-To restore, stop the service, restore the full data directory, then restart and check accounts, sessions, and settings. Backups contain sensitive credentials; never publish them. TeleBox core code can be updated while user plugins, configuration, and separate sessions remain in place.
-
-</details>
-
-<a id="verification-limitations"></a>
 <details>
-<summary><strong>🧪 Verification and known limitations</strong></summary>
-
-Local checks:
-
-```bash
-python3 -m ruff check backend tg_manage tests
-python3 -m pytest -q
-cd frontend && npm run typecheck && npm test && npm run build
-cd ../telebox && npx tsc --noEmit
-```
-
-Real-account code and QR login, independent TeleBox authorization, Bot API access, remote plugin installation, and a complete Docker build still need verification in your deployment environment. Former scheduler and monitor data may remain on disk, but the removed actions no longer run. Allow for the additional process and session overhead of each active TeleBox account.
-
-</details>
-
-<a id="project-development"></a>
-<details>
-<summary><strong>🗂️ Project structure and development</strong></summary>
+<summary>📂 Repository layout</summary>
 
 ```text
 TG-Manage/
-├── backend/       FastAPI routes and account/message services
-├── frontend/      Vue 3 management UI
-├── tg_manage/     Telegram client and session utilities
-├── telebox/       Upstream TeleBox source and integration adapter
-├── docs/          User, deployment, and operations guides
-└── tests/         Backend tests
+├── backend/              # FastAPI routes, auth/rate limiting, Xray routing, TeleBox supervisor, scheduler
+├── tg_manage/            # Shared Pyrogram client pool, encryption, and log redaction utilities
+├── frontend/             # Vue 3 + Vite + TypeScript web panel & Vitest suite
+├── telebox/              # Isolated TeleBox TypeScript worker runtime adapter
+├── docker/               # Container entrypoint & Nginx reverse-proxy example
+├── scripts/              # install.sh / update.sh / backup.sh
+├── docs/                 # VitePress documentation & release notes
+└── tests/                # pytest backend test suite
 ```
 
-Source development needs Python 3.10–3.13, Node 22.23.1 for the frontend, and Node 24 for TeleBox. See [`Dockerfile`](Dockerfile) for native module dependencies. Local AI workflows, skills, and task notes are not published with the source. TeleBox keeps its upstream [LGPL-2.1-only license](telebox/LICENSE); the rest of this project uses the root [`LICENSE`](LICENSE).
-
 </details>
+
+## 📄 License
+
+Released under the [BSD-3-Clause](LICENSE) License.

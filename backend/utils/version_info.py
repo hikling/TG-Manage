@@ -384,7 +384,7 @@ def _fetch_json_release(url: str) -> Dict[str, Any]:
         raise ValueError("release payload is not an object")
     source = (
         "github_releases"
-        if "api.github.com" in safe_url
+        if urlparse(safe_url).hostname == "api.github.com"
         else "custom_release_json"
     )
     return _payload_from_release_json(data, source=source)

@@ -21,7 +21,10 @@ def _error(exc: ValueError) -> HTTPException:
 
 @router.get("")
 def overview():
-    return get_telebox_service().overview()
+    try:
+        return get_telebox_service().overview()
+    except ValueError as exc:
+        raise _error(exc) from None
 
 
 @router.get("/{account}")

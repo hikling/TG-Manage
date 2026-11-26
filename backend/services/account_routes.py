@@ -465,7 +465,7 @@ class AccountRouteService:
     def _best_node(
         self, account: str, *, exclude: str | None = None, source: str | None = None,
         occupied_keys: set[str] | None = None, used_ips: set[str] | None = None,
-        node_ips: dict[str, str] | None = None,
+        node_ips: dict[str, str] | None = None, min_good_streak: int = 0,
     ) -> ImportedNode | None:
         if node_ips is None:
             node_ips = self._node_exit_ips()
@@ -481,6 +481,7 @@ class AccountRouteService:
             key = self._key(node)
             if (key == exclude or key in occupied_keys or (source and node.source != source)
                     or not self._probe_usable(key) or self._geo_quarantined(key)
+                    or self._state["health"].get(key, {}).get("good_streak", 0) < min_good_streak
                     or node_ips.get(key) in used_ips):
                 continue
             eligible.append(node)
@@ -541,20 +542,23 @@ class AccountRouteService:
             health = self._state["health"].get(current_key, {}) if current_key else {}
             node = sticky.get(account)
             if node and node.source == "fallback":
-                primary = self._best_node(account, source="primary", occupied_keys=occupied_keys, used_ips=used_ips, node_ips=node_ips)
-                if primary and self._state["health"][self._key(primary)].get("good_streak", 0) >= 2:
+                primary = self._best_node(
+                    account, source="primary", occupied_keys=occupied_keys,
+                    used_ips=used_ips, node_ips=node_ips, min_good_streak=2,
+                )
+                if primary:
                     occupied_keys.remove(current_key)
                     old_ip = node_ips.get(current_key)
                     if old_ip:
                         used_ips.remove(old_ip)
                     node = primary
             if node is None:
+                recovering_direct = bool(current and current.get("mode") == "direct")
                 node = self._best_node(
                     account, exclude=current_key if health.get("bad_streak", 0) >= 2 else None,
                     occupied_keys=occupied_keys, used_ips=used_ips, node_ips=node_ips,
+                    min_good_streak=2 if recovering_direct else 0,
                 )
-                if node and current and current.get("mode") == "direct" and self._state["health"][self._key(node)].get("good_streak", 0) < 2:
-                    node = None
             if node:
                 key = self._key(node)
                 occupied_keys.add(key)
@@ -673,6 +677,12 @@ class AccountRouteService:
             raise RouteSetupRequired()
         key = entry.get("key")
         port = self.runtime.port_for(key, entry.get("runtime_generation")) if key else None
+        if port is None and key:
+            active_port = self.runtime.port_for(key)
+            if active_port is not None and self.runtime.active is not None:
+                entry["runtime_generation"] = self.runtime.active.number
+                self._save_state()
+                port = active_port
         if port is None:
             if key:
                 self._assign(account_name, None)

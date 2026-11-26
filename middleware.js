@@ -18,10 +18,14 @@ function getSiteOrigin(request) {
     if (url.origin && !url.origin.includes("localhost") && !url.origin.includes("127.0.0.1")) {
       return url.origin;
     }
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
-    const proto = request.headers.get("x-forwarded-proto") || "https";
-    if (host && !host.includes("localhost") && !host.includes("127.0.0.1")) {
-      return `${proto}://${host}`;
+    const rawHost = (request.headers.get("x-forwarded-host") || request.headers.get("host") || "").split(",")[0].trim();
+    const rawProto = (request.headers.get("x-forwarded-proto") || "https").split(",")[0].trim().toLowerCase();
+    const proto = rawProto === "http" || rawProto === "https" ? rawProto : "https";
+    if (rawHost && !rawHost.includes("localhost") && !rawHost.includes("127.0.0.1")) {
+      const parsed = new URL(`${proto}://${rawHost}`);
+      if (parsed.origin && parsed.host === rawHost) {
+        return parsed.origin;
+      }
     }
   } catch {
     // ignore

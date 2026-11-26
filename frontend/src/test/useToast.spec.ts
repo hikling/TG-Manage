@@ -248,4 +248,27 @@ describe('useToast', () => {
     clear()
     i18n.global.locale.value = previous
   })
+
+  it('resume 后二次 pause 使用恢复后的剩余时间而非初始过期时刻', () => {
+    const { toasts, info, pause, resume, clear } = useToast()
+    info('pause-resume-pause', { duration: 4000 })
+    const id = toasts.value[0].id
+    // 运行 1000ms 后第一次暂停：剩余 3000ms
+    vi.advanceTimersByTime(1000)
+    pause(id)
+    // 暂停持续 3500ms（已超过最初 4000ms 时刻），恢复后再等 1000ms 二次暂停应仍剩余 ~2000ms
+    vi.advanceTimersByTime(3500)
+    resume(id)
+    expect(toasts.value).toHaveLength(1)
+    vi.advanceTimersByTime(1000)
+    pause(id)
+    vi.advanceTimersByTime(5000)
+    expect(toasts.value).toHaveLength(1)
+    resume(id)
+    vi.advanceTimersByTime(1999)
+    expect(toasts.value).toHaveLength(1)
+    vi.advanceTimersByTime(2)
+    expect(toasts.value).toHaveLength(0)
+    clear()
+  })
 })

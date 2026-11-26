@@ -66,7 +66,7 @@ class GlobalSettingsResponse(BaseModel):
     telegram_bot_message_thread_id: Optional[int] = None
     telegram_bot_web_url: Optional[str] = None
     timezone: str = "Asia/Hong_Kong"
-    appearance_accent_color: str = "#3d6fa8"
+    appearance_accent_color: str = "#3367a6"
     hero_position_x: float = 50.0
     hero_position_y: float = 50.0
     hero_height: int = 360
@@ -183,18 +183,14 @@ async def save_global_settings(
 
             # A failed Telegram API call must not make the saved configuration appear unsaved.
             menu_synced = await sync_menu_button(get_config_service().get_global_settings(), previous)
-        # 时区变更时同步调度器（后台执行，不阻塞响应）
+        # 时区变更时同步调度器
         if "timezone" in settings:
-            import asyncio
-
             from backend.scheduler import sync_jobs
 
-            async def _safe_tz_sync():
-                try:
-                    await sync_jobs()
-                except Exception as e:
-                    logger.warning("设置变更调度同步失败: %s", e)
-            asyncio.ensure_future(_safe_tz_sync())
+            try:
+                await sync_jobs()
+            except Exception as e:
+                logger.warning("设置变更调度同步失败: %s", e)
         return GlobalSettingsSaveResponse(
             success=True, message="Global settings saved", telegram_web_menu_synced=menu_synced,
         )

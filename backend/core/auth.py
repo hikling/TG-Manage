@@ -4,8 +4,9 @@ import hashlib
 import logging
 import os
 import threading
+import time
 from datetime import timedelta
-from typing import Optional
+from typing import Any, Optional
 
 import jwt
 import pyotp
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.config import get_settings
 from backend.core.database import get_db
-from backend.core.security import verify_password
+from backend.core.security import hash_password, verify_password
 from backend.models.user import User
 from backend.utils.time import utc_now
 
@@ -30,11 +31,21 @@ logger = logging.getLogger("backend.auth")
 _used_totp_codes: dict[str, float] = {}
 _totp_lock = threading.Lock()
 _TOTP_CODE_REUSE_WINDOW = 120  # 2 分钟（覆盖当前 + 上一个窗口）
+_dummy_hash_lock = threading.Lock()
+_dummy_password_hash: Optional[str] = None
+
+
+def _get_dummy_password_hash() -> str:
+    global _dummy_password_hash
+    if _dummy_password_hash is None:
+        with _dummy_hash_lock:
+            if _dummy_password_hash is None:
+                _dummy_password_hash = hash_password("tg-manage-dummy-timing-pad")
+    return _dummy_password_hash
 
 
 def _cleanup_used_totp_codes() -> None:
     """清理过期的已使用 code 记录（必须在 _totp_lock 内调用）"""
-    import time
     now = time.monotonic()
     expired = [
         k for k, v in _used_totp_codes.items()
@@ -74,18 +85,14 @@ def verify_totp(secret: str, code: str) -> bool:
             return False
 
         # 重放保护：使用 secret+code 的哈希作为 key（线程安全）
-        import hashlib
-        import time
         code_hash = hashlib.sha256(f"{secret}:{code}".encode()).hexdigest()[:16]
         now = time.monotonic()
         with _totp_lock:
+            # 先清理过期条目，避免同一 6 位验证码数小时后再次出现时被误判为重放
+            _cleanup_used_totp_codes()
             if code_hash in _used_totp_codes:
                 return False  # 该 code 已被使用过
             _used_totp_codes[code_hash] = now
-            # 清理与读写同锁：锁外遍历+pop 共享字典会与其他线程的插入并发，
-            # 偶发 RuntimeError 被兜底吞掉后合法 TOTP 被误拒；
-            # 字典极小（窗口期内每用户个位数），锁内清理成本可忽略
-            _cleanup_used_totp_codes()
         return True
     except (ValueError, TypeError, OSError) as exc:
         # pyotp/hashlib/系统调用相关异常视为验证失败，不向上抛出
@@ -109,13 +116,14 @@ def get_user_by_username(db: Session, username: str) -> Optional[User]:
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     user = get_user_by_username(db, username)
     if not user:
+        verify_password(password, _get_dummy_password_hash())
         return None
     if not verify_password(password, user.password_hash):
         return None
     return user
 
 
-def _resolve_user_from_token(token: str, db: Session) -> Optional[User]:
+def _resolve_user_and_payload(token: str, db: Session) -> Optional[tuple[User, dict[str, Any]]]:
     """解码 JWT 并按 sub 查询用户；解码失败或用户不存在时返回 None。
 
     解码失败统一返回 None（与调用方 401 语义一致），但按失败类型留
@@ -152,7 +160,12 @@ def _resolve_user_from_token(token: str, db: Session) -> Optional[User]:
             or payload.get("telegram_bot_fingerprint") != hashlib.sha256(bot_token.encode()).hexdigest()
         ):
             return None
-    return user
+    return user, payload
+
+
+def _resolve_user_from_token(token: str, db: Session) -> Optional[User]:
+    resolved = _resolve_user_and_payload(token, db)
+    return resolved[0] if resolved is not None else None
 
 
 def get_current_user(
@@ -169,22 +182,21 @@ def get_current_user(
     return user
 
 
-# OAuth2 scheme that doesn't auto-error on missing token
-oauth2_scheme_optional = OAuth2PasswordBearer(
-    tokenUrl="/api/auth/login", auto_error=False
-)
-
-
-def get_current_user_optional(
-    token: Optional[str] = Depends(oauth2_scheme_optional),
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    """获取当前用户，如果无法认证则返回 None（不抛出异常）"""
-    if not token:
-        return None
-    return verify_token(token, db)
-
-
-def verify_token(token: str, db: Session) -> Optional[User]:
-    """验证 Token 并返回用户对象"""
-    return _resolve_user_from_token(token, db)
+def require_standard_admin_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
+    """拒绝短时 Telegram WebApp 会话执行修改密码/用户名/2FA 等高敏账户操作。"""
+    resolved = _resolve_user_and_payload(token, db)
+    if resolved is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user, payload = resolved
+    if payload.get("auth_source") == "telegram_webapp":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="TELEGRAM_WEBAPP_ADMIN_ACTION_FORBIDDEN",
+        )
+    return user

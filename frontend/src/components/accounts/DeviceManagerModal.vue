@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { RefreshCw, ShieldCheck, Smartphone, Trash2 } from 'lucide-vue-next'
 import Modal from '../Modal.vue'
 import { listAccountDevices, terminateAccountDevice, type AccountDeviceInfo } from '../../lib/api'
@@ -7,6 +7,8 @@ import { getAuthToken } from '../../lib/api/core'
 import { useI18n } from '../../composables/useI18n'
 import { useConfirm } from '../../composables/useConfirm'
 import { formatDateTime } from '../../lib/datetime'
+import { useLatestResponseGuard } from '../../lib/latest-response'
+import { getLocalizedErrorMessage } from '../../lib/types'
 
 const props = defineProps<{
   isOpen: boolean
@@ -17,16 +19,17 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { confirm } = useConfirm()
 const devices = ref<AccountDeviceInfo[]>([])
 const loading = ref(false)
 const error = ref('')
 const terminatingHash = ref('')
+const devicesGuard = useLatestResponseGuard()
 
 const title = computed(() => `${t('accounts.devices')} · ${props.accountName || ''}`)
 
-const formatDate = (value?: string | null) => formatDateTime(value)
+const formatDate = (value?: string | null) => formatDateTime(value, locale.value === 'en' ? 'en-US' : 'zh-CN')
 
 const deviceTitle = (device: AccountDeviceInfo) => {
   return [device.device_model, device.platform].filter(Boolean).join(' · ') || t('accounts.unknownDevice')
@@ -41,50 +44,65 @@ const locationText = (device: AccountDeviceInfo) => {
 }
 
 const loadDevices = async () => {
-  if (!props.isOpen || !props.accountName) return
+  const targetAccount = props.accountName
+  if (!props.isOpen || !targetAccount) return
   const token = getAuthToken()
   if (!token) return
+  const seq = devicesGuard.next()
   loading.value = true
   error.value = ''
   try {
-    const res = await listAccountDevices(token, props.accountName)
+    const res = await listAccountDevices(token, targetAccount)
+    if (!devicesGuard.isCurrent(seq) || !props.isOpen || props.accountName !== targetAccount) return
     devices.value = res.devices || []
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : t('accounts.devicesLoadFailed')
+    if (!devicesGuard.isCurrent(seq) || !props.isOpen || props.accountName !== targetAccount) return
+    error.value = getLocalizedErrorMessage(e, t, t('accounts.devicesLoadFailed'))
   } finally {
-    loading.value = false
+    if (devicesGuard.isCurrent(seq)) loading.value = false
   }
 }
 
 const terminateDevice = async (device: AccountDeviceInfo) => {
   if (device.current) return
+  const targetAccount = props.accountName
   const ok = await confirm({
     title: t('accounts.terminateDevice'),
     message: t('accounts.terminateDeviceConfirm'),
     confirmText: t('accounts.terminateDevice'),
     danger: true,
   })
-  if (!ok) return
+  if (!ok || !props.isOpen || props.accountName !== targetAccount) return
   const token = getAuthToken()
   if (!token) return
   terminatingHash.value = device.hash
   error.value = ''
   try {
-    await terminateAccountDevice(token, props.accountName, device.hash)
+    await terminateAccountDevice(token, targetAccount, device.hash)
+    if (!props.isOpen || props.accountName !== targetAccount) return
     await loadDevices()
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : t('accounts.terminateDeviceFailed')
+    if (props.isOpen && props.accountName === targetAccount) {
+      error.value = getLocalizedErrorMessage(e, t, t('accounts.terminateDeviceFailed'))
+    }
   } finally {
     terminatingHash.value = ''
   }
 }
 
 watch(() => props.isOpen, (open) => {
-  if (open) loadDevices()
-  else {
+  if (open) {
+    void loadDevices()
+  } else {
+    devicesGuard.invalidate()
     devices.value = []
     error.value = ''
+    loading.value = false
   }
+})
+
+onUnmounted(() => {
+  devicesGuard.invalidate()
 })
 </script>
 
