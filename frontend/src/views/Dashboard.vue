@@ -236,8 +236,41 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
-    <section class="dashboard-hero" aria-hidden="true">
+    <section class="dashboard-hero" :class="{ 'dashboard-hero--custom': Boolean(heroImageUrl) }" aria-hidden="true">
       <HeroCover v-if="heroImageUrl" :src="heroImageUrl" :position-x="heroPositionX" :position-y="heroPositionY" />
+      <div v-else class="dashboard-hero-ambient">
+        <div class="dashboard-hero-orb dashboard-hero-orb--a" />
+        <div class="dashboard-hero-orb dashboard-hero-orb--b" />
+        <div class="dashboard-hero-grid" />
+        <svg class="dashboard-hero-pulse-line" viewBox="0 0 680 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="tg-hero-wave" x1="0" y1="60" x2="680" y2="60" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.1" />
+              <stop offset="22%" stop-color="#60a5fa" stop-opacity="0.9" />
+              <stop offset="52%" stop-color="#a78bfa" stop-opacity="1" />
+              <stop offset="78%" stop-color="#34d399" stop-opacity="0.85" />
+              <stop offset="100%" stop-color="#34d399" stop-opacity="0.05" />
+            </linearGradient>
+            <linearGradient id="tg-hero-area" x1="340" y1="24" x2="340" y2="120" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.22" />
+              <stop offset="100%" stop-color="#60a5fa" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0 70H120L148 28L174 96L200 44L220 70H340L364 36L386 86L408 52L426 70H540L562 48L582 78L600 70H680V120H0V70Z" fill="url(#tg-hero-area)" />
+          <path d="M0 70H120L148 28L174 96L200 44L220 70H340L364 36L386 86L408 52L426 70H540L562 48L582 78L600 70H680" stroke="url(#tg-hero-wave)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+          <circle cx="148" cy="28" r="4.5" fill="#93c5fd" />
+          <circle cx="148" cy="28" r="10" fill="#93c5fd" fill-opacity="0.22" />
+          <circle cx="364" cy="36" r="4.5" fill="#c4b5fd" />
+          <circle cx="364" cy="36" r="10" fill="#c4b5fd" fill-opacity="0.22" />
+          <circle cx="562" cy="48" r="4" fill="#6ee7b7" />
+          <circle cx="562" cy="48" r="9" fill="#6ee7b7" fill-opacity="0.22" />
+        </svg>
+        <div class="dashboard-hero-rings">
+          <span class="dashboard-hero-ring dashboard-hero-ring--1" />
+          <span class="dashboard-hero-ring dashboard-hero-ring--2" />
+          <span class="dashboard-hero-ring dashboard-hero-ring--3" />
+        </div>
+      </div>
     </section>
 
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
@@ -245,29 +278,29 @@ onUnmounted(() => {
 
     <section :aria-label="t('dashboard.overview')" class="dashboard-metrics">
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--accounts">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="19" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ store.accounts.length }}</span><span class="dashboard-metric-label">{{ t('dashboard.loggedAccounts') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.viewAccounts') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--telebox">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Activity :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ runningCount }}</span><span class="dashboard-metric-label">{{ t('dashboard.runningTelebox') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.manageAccounts') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--tasks">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><CheckCircle2 :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><CheckCircle2 :size="19" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ healthyCount }}</span><span class="dashboard-metric-label">{{ t('dashboard.healthyAccounts') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.viewStatus') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <div class="dashboard-metric dashboard-metric--memory" :aria-label="t('dashboard.memoryAriaLabel')">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><HardDrive :size="21" aria-hidden="true" /></span><span class="dashboard-live-badge">{{ t('dashboard.memoryLive') }}</span></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><HardDrive :size="19" aria-hidden="true" /></span><span class="dashboard-live-badge"><span class="ui-pulse-dot" aria-hidden="true" />{{ t('dashboard.memoryLive') }}</span></span>
         <span class="dashboard-metric-value dashboard-memory-value">{{ memoryRss || t('dashboard.memoryUnavailableValue') }}</span>
         <span class="dashboard-metric-label">{{ t('dashboard.memoryLabel') }}</span><span class="dashboard-metric-foot">{{ t(`dashboard.${memoryStatusKey}`) }}<span v-if="memoryUpdatedAt">  /  {{ memoryUpdatedAt }}</span></span>
       </div>
     </section>
 
     <section class="dashboard-activity panel-card" aria-labelledby="dashboard-attention-title">
-      <div class="dashboard-section-heading"><h3 id="dashboard-attention-title">{{ t('dashboard.attentionTitle') }}</h3><RouterLink to="/accounts" class="panel-button">{{ t('dashboard.viewAllAccounts') }} <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>
+      <div class="dashboard-section-heading"><h3 id="dashboard-attention-title">{{ t('dashboard.attentionTitle') }}</h3><RouterLink to="/accounts" class="panel-button">{{ t('dashboard.viewAllAccounts') }} <ArrowRight :size="15" aria-hidden="true" /></RouterLink></div>
       <div v-if="loading && !store.accounts.length" class="dashboard-activity-loading" role="status">{{ t('dashboard.attentionLoading') }}</div>
-      <div v-else-if="!attention.length" class="dashboard-activity-empty"><CheckCircle2 :size="26" aria-hidden="true" /><strong>{{ t('dashboard.attentionEmpty') }}</strong><span>{{ t('dashboard.attentionEmptyHint') }}</span></div>
-      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>
+      <div v-else-if="!attention.length" class="dashboard-activity-empty"><span class="dashboard-activity-empty-badge"><CheckCircle2 :size="22" aria-hidden="true" /></span><strong>{{ t('dashboard.attentionEmpty') }}</strong><span>{{ t('dashboard.attentionEmptyHint') }}</span></div>
+      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="18" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>
     </section>
   </div>
 </template>

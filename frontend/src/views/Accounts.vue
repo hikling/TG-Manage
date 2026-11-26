@@ -519,17 +519,18 @@ const openAddModal = (method: 'code' | 'qr') => {
     </div>
 
     <div v-else class="space-y-4 pb-20">
-      <div class="ui-card flex flex-col sm:flex-row sm:items-center gap-3 p-3">
-        <div class="text-xs text-gray-500 shrink-0">
-          {{ t('accounts.total') }}：<span class="font-mono text-gray-800 dark:text-gray-200">{{ filteredAccounts.length }}</span>
-          <span v-if="searchQuery.trim()" class="text-gray-400"> / {{ accounts.length }}</span>
+      <div class="accounts-toolbar flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="accounts-count-pill shrink-0">
+          <span>{{ t('accounts.total') }}</span>
+          <span class="font-mono font-bold text-[var(--tg-text)]">{{ filteredAccounts.length }}</span>
+          <span v-if="searchQuery.trim()" class="font-mono opacity-70">/ {{ accounts.length }}</span>
         </div>
         <div class="relative flex-1 min-w-0 max-w-md">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--tg-text-muted)] pointer-events-none" />
           <input
             v-model="searchQuery"
             type="search"
-            class="ui-input !pl-8 !h-9 !text-xs"
+            class="ui-input !pl-9 !min-h-[38px] !h-[38px] !text-xs"
             :class="searchQuery.trim() ? '!pr-8' : ''"
             :placeholder="t('common.searchPlaceholder')"
             :aria-label="t('common.search')"
@@ -537,7 +538,7 @@ const openAddModal = (method: 'code' | 'qr') => {
           <button
             v-if="searchQuery.trim()"
             type="button"
-            class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded-sm"
+            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--tg-text-muted)] hover:text-[var(--tg-text)] rounded-md"
             :title="t('common.clearFilters')"
             :aria-label="t('common.clearFilters')"
             @click="clearListFilters"
@@ -545,15 +546,15 @@ const openAddModal = (method: 'code' | 'qr') => {
             <X class="w-3.5 h-3.5" />
           </button>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1" @click="showLoginBackupModal = true">
+        <div class="flex flex-wrap items-center gap-2 shrink-0 sm:ml-auto">
+          <button type="button" class="ui-btn-secondary !px-3.5 !py-2 !text-xs inline-flex items-center gap-1.5" @click="showLoginBackupModal = true">
             <HardDriveDownload class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupTitle') }}
           </button>
           <div
             v-if="batchChecking && batchJob"
-            class="flex flex-col items-end gap-0.5 min-w-0 sm:min-w-[7rem]"
+            class="flex flex-col items-end gap-1 min-w-0 sm:min-w-[7.5rem]"
           >
-            <span class="text-[11px] font-mono text-sky-700 dark:text-sky-300 whitespace-nowrap">
+            <span class="text-[11px] font-mono text-[var(--tg-accent-text)] whitespace-nowrap">
               {{ t('accounts.batchCheckProgress', {
                 done: batchJob.progress?.done ?? 0,
                 total: batchJob.progress?.total ?? accounts.length,
@@ -566,7 +567,7 @@ const openAddModal = (method: 'code' | 'qr') => {
               </template>
             </span>
             <div
-              class="hidden sm:block w-full h-1 rounded-full bg-sky-100 dark:bg-sky-950/50 overflow-hidden"
+              class="hidden sm:block w-full h-1.5 rounded-full bg-[var(--tg-bg-muted)] overflow-hidden"
               role="progressbar"
               :aria-valuenow="batchProgressPct"
               aria-valuemin="0"
@@ -577,8 +578,8 @@ const openAddModal = (method: 'code' | 'qr') => {
               })"
             >
               <div
-                class="h-full bg-sky-500 transition-all duration-300"
-                :style="{ width: `${batchProgressPct}%` }"
+                class="h-full rounded-full transition-all duration-300"
+                :style="{ width: `${batchProgressPct}%`, backgroundColor: 'var(--tg-accent)' }"
                 aria-hidden="true"
               />
             </div>
@@ -586,7 +587,7 @@ const openAddModal = (method: 'code' | 'qr') => {
           <button
             v-if="batchChecking && batchJob?.job_id"
             type="button"
-            class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1"
+            class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1.5"
             @click="handleCancelBatchCheck"
           >
             <XCircle class="w-3.5 h-3.5" />
@@ -595,7 +596,7 @@ const openAddModal = (method: 'code' | 'qr') => {
           <button
             v-if="!batchChecking && lastFailedAccountNames.length > 0"
             type="button"
-            class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1"
+            class="ui-btn-secondary !px-3 !py-2 !text-xs inline-flex items-center gap-1.5"
             :title="t('accounts.batchRecheckFailedHint')"
             @click="handleRecheckFailed"
           >
@@ -605,7 +606,7 @@ const openAddModal = (method: 'code' | 'qr') => {
           </button>
           <button
             type="button"
-            class="ui-btn-primary !px-3 !py-2 !text-xs inline-flex items-center gap-1"
+            class="ui-btn-primary !px-3.5 !py-2 !text-xs inline-flex items-center gap-1.5"
             :disabled="batchChecking"
             :title="batchChecking ? t('accounts.batchChecking') : undefined"
             @click="handleBatchCheck"
@@ -664,13 +665,13 @@ const openAddModal = (method: 'code' | 'qr') => {
 
     <!-- FAB for Adding Account -->
     <div class="fixed ui-safe-fab z-40 flex flex-col items-end gap-2">
-      <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-2" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 translate-y-2">
-        <div v-if="showAddMenu" class="flex flex-col gap-1.5 mb-1">
-          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--tg-shadow-md)]" @click="openAddModal('qr')">
-            <QrCode class="w-4 h-4 text-gray-500" /> {{ t('accounts.qrLogin') }}
+      <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 translate-y-2 scale-95" enter-to-class="opacity-100 translate-y-0 scale-100" leave-active-class="transition duration-150 ease-in" leave-from-class="opacity-100 translate-y-0 scale-100" leave-to-class="opacity-0 translate-y-2 scale-95">
+        <div v-if="showAddMenu" class="flex flex-col gap-2 mb-1">
+          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-lg)]" @click="openAddModal('qr')">
+            <span class="w-7 h-7 rounded-lg grid place-items-center bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)]"><QrCode class="w-4 h-4" /></span> {{ t('accounts.qrLogin') }}
           </button>
-          <button type="button" class="ui-card ui-card-hover flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 shadow-[var(--tg-shadow-md)]" @click="openAddModal('code')">
-            <Phone class="w-4 h-4 text-gray-500" /> {{ t('accounts.codeLogin') }}
+          <button type="button" class="ui-card ui-card-hover !rounded-xl flex items-center gap-2.5 px-3.5 py-2.5 text-sm font-medium text-[var(--tg-text)] shadow-[var(--tg-shadow-lg)]" @click="openAddModal('code')">
+            <span class="w-7 h-7 rounded-lg grid place-items-center bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)]"><Phone class="w-4 h-4" /></span> {{ t('accounts.codeLogin') }}
           </button>
         </div>
       </transition>

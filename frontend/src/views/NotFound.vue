@@ -43,15 +43,15 @@ const openGithub = () => {
 </script>
 
 <template>
-  <main class="min-h-screen flex flex-col items-center justify-center font-sans px-4 py-10" role="main">
-    <div class="w-full max-w-sm ui-card shadow-[var(--tg-shadow-md)] px-8 py-10 text-center">
-      <div class="w-14 h-14 bg-gray-100 dark:bg-gray-800/80 mx-auto flex items-center justify-center text-gray-700 dark:text-gray-200 mb-6 rounded-full">
-        <FileQuestion class="w-7 h-7 stroke-[1.5]" />
+  <main class="login-shell min-h-screen flex flex-col items-center justify-center font-sans px-4 py-10" role="main">
+    <div class="w-full max-w-sm ui-card !rounded-3xl shadow-[var(--tg-shadow-lg)] px-8 py-10 text-center">
+      <div class="w-14 h-14 bg-[var(--tg-accent-soft)] border border-[var(--tg-accent-border)] mx-auto flex items-center justify-center text-[var(--tg-accent-text)] mb-6 rounded-2xl">
+        <FileQuestion class="w-7 h-7 stroke-[1.6]" />
       </div>
 
-      <div class="text-5xl font-mono font-bold text-gray-900 dark:text-gray-100 tracking-wider mb-2">404</div>
-      <h1 class="text-base font-medium text-gray-900 dark:text-gray-100 mb-2">{{ t('notFound.title') }}</h1>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">{{ t('notFound.desc') }}</p>
+      <div class="text-5xl font-mono font-extrabold tracking-tight text-[var(--tg-text)] mb-2">404</div>
+      <h1 class="text-base font-semibold text-[var(--tg-text)] mb-2">{{ t('notFound.title') }}</h1>
+      <p class="text-xs text-[var(--tg-text-muted)] mb-8 leading-relaxed">{{ t('notFound.desc') }}</p>
 
       <div class="space-y-2.5">
         <button
@@ -75,35 +75,37 @@ const openGithub = () => {
       </div>
 
       <!-- Footer icons -->
-      <div class="flex items-center justify-center gap-2 mt-7 pt-5 border-t border-gray-200 dark:border-gray-800/60">
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="t('common.github')"
-          :aria-label="t('common.github')"
-          @click="openGithub"
-        >
-          <Github class="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="locale === 'zh' ? t('language.switchToEn') : t('language.switchToZh')"
-          :aria-label="t('common.changeLanguage')"
-          @click="toggleLanguage"
-        >
-          <Globe class="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="isDark ? t('common.lightMode') : t('common.darkMode')"
-          :aria-label="isDark ? t('common.lightMode') : t('common.darkMode')"
-          @click="toggleTheme($event)"
-        >
-          <Moon v-if="!isDark" class="w-4 h-4" />
-          <Sun v-else class="w-4 h-4" />
-        </button>
+      <div class="flex items-center justify-center mt-7 pt-5 border-t border-[var(--tg-border)]">
+        <div class="header-utility-dock">
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="t('common.github')"
+            :aria-label="t('common.github')"
+            @click="openGithub"
+          >
+            <Github class="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="locale === 'zh' ? t('language.switchToEn') : t('language.switchToZh')"
+            :aria-label="t('common.changeLanguage')"
+            @click="toggleLanguage"
+          >
+            <Globe class="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="isDark ? t('common.lightMode') : t('common.darkMode')"
+            :aria-label="isDark ? t('common.lightMode') : t('common.darkMode')"
+            @click="toggleTheme($event)"
+          >
+            <Moon v-if="!isDark" class="w-4 h-4" />
+            <Sun v-else class="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   </main>

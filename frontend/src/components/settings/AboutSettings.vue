@@ -65,18 +65,18 @@ const memoryHealthText = computed(() => {
 </script>
 
 <template>
-  <section class="ui-card p-6">
-    <div class="mb-6 border-b border-gray-200 dark:border-gray-800/60 pb-3 flex items-start justify-between gap-3">
+  <section class="ui-card p-5 sm:p-6">
+    <div class="mb-5 border-b border-[var(--tg-border)] pb-4 flex items-center justify-between gap-3">
       <div class="flex items-start gap-3 min-w-0">
-        <span class="ui-section-icon" aria-hidden="true"><Info class="w-3.5 h-3.5" /></span>
+        <span class="ui-section-icon" aria-hidden="true"><Info class="w-4 h-4" /></span>
         <div class="min-w-0">
-          <h2 class="text-base font-medium text-gray-900 dark:text-gray-100">{{ t('settings.aboutTitle') }}</h2>
-          <p class="text-[10px] text-gray-500 mt-1">{{ t('settings.aboutDesc') }}</p>
+          <h2 class="text-base font-bold tracking-tight text-[var(--tg-text)]">{{ t('settings.aboutTitle') }}</h2>
+          <p class="text-xs text-[var(--tg-text-muted)] mt-0.5">{{ t('settings.aboutDesc') }}</p>
         </div>
       </div>
       <button
         type="button"
-        class="ui-btn-secondary shrink-0 !px-3 !py-1 !text-xs inline-flex items-center gap-1.5"
+        class="ui-btn-secondary shrink-0 !px-3.5 !py-1.5 !text-xs inline-flex items-center gap-1.5"
         :disabled="checkLoading || versionLoading || !appVersion"
         @click="emit('check-update')"
       >
@@ -88,112 +88,119 @@ const memoryHealthText = computed(() => {
     <div class="space-y-4">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- 版本与构建信息 (7项) -->
-        <div
-          v-if="appVersion"
-          class="p-3 border border-gray-200 dark:border-gray-800/60 bg-gray-50/50 dark:bg-white/[0.02] text-xs space-y-1.5 font-mono"
-        >
-          <div class="font-medium font-sans text-gray-700 dark:text-gray-300 mb-1">{{ t('settings.versionBuildTitle') }}</div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.appName') }}:</span>
-            <span class="ml-1 text-gray-900 dark:text-gray-100 font-medium">{{ appVersion.app_name || 'TG Manage' }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.currentVersion') }}:</span>
-            <span class="ml-1 text-gray-900 dark:text-gray-100 font-medium">v{{ appVersion.version }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.osPlatform') }}:</span>
-            <span class="ml-1">{{ appVersion.os_platform || t('settings.unknownValue') }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.gitSha') }}:</span>
-            <span class="ml-1">{{ shortSha(appVersion.git_sha) }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.gitBranch') }}:</span>
-            <span class="ml-1">{{ appVersion.git_branch || t('settings.unknownValue') }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.buildTime') }}:</span>
-            <span class="ml-1">{{ appVersion.build_time ? formatDateTime(appVersion.build_time) : t('settings.unknownValue') }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.pythonRuntime') }}:</span>
-            <span class="ml-1">{{ appVersion.python }}</span>
+        <div v-if="appVersion" class="about-telemetry-panel">
+          <div class="about-telemetry-head">{{ t('settings.versionBuildTitle') }}</div>
+          <div class="about-telemetry-rows">
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.appName') }}</span>
+              <span class="about-telemetry-val font-semibold">{{ appVersion.app_name || 'TG Manage' }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.currentVersion') }}</span>
+              <span class="about-telemetry-val font-mono px-2 py-0.5 rounded-md bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)] font-semibold">v{{ appVersion.version }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.osPlatform') }}</span>
+              <span class="about-telemetry-val font-mono">{{ appVersion.os_platform || t('settings.unknownValue') }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.gitSha') }}</span>
+              <span class="about-telemetry-val font-mono">{{ shortSha(appVersion.git_sha) }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.gitBranch') }}</span>
+              <span class="about-telemetry-val font-mono">{{ appVersion.git_branch || t('settings.unknownValue') }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.buildTime') }}</span>
+              <span class="about-telemetry-val font-mono">{{ appVersion.build_time ? formatDateTime(appVersion.build_time) : t('settings.unknownValue') }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.pythonRuntime') }}</span>
+              <span class="about-telemetry-val font-mono">{{ appVersion.python }}</span>
+            </div>
           </div>
         </div>
-        <p v-else-if="versionLoading" class="text-xs text-gray-500">{{ t('common.processing') }}</p>
+        <p v-else-if="versionLoading" class="text-xs text-[var(--tg-text-muted)]">{{ t('common.processing') }}</p>
 
         <!-- 运行状态 (7项) -->
-        <div v-if="runtimeStatus" class="p-3 border border-gray-200 dark:border-gray-800/60 bg-gray-50/50 dark:bg-white/[0.02] text-xs space-y-1.5">
-          <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('settings.runtimeStatus') }}</div>
-          <div class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5">
-            <span class="text-gray-500">{{ t('settings.serviceStatus') }}:</span>
-            <span class="inline-flex items-center gap-1 font-medium" :class="runtimeStatus.ready ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
-              <span class="w-1.5 h-1.5 rounded-full" :class="runtimeStatus.ready ? 'bg-emerald-500' : 'bg-amber-500'"></span>
-              {{ runtimeStatus.ready ? t('settings.serviceReady') : t('settings.serviceNotReady') }}
-            </span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.uptime') }}:</span>
-            <span class="ml-1 font-medium text-gray-800 dark:text-gray-200">{{ formatUptime(runtimeStatus.uptime_seconds) }}</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.schedulerRole') }}:</span>
-            <span class="ml-1 font-medium" :class="runtimeStatus.scheduler_lock_held ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400'">
-              {{ runtimeStatus.scheduler_lock_held ? t('settings.rolePrimary') : t('settings.roleReplica') }}
-            </span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.schedulerLock') }}:</span>
-            <span class="ml-1" :class="runtimeStatus.scheduler_lock_held ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
-              {{ runtimeStatus.scheduler_lock_held ? t('settings.lockHeld') : t('settings.lockNotHeld') }}
-            </span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.dbLabel') }}:</span>
-            <span class="ml-1">{{ runtimeStatus.database_is_sqlite ? t('settings.dbSqlite') : t('settings.dbExternal') }}</span>
-            <span v-if="runtimeStatus.monitor_shard"> · {{ t('settings.monitorShard', { shard: runtimeStatus.monitor_shard }) }}</span>
-            <span v-if="runtimeStatus.monitor_allowlist" class="text-[10px] text-gray-500"> ({{ runtimeStatus.monitor_allowlist }})</span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
-            <span class="text-gray-500">{{ t('settings.memoryRss') }}:</span>
-            <span class="ml-1 font-medium" :class="memoryStats?.stats?.in_alert ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-gray-700 dark:text-gray-300'">
-              {{ formatMemoryRss() }}
-            </span>
-            <span v-if="memoryStats?.stats?.threshold_mb" class="text-[10px] text-gray-400">
-              ({{ t('settings.memoryThreshold') }} {{ memoryStats.stats.threshold_mb }} MB)
-            </span>
-            <span v-if="memoryStats?.stats?.in_alert" class="px-1 py-0.2 rounded text-[10px] bg-rose-100 dark:bg-rose-950 text-rose-600 dark:text-rose-400">
-              {{ t('common.warning') }}
-            </span>
-          </div>
-          <div class="text-gray-600 dark:text-gray-400">
-            <span class="text-gray-500">{{ t('settings.memoryHealth') }}:</span>
-            <span class="ml-1" :class="memoryStats?.stats?.in_alert ? 'text-rose-600 dark:text-rose-400 font-medium' : 'text-emerald-600 dark:text-emerald-400'">
-              {{ memoryHealthText }}
-            </span>
+        <div v-if="runtimeStatus" class="about-telemetry-panel">
+          <div class="about-telemetry-head">{{ t('settings.runtimeStatus') }}</div>
+          <div class="about-telemetry-rows">
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.serviceStatus') }}</span>
+              <span class="about-telemetry-val">
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold" :class="runtimeStatus.ready ? 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/12 text-amber-700 dark:text-amber-300'">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="runtimeStatus.ready ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+                  {{ runtimeStatus.ready ? t('settings.serviceReady') : t('settings.serviceNotReady') }}
+                </span>
+              </span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.uptime') }}</span>
+              <span class="about-telemetry-val font-mono">{{ formatUptime(runtimeStatus.uptime_seconds) }}</span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.schedulerRole') }}</span>
+              <span class="about-telemetry-val font-medium" :class="runtimeStatus.scheduler_lock_held ? 'text-emerald-600 dark:text-emerald-400' : 'text-[var(--tg-accent-text)]'">
+                {{ runtimeStatus.scheduler_lock_held ? t('settings.rolePrimary') : t('settings.roleReplica') }}
+              </span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.schedulerLock') }}</span>
+              <span class="about-telemetry-val" :class="runtimeStatus.scheduler_lock_held ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'">
+                {{ runtimeStatus.scheduler_lock_held ? t('settings.lockHeld') : t('settings.lockNotHeld') }}
+              </span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.dbLabel') }}</span>
+              <span class="about-telemetry-val">
+                <span>{{ runtimeStatus.database_is_sqlite ? t('settings.dbSqlite') : t('settings.dbExternal') }}</span>
+                <span v-if="runtimeStatus.monitor_shard"> · {{ t('settings.monitorShard', { shard: runtimeStatus.monitor_shard }) }}</span>
+                <span v-if="runtimeStatus.monitor_allowlist" class="text-[11px] text-[var(--tg-text-muted)]"> ({{ runtimeStatus.monitor_allowlist }})</span>
+              </span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.memoryRss') }}</span>
+              <span class="about-telemetry-val flex items-center justify-end gap-1.5 flex-wrap">
+                <span class="font-mono font-semibold" :class="memoryStats?.stats?.in_alert ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--tg-text)]'">
+                  {{ formatMemoryRss() }}
+                </span>
+                <span v-if="memoryStats?.stats?.threshold_mb" class="text-[11px] text-[var(--tg-text-muted)] font-mono">
+                  ({{ t('settings.memoryThreshold') }} {{ memoryStats.stats.threshold_mb }} MB)
+                </span>
+                <span v-if="memoryStats?.stats?.in_alert" class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400">
+                  {{ t('common.warning') }}
+                </span>
+              </span>
+            </div>
+            <div class="about-telemetry-row">
+              <span class="about-telemetry-key">{{ t('settings.memoryHealth') }}</span>
+              <span class="about-telemetry-val" :class="memoryStats?.stats?.in_alert ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400 font-medium'">
+                {{ memoryHealthText }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       <div
         v-if="versionBanner"
-        class="text-xs rounded-md px-3 py-2 border"
+        class="text-xs rounded-xl px-4 py-3 border"
         :class="{
-          'border-sky-300/80 bg-sky-50 text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100': versionBanner.kind === 'update' || versionBanner.kind === 'info',
-          'border-emerald-300/80 bg-emerald-50 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100': versionBanner.kind === 'latest',
-          'border-amber-300/80 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100': versionBanner.kind === 'error',
+          'border-[var(--tg-accent-border)] bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)]': versionBanner.kind === 'update' || versionBanner.kind === 'info',
+          'border-emerald-300/60 bg-emerald-50/90 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/12 dark:text-emerald-200': versionBanner.kind === 'latest',
+          'border-amber-300/60 bg-amber-50/90 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/12 dark:text-amber-200': versionBanner.kind === 'error',
         }"
       >
-        <div class="font-medium">{{ versionBanner.text }}</div>
+        <div class="font-semibold">{{ versionBanner.text }}</div>
         <p v-if="versionBanner.kind === 'update'" class="mt-1 opacity-90">{{ t('settings.updateAvailableHint') }}</p>
         <a
           v-if="versionBanner.url"
           :href="versionBanner.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center gap-1 mt-1 font-medium underline hover:no-underline"
+          class="inline-flex items-center gap-1 mt-1.5 font-semibold underline hover:no-underline"
         >
           {{ t('settings.openRelease') }}
           <ExternalLink class="w-3 h-3" />

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { Search, RefreshCw, Send, Paperclip, ArrowLeft, Archive, CheckCheck, Pencil, Trash2, Reply, Download, ShieldCheck } from 'lucide-vue-next'
+import { Search, RefreshCw, Send, Paperclip, ArrowLeft, Archive, CheckCheck, Pencil, Trash2, Reply, Download, ShieldCheck, Copy } from 'lucide-vue-next'
 import { usePanelAccount, errorText } from '../composables/usePanelAccount'
 import { useConfirm } from '../composables/useConfirm'
+import { useToast } from '../composables/useToast'
+import { copyToClipboard } from '../lib/clipboard'
 import { listDialogs, listMessages, sendMessage, uploadMedia, downloadMedia, editMessage, deleteMessage, dialogAction, type Dialog, type Message } from '../lib/api/communications'
 import ChatAvatar from '../components/ChatAvatar.vue'
 import { chatAvatarCache } from '../lib/chat-avatar-cache'
@@ -11,8 +13,18 @@ import { listAccountOfficialMessages, type OfficialMessageInfo } from '../lib/ap
 import { getAuthToken } from '../lib/api/core'
 import { formatDateTime } from '../lib/datetime'
 import { useI18n } from '../composables/useI18n'
-const {store, account, error} = usePanelAccount(); const {confirm} = useConfirm()
+const {store, account, error} = usePanelAccount(); const {confirm} = useConfirm(); const toast = useToast()
 const { t, locale } = useI18n()
+function extractLoginCode(text?: string | null): string {
+  if (!text) return ''
+  const match = text.match(/(?:code[:\s]+|验证码[：:\s]*)(\d{5,6})\b/i) || text.match(/\b(\d{5,6})\b/)
+  return match?.[1] ?? ''
+}
+async function copyLoginCode(code: string) {
+  const ok = await copyToClipboard(code)
+  if (ok) toast.success(t('common.copied'))
+  else toast.error(t('common.copyFailed'))
+}
 watch(locale, () => { error.value = '' })
 const enabled = ref(false), settingsReady = ref(false)
 const settingsBusy = ref(false), officialLoading = ref(false)
@@ -128,18 +140,59 @@ function selectFile(event:Event){const input=event.target as HTMLInputElement;co
 <template>
   <div class="panel-stack">
     <header class="panel-card panel-row flex-wrap">
-      <div class="flex-1 min-w-48"><h2 class="panel-title">{{ t('chats.title') }}</h2><p class="panel-muted">{{ t('chats.description') }}</p></div>
-      <button type="button" class="panel-button" role="switch" :aria-label="t('chats.enabled')" :aria-checked="enabled" :disabled="!settingsReady || settingsBusy" @click="toggleChatCenter">{{ settingsBusy ? t('common.saving') : enabled ? t('chats.disable') : t('chats.enable') }}</button>
+      <div class="flex-1 min-w-48">
+        <h2 class="panel-title">{{ t('chats.title') }}</h2>
+        <p class="panel-muted mt-1">{{ t('chats.description') }}</p>
+      </div>
+      <button type="button" class="panel-button" role="switch" :aria-label="t('chats.enabled')" :aria-checked="enabled" :disabled="!settingsReady || settingsBusy" @click="toggleChatCenter">
+        <span class="w-2 h-2 rounded-full" :class="enabled ? 'bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129_/_0.2)]' : 'bg-[var(--tg-text-muted)] opacity-50'" aria-hidden="true" />
+        {{ settingsBusy ? t('common.saving') : enabled ? t('chats.disable') : t('chats.enable') }}
+      </button>
     </header>
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
     <div v-if="!settingsReady" class="panel-card panel-empty" role="status">{{ t('chats.checkingSettings') }}</div>
     <section v-else-if="!enabled" class="panel-card panel-stack" :aria-label="t('chats.officialMessages')">
-      <div class="panel-row flex-wrap"><div class="flex-1"><h3 class="panel-row"><ShieldCheck :size="20" /> {{ t('chats.officialMessages') }}</h3><p class="panel-muted">{{ t('chats.officialDescription') }}</p></div><button class="panel-button" :disabled="officialLoading || !account" @click="loadOfficialMessages"><RefreshCw :size="17" />{{ t('common.refresh') }}</button></div>
-      <label>{{ t('chats.chooseAccount') }}<select v-model="account" class="panel-input mt-2"><option value="" disabled>{{ t('chats.chooseAccount') }}</option><option v-for="a in store.accounts" :key="a.name" :value="a.name">{{a.name}}</option></select></label>
+      <div class="panel-row flex-wrap">
+        <div class="flex items-start gap-3 flex-1 min-w-48">
+          <span class="ui-section-icon mt-0.5" aria-hidden="true"><ShieldCheck :size="17" /></span>
+          <div class="min-w-0">
+            <h3>{{ t('chats.officialMessages') }}</h3>
+            <p class="panel-muted mt-0.5">{{ t('chats.officialDescription') }}</p>
+          </div>
+        </div>
+        <button class="panel-button" :disabled="officialLoading || !account" @click="loadOfficialMessages"><RefreshCw :size="15" :class="{ 'animate-spin': officialLoading }" />{{ t('common.refresh') }}</button>
+      </div>
+      <div class="max-w-sm">
+        <label class="ui-label">{{ t('chats.chooseAccount') }}
+          <select v-model="account" class="panel-input mt-1.5"><option value="" disabled>{{ t('chats.chooseAccount') }}</option><option v-for="a in store.accounts" :key="a.name" :value="a.name">{{a.name}}</option></select>
+        </label>
+      </div>
       <p v-if="!account" class="panel-empty">{{ t('chats.loginAccountFirst') }}</p>
       <p v-else-if="officialLoading" class="panel-empty" role="status">{{ t('chats.loadingOfficial') }}</p>
       <p v-else-if="!officialMessages.length" class="panel-empty">{{ t('chats.noOfficialMessages') }}</p>
-      <article v-for="message in officialMessages" :key="message.id ?? message.date ?? message.text" class="chat-official-message"><div class="min-w-0 flex-1"><div class="panel-row"><strong>Telegram · 777000</strong><time class="panel-muted">{{formatDateTime(message.date, locale === 'en' ? 'en-US' : 'zh-CN')}}</time></div><p class="whitespace-pre-wrap break-words mt-2">{{message.text || t('chats.emptyMessage')}}</p></div></article>
+      <div v-else class="space-y-3">
+        <article v-for="message in officialMessages" :key="message.id ?? message.date ?? message.text" class="chat-official-message">
+          <div class="min-w-0 flex-1">
+            <div class="panel-row justify-between">
+              <div class="flex items-center gap-2 min-w-0">
+                <strong class="text-sm font-semibold text-[var(--tg-text)]">Telegram · 777000</strong>
+                <button
+                  v-if="extractLoginCode(message.text)"
+                  type="button"
+                  class="chat-code-pill"
+                  :title="t('common.copy')"
+                  @click="copyLoginCode(extractLoginCode(message.text))"
+                >
+                  {{ extractLoginCode(message.text) }}
+                  <Copy :size="12" aria-hidden="true" />
+                </button>
+              </div>
+              <time class="panel-muted text-xs font-mono">{{formatDateTime(message.date, locale === 'en' ? 'en-US' : 'zh-CN')}}</time>
+            </div>
+            <p class="whitespace-pre-wrap break-words mt-2.5 text-sm leading-relaxed text-[var(--tg-text)]">{{message.text || t('chats.emptyMessage')}}</p>
+          </div>
+        </article>
+      </div>
     </section>
     <div v-else class="chat-frame">
       <aside class="chat-list" :class="{'mobile-hidden':selected}">

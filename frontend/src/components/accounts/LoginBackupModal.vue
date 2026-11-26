@@ -123,16 +123,16 @@ watch(() => props.isOpen, open => {
 <template>
   <Modal :isOpen="isOpen" :title="t('accounts.loginBackupTitle')" maxWidthClass="max-w-lg" @close="close">
     <div class="space-y-4">
-      <div class="flex gap-2" role="group" :aria-label="t('accounts.loginBackupTitle')">
-        <button type="button" class="ui-btn-secondary flex-1 justify-center !text-xs" :class="mode === 'export' ? '!border-sky-500 !text-sky-600 dark:!text-sky-300' : ''" :aria-pressed="mode === 'export'" :disabled="busy" @click="selectMode('export')">
-          <Download class="w-4 h-4" /> {{ t('accounts.loginBackupExport') }}
+      <div class="ui-segment" role="group" :aria-label="t('accounts.loginBackupTitle')">
+        <button type="button" class="ui-segment-btn !text-xs" :class="mode === 'export' ? 'ui-segment-btn-active' : ''" :aria-pressed="mode === 'export'" :disabled="busy" @click="selectMode('export')">
+          <Download class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupExport') }}
         </button>
-        <button type="button" class="ui-btn-secondary flex-1 justify-center !text-xs" :class="mode === 'import' ? '!border-sky-500 !text-sky-600 dark:!text-sky-300' : ''" :aria-pressed="mode === 'import'" :disabled="busy" @click="selectMode('import')">
-          <Upload class="w-4 h-4" /> {{ t('accounts.loginBackupImport') }}
+        <button type="button" class="ui-segment-btn !text-xs" :class="mode === 'import' ? 'ui-segment-btn-active' : ''" :aria-pressed="mode === 'import'" :disabled="busy" @click="selectMode('import')">
+          <Upload class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupImport') }}
         </button>
       </div>
 
-      <div class="flex gap-2.5 rounded-md bg-sky-50 dark:bg-sky-500/10 border border-sky-100 dark:border-sky-800/40 p-3 text-xs leading-relaxed text-sky-800 dark:text-sky-200">
+      <div class="flex gap-2.5 rounded-xl bg-[var(--tg-accent-soft)] border border-[var(--tg-accent-border)] p-3.5 text-xs leading-relaxed text-[var(--tg-accent-text)]">
         <ShieldCheck class="w-4 h-4 shrink-0 mt-0.5" />
         <p>{{ t('accounts.loginBackupScope') }}</p>
       </div>

@@ -436,9 +436,9 @@ onUnmounted(() => {
         {{ error }}
       </div>
 
-      <label class="flex items-center gap-3 rounded-xl border border-[var(--tg-border)] p-3 cursor-pointer">
-        <input v-model="enableTelebox" type="checkbox" class="h-4 w-4" :aria-label="t('addAccount.enableTelebox')">
-        <span><strong class="block text-sm">{{ t('addAccount.enableTelebox') }}</strong><small class="panel-muted">{{ t('addAccount.teleboxHint') }}</small></span>
+      <label class="flex items-start gap-3 rounded-xl border border-[var(--tg-border)] bg-[var(--tg-bg-elevated-2)] p-3.5 cursor-pointer hover:border-[var(--tg-border-strong)] transition-colors">
+        <input v-model="enableTelebox" type="checkbox" class="ui-checkbox mt-0.5" :aria-label="t('addAccount.enableTelebox')">
+        <span><strong class="block text-sm font-semibold text-[var(--tg-text)]">{{ t('addAccount.enableTelebox') }}</strong><small class="panel-muted text-xs leading-relaxed">{{ t('addAccount.teleboxHint') }}</small></span>
       </label>
       <!-- Common Fields -->
       <div v-if="enableTelebox" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -529,24 +529,24 @@ onUnmounted(() => {
 
       <!-- QR specific block -->
       <div v-if="loginMethod === 'qr'" class="ui-form-section mt-2">
-        <div class="flex justify-between items-center mb-4">
-          <span class="text-sm text-gray-700 dark:text-gray-300 font-medium">{{ t('addAccount.qrHint') }}</span>
+        <div class="flex justify-between items-center mb-3.5">
+          <span class="text-sm text-[var(--tg-text)] font-medium">{{ t('addAccount.qrHint') }}</span>
           <button 
             @click="handleGetQr"
             :disabled="loading"
-            class="px-3 py-1.5 text-xs bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-sm border border-gray-300 dark:border-gray-600 transition-colors disabled:opacity-50"
+            class="ui-btn-secondary !min-h-[32px] !px-3 !py-1 !text-xs"
           >
             {{ t('addAccount.getQr') }}
           </button>
         </div>
-        <div class="flex justify-center items-center h-48 w-full bg-white dark:bg-gray-900 rounded-md border border-gray-200 dark:border-gray-700">
-          <img v-if="qrImage" :src="qrImage" class="w-40 h-40" alt="" @error="handleQrImageError" />
+        <div class="flex justify-center items-center h-48 w-full bg-white dark:bg-[#0d111a] rounded-xl border border-[var(--tg-border)]">
+          <img v-if="qrImage" :src="qrImage" class="w-40 h-40 rounded-lg" alt="" @error="handleQrImageError" />
           <div v-else class="flex flex-col items-center gap-2">
-            <span class="text-sm text-gray-400">{{ qrLoadFailed ? t('addAccount.qrLoadFailed') : t('addAccount.qrArea') }}</span>
+            <span class="text-sm text-[var(--tg-text-muted)]">{{ qrLoadFailed ? t('addAccount.qrLoadFailed') : t('addAccount.qrArea') }}</span>
             <button
               v-if="qrLoadFailed"
               type="button"
-              class="text-xs text-sky-600 dark:text-sky-400 hover:underline"
+              class="text-xs font-semibold text-[var(--tg-accent-text)] hover:underline"
               :disabled="loading"
               @click="handleGetQr"
             >

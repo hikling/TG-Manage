@@ -1,7 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
   <title id="title">TG Manage</title>
-  <defs><linearGradient id="surface" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#24465f"/><stop offset="1" stop-color="#172636"/></linearGradient></defs>
-  <rect width="256" height="256" rx="58" fill="url(#surface)"/>
-  <path d="M65 65h126c17 0 30 13 30 30v61c0 17-13 30-30 30h-52l-30 25v-25H65c-17 0-30-13-30-30V95c0-17 13-30 30-30Z" fill="none" stroke="#f3f8fb" stroke-width="13" stroke-linejoin="round"/>
-  <path d="M66 128h36l17-28 19 54 17-27h35" fill="none" stroke="#7cc9ee" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="50%" stop-color="#131a2e"/>
+      <stop offset="100%" stop-color="#090d1a"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="55%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.04"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="60" fill="url(#bg)"/>
+  <rect x="4" y="4" width="248" height="248" rx="56" fill="none" stroke="url(#ring)" stroke-width="4"/>
+  <path d="M68 68h120c16 0 28 12 28 28v56c0 16-12 28-28 28h-48l-28 24v-24H68c-16 0-28-12-28-28V96c0-16 12-28 28-28Z" fill="rgba(255,255,255,0.05)" stroke="#f8fafc" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M68 125h34l16-28 18 52 16-24h36" fill="none" stroke="url(#pulse)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -16,14 +16,14 @@ const savedTheme = storageGet('theme')
 const prefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
 const initDark = savedTheme === 'dark' || (savedTheme === null && prefersDark)
 const isDark = ref(initDark)
-export const DEFAULT_ACCENT = '#3d6fa8'
+export const DEFAULT_ACCENT = '#2563eb'
 export const ACCENT_PRESETS = [
-  { nameKey: 'appearance.presetBlue', color: '#3d6fa8' },
-  { nameKey: 'appearance.presetTidal', color: '#247e83' },
-  { nameKey: 'appearance.presetViolet', color: '#a83d8f' },
-  { nameKey: 'appearance.presetMist', color: '#765ba7' },
-  { nameKey: 'appearance.presetCocoa', color: '#866044' },
-  { nameKey: 'appearance.presetSand', color: '#9b702e' },
+  { nameKey: 'appearance.presetBlue', color: '#2563eb' },
+  { nameKey: 'appearance.presetTidal', color: '#0d9488' },
+  { nameKey: 'appearance.presetViolet', color: '#9333ea' },
+  { nameKey: 'appearance.presetMist', color: '#6366f1' },
+  { nameKey: 'appearance.presetCocoa', color: '#b45309' },
+  { nameKey: 'appearance.presetSand', color: '#ca8a04' },
 ] as const
 const validHex = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value)
 const savedAccent = storageGet('tg-manage-accent-color')
@@ -40,7 +40,7 @@ const mixRgb = (color: number[], background: number[], amount: number) =>
 
 // 独立于普通强调色按钮：账号检测始终使用白字，背景按需压暗到 WCAG AA。
 export function whiteTextActionColor(color: string): string {
-  if (!validHex(color)) return '#315985'
+  if (!validHex(color)) return '#1d4ed8'
   const channels = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16))
   for (let step = 0; step <= 100; step += 1) {
     const candidate = channels.map(channel => Math.round(channel * (100 - step) / 100))
@@ -53,11 +53,24 @@ function applyAccent(color: string) {
   const channels = [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16))
   const luminance = luminanceOf(channels)
   const foreground = 1.05 / (luminance + 0.05) >= (luminance + 0.05) / 0.05 ? '#ffffff' : '#000000'
-  // 强调色文字会出现在普通卡片、15% 强调色底以及侧栏/默认封面的主题底上。
-  // 以其中对比度最差的底色计算，不能只拿纯白或固定深色作参照。
+  // 强调色文字会出现在普通卡片、浅色柔底以及侧栏/默认封面的主题底上。
+  // 以其中对比度最差的底色计算，兼顾浅色/暗色新旧表面，确保 WCAG AA 可读性。
   const surfaces = isDark.value
-    ? [[25, 40, 50], [30, 48, 58], mixRgb(channels, [25, 40, 50], 0.15), mixRgb(channels, [16, 27, 36], 0.14)]
-    : [[255, 255, 255], [249, 251, 251], mixRgb(channels, [255, 255, 255], 0.15), mixRgb(channels, [248, 250, 252], 0.09)]
+    ? [
+        [17, 20, 29],
+        [22, 26, 38],
+        [25, 40, 50],
+        [30, 48, 58],
+        mixRgb(channels, [17, 20, 29], 0.18),
+        mixRgb(channels, [25, 40, 50], 0.15),
+        mixRgb(channels, [16, 27, 36], 0.14),
+      ]
+    : [
+        [255, 255, 255],
+        [246, 247, 249],
+        mixRgb(channels, [255, 255, 255], 0.15),
+        mixRgb(channels, [248, 250, 252], 0.09),
+      ]
   const surfaceLuminance = isDark.value
     ? Math.max(...surfaces.map(luminanceOf))
     : Math.min(...surfaces.map(luminanceOf))
@@ -74,13 +87,16 @@ function applyAccent(color: string) {
   const root = document.documentElement.style
   root.setProperty('--tg-accent', color)
   root.setProperty('--tg-accent-text', textColor)
-  root.setProperty('--tg-accent-soft', `color-mix(in srgb, ${color} 15%, var(--tg-bg-elevated))`)
+  root.setProperty('--tg-accent-soft', `color-mix(in srgb, ${color} ${isDark.value ? '18%' : '11%'}, var(--tg-bg-elevated))`)
+  root.setProperty('--tg-accent-ring', `color-mix(in srgb, ${color} ${isDark.value ? '28%' : '20%'}, transparent)`)
+  root.setProperty('--tg-accent-glow', `color-mix(in srgb, ${color} ${isDark.value ? '36%' : '26%'}, transparent)`)
+  root.setProperty('--tg-accent-border', `color-mix(in srgb, ${color} ${isDark.value ? '38%' : '26%'}, var(--tg-border))`)
   root.setProperty('--tg-on-accent', foreground)
-  root.setProperty('--tg-accent-hover', `color-mix(in srgb, ${color} 85%, ${foreground === '#ffffff' ? '#000000' : '#ffffff'})`)
+  root.setProperty('--tg-accent-hover', `color-mix(in srgb, ${color} 86%, ${foreground === '#ffffff' ? '#000000' : '#ffffff'})`)
   const accountAction = whiteTextActionColor(color)
   const actionChannels = [1, 3, 5].map(index => parseInt(accountAction.slice(index, index + 2), 16))
   root.setProperty('--tg-account-action', accountAction)
-  root.setProperty('--tg-account-action-hover', toHex(actionChannels.map(channel => Math.round(channel * 0.85))))
+  root.setProperty('--tg-account-action-hover', toHex(actionChannels.map(channel => Math.round(channel * 0.86))))
 }
 
 if (initDark) {
@@ -126,14 +142,14 @@ export const useTheme = () => {
         `circle(0px at ${x}px ${y}px)`,
         `circle(${endRadius}px at ${x}px ${y}px)`
       ]
-      
+
       document.documentElement.animate(
         {
           clipPath: clipPath
         },
         {
-          duration: 500,
-          easing: 'ease-in-out',
+          duration: 450,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
           pseudoElement: '::view-transition-new(root)'
         }
       )

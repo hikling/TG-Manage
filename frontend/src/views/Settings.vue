@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Bot, Globe, Settings2 } from 'lucide-vue-next'
 import GeneralSettings from '../components/settings/GeneralSettings.vue'
 import BotNotifySettings from '../components/settings/BotNotifySettings.vue'
 import ProxySubscriptionsSettings from '../components/settings/ProxySubscriptionsSettings.vue'
@@ -51,18 +52,18 @@ const {
   <div class="max-w-7xl pb-10">
     <div
       v-if="isDirty && !pageLoading"
-      class="sticky top-[3.75rem] z-20 mb-4 flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs border border-amber-200 dark:border-amber-800/50 bg-amber-50/95 dark:bg-amber-950/90 backdrop-blur-xs text-amber-800 dark:text-amber-200 shadow-sm"
+      class="sticky top-[4.25rem] z-20 mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs rounded-xl border border-amber-300/60 dark:border-amber-700/50 bg-amber-50/95 dark:bg-amber-950/90 backdrop-blur-md text-amber-900 dark:text-amber-200 shadow-[var(--tg-shadow-md)]"
       role="status"
     >
       <div class="min-w-0">
-        <div>{{ t('settings.unsavedBanner') }}</div>
-        <div v-if="dirtyLabels.length" class="mt-0.5 text-[10px] opacity-90">
+        <div class="font-semibold">{{ t('settings.unsavedBanner') }}</div>
+        <div v-if="dirtyLabels.length" class="mt-0.5 text-[11px] opacity-85">
           {{ t('settings.dirtySections') }}: {{ dirtyLabels.join(' · ') }}
         </div>
       </div>
       <button
         type="button"
-        class="ui-btn-primary !px-3 !py-1.5 !text-xs shrink-0"
+        class="ui-btn-primary !px-3.5 !py-1.5 !text-xs shrink-0"
         :disabled="saveAllLoading || loading || botLoading || subscriptionLoading || subscriptionRefreshing"
         @click="saveAllSettings"
       >
@@ -86,7 +87,7 @@ const {
 
       <div class="settings-accordions">
         <details class="settings-accordion">
-          <summary>{{ t('settings.general') }} <span>{{ t('settings.generalSummary') }}</span></summary>
+          <summary><span class="ui-section-icon" aria-hidden="true"><Settings2 class="w-4 h-4" /></span>{{ t('settings.general') }} <span>{{ t('settings.generalSummary') }}</span></summary>
           <GeneralSettings
             v-model="settings"
             :timezone-options="timezoneOptions"
@@ -95,7 +96,7 @@ const {
           />
         </details>
         <details class="settings-accordion">
-          <summary>{{ t('settings.botNotify') }} <span>{{ t('settings.botNotifySummary') }}</span></summary>
+          <summary><span class="ui-section-icon" aria-hidden="true"><Bot class="w-4 h-4" /></span>{{ t('settings.botNotify') }} <span>{{ t('settings.botNotifySummary') }}</span></summary>
           <BotNotifySettings
             v-model="settings"
             :bot-token-set="botTokenSet"
@@ -109,7 +110,7 @@ const {
           />
         </details>
         <details class="settings-accordion">
-          <summary>{{ t('settings.subscriptions.title') }} <span>{{ t('settings.subscriptions.summary') }}</span></summary>
+          <summary><span class="ui-section-icon" aria-hidden="true"><Globe class="w-4 h-4" /></span>{{ t('settings.subscriptions.title') }} <span>{{ t('settings.subscriptions.summary') }}</span></summary>
           <ProxySubscriptionsSettings
             v-model="subscriptionDraft"
             :status="subscriptions"

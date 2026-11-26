@@ -354,7 +354,7 @@ const handleNavClick = () => {
 </script>
 
 <template>
-  <div class="panel-shell flex min-h-screen w-full overflow-x-hidden font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <div class="panel-shell flex min-h-screen w-full overflow-x-clip font-sans" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <!-- 移动端遮罩：点击关闭侧栏 -->
     <div
       v-if="isMobileMenuOpen"
@@ -369,10 +369,11 @@ const handleNavClick = () => {
       :aria-hidden="sidebarHidden ? 'true' : undefined"
       :inert="sidebarHidden || undefined"
     >
-      <div class="sidebar-brand flex items-center h-16 px-4 gap-2">
-        <img :src="'/favicon.svg'" alt="" class="ui-brand-logo w-7 h-7 shrink-0" />
+      <div class="sidebar-brand flex items-center h-16 px-4 gap-2.5">
+        <img :src="'/favicon.svg'" alt="" class="ui-brand-logo w-8 h-8 shrink-0" />
         <div class="sidebar-label min-w-0 flex-1">
           <div class="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-none">TG Manage</div>
+          <div class="sidebar-brand-sub truncate">{{ t('common.brandSubtitle') }}</div>
         </div>
         <button type="button" class="sidebar-collapse-toggle hidden lg:inline-flex" :aria-label="sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')" :title="sidebarCollapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')" :aria-expanded="!sidebarCollapsed" @click="toggleSidebar">
           <PanelLeftOpen v-if="sidebarCollapsed" class="w-4 h-4" /><PanelLeftClose v-else class="w-4 h-4" />
@@ -451,7 +452,7 @@ const handleNavClick = () => {
             <h1 class="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 tracking-wide truncate">{{ currentTitle }}</h1>
           </div>
         </div>
-        <div class="flex items-center gap-1 sm:gap-1.5">
+        <div class="header-utility-dock">
           <button
             type="button"
             class="ui-icon-btn"
