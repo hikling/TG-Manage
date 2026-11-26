@@ -1,8 +1,32 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Edit2, Trash2, Plus, QrCode, Phone, MonitorSmartphone, MessageCircle, MessagesSquare, CheckCircle2, Search, RefreshCw, XCircle, X, Users, MoreHorizontal, LogOut, Power, ShieldCheck, HardDriveDownload, Cpu, ChevronDown } from 'lucide-vue-next'
-import { accountAvatarTone } from '../lib/avatar-palette'
+import {
+  Edit2,
+  Trash2,
+  Plus,
+  QrCode,
+  Phone,
+  MonitorSmartphone,
+  MessageCircle,
+  MessagesSquare,
+  CheckCircle2,
+  Search,
+  RefreshCw,
+  XCircle,
+  X,
+  Users,
+  MoreHorizontal,
+  LogOut,
+  Power,
+  ShieldCheck,
+  HardDriveDownload,
+  ChevronDown,
+  LayoutList,
+  LayoutGrid,
+} from 'lucide-vue-next'
+import { accountAvatarToneClass } from '../lib/avatar-palette'
+import { storageGet, storageSet } from '../lib/safe-storage'
 import {
   deleteAccount,
   fetchAccountAvatar,
@@ -74,8 +98,17 @@ const showLoginBackupModal = ref(false)
 const officialMessagesAccountName = ref('')
 const searchQuery = ref('')
 const statusFilter = ref<'all' | 'active' | 'error' | 'telebox'>('all')
+const savedViewMode = storageGet('tg-manage-accounts-view')
+const viewMode = ref<'list' | 'grid'>(savedViewMode === 'grid' ? 'grid' : 'list')
 const loadError = ref(false)
 const openActionsName = ref<string | null>(null)
+
+const setViewMode = (mode: 'list' | 'grid') => {
+  viewMode.value = mode
+  storageSet('tg-manage-accounts-view', mode)
+  openActionsName.value = null
+}
+
 const onOutsideClick = () => {
   openActionsName.value = null
   showAddMenu.value = false
@@ -226,8 +259,6 @@ const loadSavedRouteStates = async () => {
   if (!token || disposed || document.hidden || routeStatesInFlight || pageLoading.value) return
   routeStatesInFlight = true
   try {
-    // This GET reads saved route metadata only; node and IP probes stay in
-    // their scheduler or explicit account-check paths.
     const latest = await accountsStore.refreshAccounts()
     if (disposed || token !== getAuthToken()) return
     const byName = new Map(latest.map(item => [item.name, item]))
@@ -247,7 +278,7 @@ const loadSavedRouteStates = async () => {
       account.raw.shared_node = route.shared_node
     }
   } catch {
-    // Leave the last saved card state visible until a later successful GET.
+    // Leave the last saved state visible until a later successful GET.
   } finally {
     routeStatesInFlight = false
   }
@@ -277,7 +308,6 @@ const loadAvatar = async (acc: AccountUiItem, cacheOnly = false) => {
     const current = accounts.value.find(item => item.name === acc.name)
     if (current) current.avatarUrl = url
   } catch {
-    // 头像下载失败/无头像：保留首字母占位，不影响列表
     if (cacheOnly && !disposed && avatarLoadGate.isCurrent(acc.name, version)) {
       avatarCacheMisses.add(acc.name)
     }
@@ -340,7 +370,6 @@ const observeVisibleAvatars = () => {
 
   const cards = document.querySelectorAll<HTMLElement>('[data-account-avatar-name]')
   if (typeof IntersectionObserver === 'undefined') {
-    // 旧浏览器降级：滚动时仅检查当前视口，不恢复整页并发抓取。
     scanFallbackVisibleAvatars()
     return
   }
@@ -357,7 +386,7 @@ const observeVisibleAvatars = () => {
   for (const card of cards) avatarObserver.observe(card)
 }
 
-watch(filteredAccounts, observeVisibleAvatars, { flush: 'post' })
+watch([filteredAccounts, viewMode], observeVisibleAvatars, { flush: 'post' })
 
 const invalidateAvatars = (names: string[]) => {
   for (const name of names) {
@@ -385,7 +414,6 @@ onMounted(async () => {
   void loadTeleBoxStates()
   statusTimer = setInterval(() => void loadTeleBoxStates(), 10000)
   routeStatusTimer = setInterval(() => void loadSavedRouteStates(), 30000)
-  // 刷新页面后恢复未完成的批量检测
   void resumeActiveBatchJob()
 })
 
@@ -406,7 +434,6 @@ onUnmounted(() => {
     window.clearTimeout(reloginTimer)
     reloginTimer = undefined
   }
-  // 离开页面时统一回收会话内头像 ObjectURL，避免 blob 泄漏
   avatarCache.release()
 })
 
@@ -481,32 +508,29 @@ const openAddModal = (method: 'code' | 'qr') => {
   showAddMenu.value = false
   showAddModal.value = true
 }
-
 </script>
 
 <template>
   <div class="relative min-h-[80vh]">
-    <!-- Page Loading skeleton -->
+    <!-- Page Loading Skeleton -->
     <div v-if="pageLoading" class="space-y-4" aria-busy="true">
-      <div class="ui-card p-3 flex justify-between">
-        <div class="ui-skeleton h-4 w-24" />
-        <div class="ui-skeleton h-8 w-28" />
+      <div class="flex justify-between items-center gap-3">
+        <div class="ui-skeleton h-9 w-64" />
+        <div class="ui-skeleton h-9 w-48" />
       </div>
-      <div class="account-grid">
-        <div v-for="i in 4" :key="i" class="ui-card p-5 space-y-4">
-          <div class="flex items-center gap-3">
-            <div class="ui-skeleton w-10 h-10 shrink-0" />
-            <div class="flex-1 space-y-2">
-              <div class="ui-skeleton h-3.5 w-24" />
-              <div class="ui-skeleton h-3 w-16" />
-            </div>
+      <div class="ui-card divide-y divide-[var(--tg-border)]">
+        <div v-for="i in 4" :key="i" class="p-4 flex items-center gap-4">
+          <div class="ui-skeleton w-10 h-10 rounded-full shrink-0" />
+          <div class="flex-1 space-y-2">
+            <div class="ui-skeleton h-3.5 w-32" />
+            <div class="ui-skeleton h-3 w-20" />
           </div>
-          <div class="ui-skeleton h-10 w-full" />
+          <div class="ui-skeleton h-8 w-28 hidden sm:block" />
         </div>
       </div>
     </div>
 
-    <!-- 加载失败（空列表时也要能重试，不能误显示 empty） -->
+    <!-- 加载失败 -->
     <div v-else-if="loadError" class="space-y-4">
       <PageRetry
         :message="t('accounts.loadFailed')"
@@ -523,168 +547,191 @@ const openAddModal = (method: 'code' | 'qr') => {
       <p class="ui-empty-title">{{ t('accounts.empty') }}</p>
       <p class="ui-empty-desc mb-4">{{ t('accounts.emptyHint') }}</p>
       <div class="flex flex-wrap items-center justify-center gap-2">
-        <button type="button" class="ui-btn-primary !text-xs !px-3 !py-2" @click="openAddModal('code')">
+        <button type="button" class="ui-btn-primary !text-xs !px-3.5 !py-2" @click="openAddModal('code')">
           <Phone class="w-3.5 h-3.5" /> {{ t('accounts.codeLogin') }}
         </button>
-        <button type="button" class="ui-btn-secondary !text-xs !px-3 !py-2" @click="openAddModal('qr')">
+        <button type="button" class="ui-btn-secondary !text-xs !px-3.5 !py-2" @click="openAddModal('qr')">
           <QrCode class="w-3.5 h-3.5" /> {{ t('accounts.qrLogin') }}
         </button>
-        <button type="button" class="ui-btn-secondary !text-xs !px-3 !py-2" @click="showLoginBackupModal = true">
+        <button type="button" class="ui-btn-secondary !text-xs !px-3.5 !py-2" @click="showLoginBackupModal = true">
           <HardDriveDownload class="w-3.5 h-3.5" /> {{ t('accounts.loginBackupImport') }}
         </button>
       </div>
     </div>
 
-    <div v-else class="space-y-5 pb-12">
-      <!-- Redesigned Command Bar + Interactive Filter Tabs -->
-      <div class="accounts-command-bar">
-        <div class="accounts-command-top">
-          <div class="accounts-filter-pills" role="group" :aria-label="t('accounts.total')">
-            <button type="button" class="accounts-filter-pill" :class="{ 'is-active': statusFilter === 'all' }" @click="statusFilter = 'all'">
-              {{ t('accounts.filterAll') }}
-              <span class="accounts-filter-count">{{ accounts.length }}</span>
-            </button>
-            <button type="button" class="accounts-filter-pill accounts-filter-pill--ok" :class="{ 'is-active': statusFilter === 'active' }" @click="statusFilter = 'active'">
-              <span class="accounts-filter-dot bg-emerald-500" aria-hidden="true" />
-              {{ t('accounts.statusOk') }}
-              <span class="accounts-filter-count">{{ healthyAccountsCount }}</span>
-            </button>
-            <button type="button" class="accounts-filter-pill accounts-filter-pill--err" :class="{ 'is-active': statusFilter === 'error' }" @click="statusFilter = 'error'">
-              <span class="accounts-filter-dot bg-rose-500" aria-hidden="true" />
-              {{ t('accounts.checkFailedCount') }}
-              <span class="accounts-filter-count">{{ errorAccountsCount }}</span>
-            </button>
-            <button type="button" class="accounts-filter-pill accounts-filter-pill--tb" :class="{ 'is-active': statusFilter === 'telebox' }" @click="statusFilter = 'telebox'">
-              <span class="accounts-filter-dot bg-violet-500" aria-hidden="true" />
-              TeleBox
-              <span class="accounts-filter-count">{{ runningTeleboxCount }}</span>
-            </button>
-          </div>
-
-          <div class="accounts-command-actions">
-            <div class="relative flex-1 sm:flex-none sm:w-56 md:w-64 min-w-0">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--tg-text-muted)] pointer-events-none" />
-              <input
-                v-model="searchQuery"
-                type="search"
-                class="ui-input !pl-8 !min-h-[36px] !h-[36px] !text-xs"
-                :class="searchQuery.trim() ? '!pr-8' : ''"
-                :placeholder="t('common.searchPlaceholder')"
-                :aria-label="t('common.search')"
-              >
-              <button
-                v-if="searchQuery.trim()"
-                type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-[var(--tg-text-muted)] hover:text-[var(--tg-text)] rounded-md"
-                :title="t('common.clearFilters')"
-                :aria-label="t('common.clearFilters')"
-                @click="clearListFilters"
-              >
-                <X class="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <button type="button" class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0" @click="showLoginBackupModal = true">
-              <HardDriveDownload class="w-3.5 h-3.5" />
-              <span class="hidden sm:inline">{{ t('accounts.loginBackupTitle') }}</span>
-            </button>
-
-            <button
-              v-if="batchChecking && batchJob?.job_id"
-              type="button"
-              class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
-              @click="handleCancelBatchCheck"
-            >
-              <XCircle class="w-3.5 h-3.5" />
-              {{ t('accounts.batchCheckCancel') }}
-            </button>
-            <button
-              v-if="!batchChecking && lastFailedAccountNames.length > 0"
-              type="button"
-              class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
-              :title="t('accounts.batchRecheckFailedHint')"
-              @click="handleRecheckFailed"
-            >
-              <RefreshCw class="w-3.5 h-3.5" />
-              {{ t('accounts.batchRecheckFailed') }}
-              <span class="font-mono opacity-80">({{ lastFailedAccountNames.length }})</span>
-            </button>
-            <button
-              type="button"
-              class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
-              :disabled="batchChecking"
-              :title="batchChecking ? t('accounts.batchChecking') : undefined"
-              @click="handleBatchCheck"
-            >
-              <span v-if="batchChecking" class="ui-spinner !w-3.5 !h-3.5 !border-2" />
-              <CheckCircle2 v-else class="w-3.5 h-3.5" />
-              {{ batchChecking ? t('accounts.batchChecking') : t('accounts.batchCheck') }}
-            </button>
-
-            <div class="relative shrink-0" @click.stop>
-              <button
-                type="button"
-                class="ui-btn-primary !px-3.5 !py-1.5 !text-xs inline-flex items-center gap-1.5"
-                :aria-expanded="showAddMenu"
-                :aria-label="t('accounts.addAccount')"
-                @click="showAddMenu = !showAddMenu"
-              >
-                <Plus class="w-3.5 h-3.5" />
-                {{ t('accounts.addAccount') }}
-                <ChevronDown class="w-3.5 h-3.5 opacity-80 transition-transform" :class="{ 'rotate-180': showAddMenu }" />
-              </button>
-              <transition enter-active-class="transition duration-150 ease-out" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 -translate-y-1">
-                <div v-if="showAddMenu" class="account-add-popover">
-                  <button type="button" @click="openAddModal('code')">
-                    <span class="account-add-icon bg-blue-500/12 text-blue-600 dark:text-blue-400"><Phone class="w-4 h-4" /></span>
-                    <span>{{ t('accounts.codeLogin') }}</span>
-                  </button>
-                  <button type="button" @click="openAddModal('qr')">
-                    <span class="account-add-icon bg-violet-500/12 text-violet-600 dark:text-violet-400"><QrCode class="w-4 h-4" /></span>
-                    <span>{{ t('accounts.qrLogin') }}</span>
-                  </button>
-                </div>
-              </transition>
-            </div>
-          </div>
+    <div v-else class="space-y-4 pb-12">
+      <!-- Calm, Airy Page Control Bar -->
+      <div class="accounts-bar">
+        <div class="accounts-filter-bar" role="group" :aria-label="t('accounts.total')">
+          <button type="button" class="accounts-filter-tab" :class="{ 'is-active': statusFilter === 'all' }" @click="statusFilter = 'all'">
+            {{ t('accounts.filterAll') }}
+            <span class="accounts-filter-num">{{ accounts.length }}</span>
+          </button>
+          <button type="button" class="accounts-filter-tab" :class="{ 'is-active': statusFilter === 'active' }" @click="statusFilter = 'active'">
+            <span class="accounts-dot bg-emerald-500" aria-hidden="true" />
+            {{ t('accounts.statusOk') }}
+            <span class="accounts-filter-num">{{ healthyAccountsCount }}</span>
+          </button>
+          <button type="button" class="accounts-filter-tab" :class="{ 'is-active': statusFilter === 'error' }" @click="statusFilter = 'error'">
+            <span class="accounts-dot bg-rose-500" aria-hidden="true" />
+            {{ t('accounts.checkFailedCount') }}
+            <span class="accounts-filter-num">{{ errorAccountsCount }}</span>
+          </button>
+          <button type="button" class="accounts-filter-tab" :class="{ 'is-active': statusFilter === 'telebox' }" @click="statusFilter = 'telebox'">
+            <span class="accounts-dot bg-violet-500" aria-hidden="true" />
+            TeleBox
+            <span class="accounts-filter-num">{{ runningTeleboxCount }}</span>
+          </button>
         </div>
 
-        <div v-if="batchChecking && batchJob" class="accounts-batch-progress">
-          <div class="flex items-center justify-between gap-2 text-xs">
-            <span class="font-mono font-medium text-[var(--tg-accent-text)]">
-              {{ t('accounts.batchCheckProgress', {
-                done: batchJob.progress?.done ?? 0,
-                total: batchJob.progress?.total ?? accounts.length,
-              }) }}
-              <template v-if="(batchJob.progress?.ok ?? 0) + (batchJob.progress?.fail ?? 0) > 0">
-                · {{ t('accounts.batchCheckOkFail', {
-                  ok: batchJob.progress?.ok ?? 0,
-                  fail: batchJob.progress?.fail ?? 0,
-                }) }}
-              </template>
-            </span>
-            <span class="font-mono text-[var(--tg-text-muted)]">{{ batchProgressPct }}%</span>
+        <div class="accounts-bar-right">
+          <div class="relative flex-1 sm:flex-none sm:w-52 md:w-60 min-w-0">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--tg-text-muted)] pointer-events-none" />
+            <input
+              v-model="searchQuery"
+              type="search"
+              class="ui-input !pl-8 !min-h-[36px] !h-[36px] !text-xs"
+              :class="searchQuery.trim() ? '!pr-8' : ''"
+              :placeholder="t('common.searchPlaceholder')"
+              :aria-label="t('common.search')"
+            >
+            <button
+              v-if="searchQuery.trim()"
+              type="button"
+              class="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-[var(--tg-text-muted)] hover:text-[var(--tg-text)] rounded-md"
+              :title="t('common.clearFilters')"
+              :aria-label="t('common.clearFilters')"
+              @click="clearListFilters"
+            >
+              <X class="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div
-            class="w-full h-1.5 rounded-full bg-[var(--tg-bg-muted)] overflow-hidden"
-            role="progressbar"
-            :aria-valuenow="batchProgressPct"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-label="t('accounts.batchCheckProgress', {
-              done: batchJob.progress?.done ?? 0,
-              total: batchJob.progress?.total ?? accounts.length,
-            })"
+
+          <div class="accounts-view-switch" role="group" :aria-label="t('nav.accounts')">
+            <button
+              type="button"
+              :class="{ 'is-active': viewMode === 'list' }"
+              :title="t('accounts.viewList')"
+              :aria-label="t('accounts.viewList')"
+              :aria-pressed="viewMode === 'list'"
+              @click="setViewMode('list')"
+            >
+              <LayoutList class="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              :class="{ 'is-active': viewMode === 'grid' }"
+              :title="t('accounts.viewGrid')"
+              :aria-label="t('accounts.viewGrid')"
+              :aria-pressed="viewMode === 'grid'"
+              @click="setViewMode('grid')"
+            >
+              <LayoutGrid class="w-4 h-4" />
+            </button>
+          </div>
+
+          <button type="button" class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0" @click="showLoginBackupModal = true">
+            <HardDriveDownload class="w-3.5 h-3.5" />
+            <span class="hidden md:inline">{{ t('accounts.loginBackupTitle') }}</span>
+          </button>
+
+          <button
+            v-if="batchChecking && batchJob?.job_id"
+            type="button"
+            class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
+            @click="handleCancelBatchCheck"
           >
-            <div
-              class="h-full rounded-full transition-all duration-300"
-              :style="{ width: `${batchProgressPct}%`, backgroundColor: 'var(--tg-accent)' }"
-              aria-hidden="true"
-            />
+            <XCircle class="w-3.5 h-3.5" />
+            {{ t('accounts.batchCheckCancel') }}
+          </button>
+          <button
+            v-if="!batchChecking && lastFailedAccountNames.length > 0"
+            type="button"
+            class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
+            :title="t('accounts.batchRecheckFailedHint')"
+            @click="handleRecheckFailed"
+          >
+            <RefreshCw class="w-3.5 h-3.5" />
+            {{ t('accounts.batchRecheckFailed') }}
+            <span class="font-mono opacity-80">({{ lastFailedAccountNames.length }})</span>
+          </button>
+          <button
+            type="button"
+            class="ui-btn-secondary !px-3 !py-1.5 !text-xs inline-flex items-center gap-1.5 shrink-0"
+            :disabled="batchChecking"
+            :title="batchChecking ? t('accounts.batchChecking') : undefined"
+            @click="handleBatchCheck"
+          >
+            <span v-if="batchChecking" class="ui-spinner !w-3.5 !h-3.5 !border-2" />
+            <CheckCircle2 v-else class="w-3.5 h-3.5" />
+            {{ batchChecking ? t('accounts.batchChecking') : t('accounts.batchCheck') }}
+          </button>
+
+          <div class="relative shrink-0" @click.stop>
+            <button
+              type="button"
+              class="ui-btn-primary !px-3.5 !py-1.5 !text-xs inline-flex items-center gap-1.5"
+              :aria-expanded="showAddMenu"
+              :aria-label="t('accounts.addAccount')"
+              @click="showAddMenu = !showAddMenu"
+            >
+              <Plus class="w-3.5 h-3.5" />
+              {{ t('accounts.addAccount') }}
+              <ChevronDown class="w-3.5 h-3.5 opacity-80 transition-transform" :class="{ 'rotate-180': showAddMenu }" />
+            </button>
+            <transition enter-active-class="transition duration-150 ease-out" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-100 ease-in" leave-from-class="opacity-100 translate-y-0" leave-to-class="opacity-0 -translate-y-1">
+              <div v-if="showAddMenu" class="account-add-popover">
+                <button type="button" @click="openAddModal('code')">
+                  <Phone class="w-4 h-4 text-[var(--tg-text-muted)]" />
+                  <span>{{ t('accounts.codeLogin') }}</span>
+                </button>
+                <button type="button" @click="openAddModal('qr')">
+                  <QrCode class="w-4 h-4 text-[var(--tg-text-muted)]" />
+                  <span>{{ t('accounts.qrLogin') }}</span>
+                </button>
+              </div>
+            </transition>
           </div>
         </div>
       </div>
 
+      <!-- Batch Check Progress -->
+      <div v-if="batchChecking && batchJob" class="accounts-batch-progress">
+        <div class="flex items-center justify-between gap-2 text-xs">
+          <span class="font-mono font-medium text-[var(--tg-text)]">
+            {{ t('accounts.batchCheckProgress', {
+              done: batchJob.progress?.done ?? 0,
+              total: batchJob.progress?.total ?? accounts.length,
+            }) }}
+            <template v-if="(batchJob.progress?.ok ?? 0) + (batchJob.progress?.fail ?? 0) > 0">
+              · {{ t('accounts.batchCheckOkFail', {
+                ok: batchJob.progress?.ok ?? 0,
+                fail: batchJob.progress?.fail ?? 0,
+              }) }}
+            </template>
+          </span>
+          <span class="font-mono text-[var(--tg-text-muted)]">{{ batchProgressPct }}%</span>
+        </div>
+        <div
+          class="w-full h-1.5 rounded-full bg-[var(--tg-bg-muted)] overflow-hidden"
+          role="progressbar"
+          :aria-valuenow="batchProgressPct"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="t('accounts.batchCheckProgress', {
+            done: batchJob.progress?.done ?? 0,
+            total: batchJob.progress?.total ?? accounts.length,
+          })"
+        >
+          <div
+            class="h-full rounded-full transition-all duration-300"
+            :style="{ width: `${batchProgressPct}%`, backgroundColor: 'var(--tg-accent)' }"
+            aria-hidden="true"
+          />
+        </div>
+      </div>
+
+      <!-- Filter Empty State -->
       <div v-if="filteredAccounts.length === 0" class="ui-empty !py-14">
         <FilterEmptyState
           v-if="accounts.length > 0 && hasListFilters"
@@ -696,43 +743,192 @@ const openAddModal = (method: 'code' | 'qr') => {
         <p v-else class="ui-empty-desc">{{ t('common.noData') }}</p>
       </div>
 
-      <!-- Completely Re-Architected Account Cards -->
+      <!-- VIEW 1 (Default): Clean Structured Account Directory List -->
+      <div v-else-if="viewMode === 'list'" class="account-directory">
+        <div class="account-directory-head" aria-hidden="true">
+          <span>{{ t('accounts.colAccount') }}</span>
+          <span>{{ t('accounts.colNetwork') }}</span>
+          <span>TeleBox</span>
+          <span class="text-right">{{ t('accounts.colActions') }}</span>
+        </div>
+
+        <article
+          v-for="acc in filteredAccounts"
+          :key="acc.id"
+          class="account-row"
+          :data-account-avatar-name="acc.name"
+          :class="[
+            `account-row--${acc.status}`,
+            { 'account-tile--menu-open': openActionsName === acc.name },
+          ]"
+        >
+          <div class="account-row-main">
+            <!-- Col 1: Identity -->
+            <div class="account-row-identity">
+              <div class="account-avatar-wrap" aria-hidden="true">
+                <div class="account-avatar" :class="acc.avatarUrl ? '' : accountAvatarToneClass(acc.name)">
+                  <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="40" height="40" loading="lazy" decoding="async" />
+                  <span v-else>{{ acc.name.substring(0, 2).toUpperCase() }}</span>
+                </div>
+                <span class="account-avatar-dot" :class="`account-avatar-dot--${acc.status}`" />
+              </div>
+
+              <div class="min-w-0 flex-1">
+                <div class="account-name-line">
+                  <h2 :title="acc.name">{{ acc.name }}</h2>
+                  <span
+                    class="account-state-tag"
+                    :class="`account-state-tag--${acc.status}`"
+                    :title="accountMessage(acc)"
+                  >
+                    {{ acc.status === 'active' ? t('accounts.statusOk') : (accountMessage(acc) || t('accounts.statusUnknown')) }}
+                  </span>
+                </div>
+                <p class="account-remark-line" :title="acc.remark || t('accounts.noRemark')">
+                  {{ acc.remark || t('accounts.noRemark') }}
+                </p>
+              </div>
+            </div>
+
+            <!-- Col 2: Flat Network & Exit IP -->
+            <div class="account-row-network">
+              <AccountIpLocation :account="acc.raw" />
+            </div>
+
+            <!-- Col 3: TeleBox Inline Status + Toggle -->
+            <div class="account-row-telebox" :title="teleboxMessage(acc.name)">
+              <span
+                class="account-tb-status"
+                :class="{
+                  'is-running': teleboxStates[acc.name]?.status === 'running',
+                  'is-error': teleboxStates[acc.name]?.status === 'failed',
+                  'is-starting': teleboxStates[acc.name]?.status === 'starting' || teleboxStates[acc.name]?.status === 'password_required',
+                }"
+              >
+                <span class="account-tb-dot" aria-hidden="true" />
+                {{ teleboxLabel(acc.name) }}
+              </span>
+              <button
+                type="button"
+                class="account-tb-btn"
+                :class="{ 'is-on': teleboxStates[acc.name]?.enabled }"
+                :disabled="teleboxBusy === acc.name"
+                :title="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
+                :aria-label="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
+                @click="setTeleBoxEnabled(acc.name, !teleboxStates[acc.name]?.enabled)"
+              >
+                <Power class="w-3.5 h-3.5" />
+                <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart') }}</span>
+              </button>
+            </div>
+
+            <!-- Col 4: Quiet Right-Aligned Actions -->
+            <div class="account-row-actions">
+              <button
+                type="button"
+                class="account-check-btn"
+                :disabled="checkingAccount === acc.name"
+                @click="handleCheck(acc.name)"
+              >
+                <ShieldCheck :size="14" aria-hidden="true" />
+                <span>{{ checkingAccount === acc.name ? t('accounts.checking') : t('accounts.check') }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="account-ghost-btn"
+                :title="t('nav.chats')"
+                :aria-label="t('nav.chats')"
+                @click="router.push({ name: 'chats', query: { account: acc.name } })"
+              >
+                <MessagesSquare :size="15" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                class="account-ghost-btn"
+                :title="t('accounts.officialMessages')"
+                :aria-label="t('accounts.officialMessages')"
+                @click="openOfficialMessages(acc.name)"
+              >
+                <MessageCircle :size="15" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                class="account-ghost-btn"
+                :title="t('accounts.devices')"
+                :aria-label="t('accounts.devices')"
+                @click="openDevices(acc.name)"
+              >
+                <MonitorSmartphone :size="15" aria-hidden="true" />
+              </button>
+
+              <div class="relative" @click.stop>
+                <button
+                  type="button"
+                  class="account-more"
+                  :aria-label="t('accounts.actions', { name: acc.name })"
+                  :title="t('accounts.actions', { name: acc.name })"
+                  :aria-expanded="openActionsName === acc.name"
+                  aria-haspopup="true"
+                  @click="openActionsName = openActionsName === acc.name ? null : acc.name"
+                >
+                  <MoreHorizontal class="w-4 h-4" />
+                </button>
+                <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="t('accounts.actions', { name: acc.name })">
+                  <button type="button" @click="runCardAction(() => router.push({ name: 'chats', query: { account: acc.name } }))"><MessagesSquare class="w-4 h-4" />{{ t('nav.chats') }}</button>
+                  <button v-if="teleboxStates[acc.name]?.enabled" type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, false))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStop') }}</button>
+                  <button v-else type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, true))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStart') }}</button>
+                  <button v-if="teleboxStates[acc.name]?.authorized || teleboxStates[acc.name]?.enabled" type="button" class="account-action-danger" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => handleTeleBoxLogout(acc.name))"><LogOut class="w-4 h-4" />{{ t('accounts.teleboxLogout') }}</button>
+                  <button type="button" @click="runCardAction(() => openDevices(acc.name))"><MonitorSmartphone class="w-4 h-4" />{{ t('accounts.devicesShort') }}</button>
+                  <button type="button" @click="runCardAction(() => openOfficialMessages(acc.name))"><MessageCircle class="w-4 h-4" />{{ t('accounts.officialMessagesShort') }}</button>
+                  <button type="button" @click="runCardAction(() => openEdit(acc))"><Edit2 class="w-4 h-4" />{{ t('accounts.editBtn') }}</button>
+                  <button type="button" class="account-action-danger" @click="runCardAction(() => handleDelete(acc.name))"><Trash2 class="w-4 h-4" />{{ t('accounts.deleteBtn') }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <form v-if="teleboxStates[acc.name]?.status === 'password_required'" class="account-row-password" @submit.prevent="enterTeleBoxPassword(acc.name)">
+            <label :for="`telebox-password-${acc.id}`">{{ t('accounts.teleboxPassword') }}</label>
+            <div>
+              <input :id="`telebox-password-${acc.id}`" v-model="teleboxPasswords[acc.name]" type="password" autocomplete="current-password" class="panel-input" required />
+              <button type="submit" class="panel-button" :disabled="teleboxBusy === acc.name">{{ t('common.confirm') }}</button>
+            </div>
+          </form>
+        </article>
+      </div>
+
+      <!-- VIEW 2 (Optional): Flat, Minimal-Chrome Card Grid -->
       <div v-else class="account-grid">
         <article
           v-for="acc in filteredAccounts"
           :key="acc.id"
-          class="account-tile"
+          class="account-card"
           :data-account-avatar-name="acc.name"
-          :class="[
-            `account-tile--${acc.status}`,
-            { 'account-tile--menu-open': openActionsName === acc.name },
-          ]"
+          :class="{ 'account-tile--menu-open': openActionsName === acc.name }"
         >
-          <!-- Top Health Accent Strip -->
-          <div class="account-tile-accent" aria-hidden="true" />
-
-          <!-- Zone 1: Identity + Status Pill + Menu -->
-          <div class="account-tile-top">
-            <div class="account-tile-avatar-frame" aria-hidden="true">
-              <div class="account-tile-avatar" :style="acc.avatarUrl ? undefined : { background: accountAvatarTone(acc.name), color: '#ffffff' }">
-                <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="48" height="48" loading="lazy" decoding="async" />
+          <div class="account-card-head">
+            <div class="account-avatar-wrap" aria-hidden="true">
+              <div class="account-avatar" :class="acc.avatarUrl ? '' : accountAvatarToneClass(acc.name)">
+                <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="40" height="40" loading="lazy" decoding="async" />
                 <span v-else>{{ acc.name.substring(0, 2).toUpperCase() }}</span>
               </div>
-              <span class="account-avatar-badge" :class="`account-avatar-badge--${acc.status}`" />
+              <span class="account-avatar-dot" :class="`account-avatar-dot--${acc.status}`" />
             </div>
 
-            <div class="account-tile-info">
-              <div class="account-tile-name-row">
+            <div class="min-w-0 flex-1">
+              <div class="account-name-line">
                 <h2 :title="acc.name">{{ acc.name }}</h2>
-                <span class="account-health-pill" :class="`account-health-pill--${acc.status}`" :title="accountMessage(acc)">
-                  <span class="account-status-dot" aria-hidden="true" />
+                <span class="account-state-tag" :class="`account-state-tag--${acc.status}`" :title="accountMessage(acc)">
                   {{ acc.status === 'active' ? t('accounts.statusOk') : (accountMessage(acc) || t('accounts.statusUnknown')) }}
                 </span>
               </div>
-              <p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
+              <p class="account-remark-line" :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
             </div>
 
-            <div class="account-tile-actions" @click.stop>
+            <div class="relative shrink-0" @click.stop>
               <button
                 type="button"
                 class="account-more"
@@ -757,28 +953,27 @@ const openAddModal = (method: 'code' | 'qr') => {
             </div>
           </div>
 
-          <!-- Zone 2: Dedicated Full-Width Network/IP Strip + TeleBox Inline Control -->
-          <div class="account-telemetry-stack">
+          <div class="account-card-body">
             <AccountIpLocation :account="acc.raw" />
 
-            <div class="account-telebox-bar" :title="teleboxMessage(acc.name)">
-              <div class="account-telebox-left">
-                <Cpu class="w-3.5 h-3.5 shrink-0 text-violet-600 dark:text-violet-400" aria-hidden="true" />
+            <div class="account-card-tb" :title="teleboxMessage(acc.name)">
+              <div class="flex items-center gap-2 min-w-0">
                 <span class="account-signal-label">TeleBox</span>
                 <span
-                  class="account-telebox-pill"
+                  class="account-tb-status"
                   :class="{
                     'is-running': teleboxStates[acc.name]?.status === 'running',
                     'is-error': teleboxStates[acc.name]?.status === 'failed',
                     'is-starting': teleboxStates[acc.name]?.status === 'starting' || teleboxStates[acc.name]?.status === 'password_required',
                   }"
                 >
+                  <span class="account-tb-dot" aria-hidden="true" />
                   {{ teleboxLabel(acc.name) }}
                 </span>
               </div>
               <button
                 type="button"
-                class="account-telebox-toggle"
+                class="account-tb-btn"
                 :class="{ 'is-on': teleboxStates[acc.name]?.enabled }"
                 :disabled="teleboxBusy === acc.name"
                 :title="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
@@ -789,43 +984,28 @@ const openAddModal = (method: 'code' | 'qr') => {
                 <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart') }}</span>
               </button>
             </div>
+
+            <form v-if="teleboxStates[acc.name]?.status === 'password_required'" class="account-tile-password" @submit.prevent="enterTeleBoxPassword(acc.name)">
+              <label :for="`telebox-password-${acc.id}`">{{ t('accounts.teleboxPassword') }}</label>
+              <div>
+                <input :id="`telebox-password-${acc.id}`" v-model="teleboxPasswords[acc.name]" type="password" autocomplete="current-password" class="panel-input" required />
+                <button type="submit" class="panel-button" :disabled="teleboxBusy === acc.name">{{ t('common.confirm') }}</button>
+              </div>
+            </form>
           </div>
 
-          <!-- Optional TeleBox 2FA Password Inline Prompt -->
-          <form v-if="teleboxStates[acc.name]?.status === 'password_required'" class="account-tile-password" @submit.prevent="enterTeleBoxPassword(acc.name)">
-            <label :for="`telebox-password-${acc.id}`">{{ t('accounts.teleboxPassword') }}</label>
-            <div>
-              <input :id="`telebox-password-${acc.id}`" v-model="teleboxPasswords[acc.name]" type="password" autocomplete="current-password" class="panel-input" required />
-              <button type="submit" class="panel-button" :disabled="teleboxBusy === acc.name">{{ t('common.confirm') }}</button>
-            </div>
-          </form>
-
-          <!-- Zone 3: Quick Action Dock -->
-          <div class="account-tile-footer">
-            <button type="button" class="account-card-primary" :disabled="checkingAccount === acc.name" @click="handleCheck(acc.name)">
-              <ShieldCheck :size="15" aria-hidden="true" />
-              {{ checkingAccount === acc.name ? t('accounts.checking') : t('accounts.checkStatus') }}
+          <div class="account-card-foot">
+            <button type="button" class="account-check-btn flex-1 justify-center" :disabled="checkingAccount === acc.name" @click="handleCheck(acc.name)">
+              <ShieldCheck :size="14" aria-hidden="true" />
+              <span>{{ checkingAccount === acc.name ? t('accounts.checking') : t('accounts.checkStatus') }}</span>
             </button>
-            <button type="button" class="account-card-secondary" @click="router.push({ name: 'chats', query: { account: acc.name } })">
+            <button type="button" class="account-ghost-btn" :title="t('nav.chats')" :aria-label="t('nav.chats')" @click="router.push({ name: 'chats', query: { account: acc.name } })">
               <MessagesSquare :size="15" aria-hidden="true" />
-              {{ t('nav.chats') }}
             </button>
-            <button
-              type="button"
-              class="account-card-icon-btn"
-              :title="t('accounts.officialMessages')"
-              :aria-label="t('accounts.officialMessages')"
-              @click="openOfficialMessages(acc.name)"
-            >
+            <button type="button" class="account-ghost-btn" :title="t('accounts.officialMessages')" :aria-label="t('accounts.officialMessages')" @click="openOfficialMessages(acc.name)">
               <MessageCircle :size="15" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              class="account-card-icon-btn"
-              :title="t('accounts.devices')"
-              :aria-label="t('accounts.devices')"
-              @click="openDevices(acc.name)"
-            >
+            <button type="button" class="account-ghost-btn" :title="t('accounts.devices')" :aria-label="t('accounts.devices')" @click="openDevices(acc.name)">
               <MonitorSmartphone :size="15" aria-hidden="true" />
             </button>
           </div>

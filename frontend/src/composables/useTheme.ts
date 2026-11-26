@@ -16,14 +16,14 @@ const savedTheme = storageGet('theme')
 const prefersDark = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
 const initDark = savedTheme === 'dark' || (savedTheme === null && prefersDark)
 const isDark = ref(initDark)
-export const DEFAULT_ACCENT = '#2d6cdf'
+export const DEFAULT_ACCENT = '#3367a6'
 export const ACCENT_PRESETS = [
-  { nameKey: 'appearance.presetBlue', color: '#2d6cdf' },
-  { nameKey: 'appearance.presetTidal', color: '#0f8b8d' },
-  { nameKey: 'appearance.presetViolet', color: '#9d3f89' },
-  { nameKey: 'appearance.presetMist', color: '#6658c8' },
-  { nameKey: 'appearance.presetCocoa', color: '#a85d38' },
-  { nameKey: 'appearance.presetSand', color: '#b57d1f' },
+  { nameKey: 'appearance.presetBlue', color: '#3367a6' },
+  { nameKey: 'appearance.presetTidal', color: '#1b7a75' },
+  { nameKey: 'appearance.presetViolet', color: '#8f447b' },
+  { nameKey: 'appearance.presetMist', color: '#5d60a6' },
+  { nameKey: 'appearance.presetCocoa', color: '#8f5839' },
+  { nameKey: 'appearance.presetSand', color: '#a37224' },
 ] as const
 const validHex = (value: string): boolean => /^#[0-9a-f]{6}$/i.test(value)
 const savedAccent = storageGet('tg-manage-accent-color')

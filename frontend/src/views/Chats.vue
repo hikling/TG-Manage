@@ -5,7 +5,7 @@ import { usePanelAccount, errorText } from '../composables/usePanelAccount'
 import { useConfirm } from '../composables/useConfirm'
 import { useToast } from '../composables/useToast'
 import { copyToClipboard } from '../lib/clipboard'
-import { accountAvatarTone } from '../lib/avatar-palette'
+import { accountAvatarToneClass } from '../lib/avatar-palette'
 import { listDialogs, listMessages, sendMessage, uploadMedia, downloadMedia, editMessage, deleteMessage, dialogAction, type Dialog, type Message } from '../lib/api/communications'
 import ChatAvatar from '../components/ChatAvatar.vue'
 import { chatAvatarCache } from '../lib/chat-avatar-cache'
@@ -334,7 +334,7 @@ function selectFile(event: Event) {
             :aria-selected="account === a.name"
             @click="selectAccount(a.name)"
           >
-            <span class="verify-account-avatar" :style="{ background: accountAvatarTone(a.name) }" aria-hidden="true">
+            <span class="verify-account-avatar" :class="accountAvatarToneClass(a.name)" aria-hidden="true">
               {{ accountInitials(a.name) }}
             </span>
             <span class="verify-account-meta">
@@ -352,7 +352,7 @@ function selectFile(event: Event) {
             <span
               v-if="account"
               class="verify-feed-avatar"
-              :style="{ background: accountAvatarTone(account) }"
+              :class="accountAvatarToneClass(account)"
               aria-hidden="true"
             >
               {{ accountInitials(account) }}
@@ -442,7 +442,7 @@ function selectFile(event: Event) {
               :aria-pressed="account === a.name"
               @click="selectAccount(a.name)"
             >
-              <span class="chat-account-chip-avatar" :style="{ background: accountAvatarTone(a.name) }" aria-hidden="true">
+              <span class="chat-account-chip-avatar" :class="accountAvatarToneClass(a.name)" aria-hidden="true">
                 {{ accountInitials(a.name) }}
               </span>
               <span class="truncate">{{ a.name }}</span>
