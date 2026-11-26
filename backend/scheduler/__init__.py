@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 scheduler: AsyncIOScheduler | None = None
