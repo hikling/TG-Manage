@@ -1393,28 +1393,56 @@ summary,
   z-index: 25;
 }
 
-/* Vibrant luminous multi-stop card banner gradients */
-.pass-tone--0 { --pass-grad: linear-gradient(125deg, #2563eb 0%, #4f46e5 48%, #06b6d4 100%); }
-.pass-tone--1 { --pass-grad: linear-gradient(125deg, #059669 0%, #10b981 46%, #06b6d4 100%); }
-.pass-tone--2 { --pass-grad: linear-gradient(125deg, #6366f1 0%, #9333ea 52%, #ec4899 100%); }
-.pass-tone--3 { --pass-grad: linear-gradient(125deg, #ea580c 0%, #f59e0b 50%, #f43f5e 100%); }
-.pass-tone--4 { --pass-grad: linear-gradient(125deg, #db2777 0%, #f43f5e 48%, #fb923c 100%); }
-.pass-tone--5 { --pass-grad: linear-gradient(125deg, #0284c7 0%, #0d9488 50%, #34d399 100%); }
+/* 20 curated luminous multi-stop card banner gradients (cycled per account) */
+.pass-tone--0  { --pass-grad: linear-gradient(125deg, #2563eb 0%, #4f46e5 48%, #06b6d4 100%); }
+.pass-tone--1  { --pass-grad: linear-gradient(125deg, #ea580c 0%, #f59e0b 50%, #f43f5e 100%); }
+.pass-tone--2  { --pass-grad: linear-gradient(125deg, #059669 0%, #10b981 48%, #0ea5e9 100%); }
+.pass-tone--3  { --pass-grad: linear-gradient(125deg, #6366f1 0%, #9333ea 52%, #ec4899 100%); }
+.pass-tone--4  { --pass-grad: linear-gradient(125deg, #e11d48 0%, #f43f5e 48%, #fb923c 100%); }
+.pass-tone--5  { --pass-grad: linear-gradient(125deg, #0284c7 0%, #0d9488 50%, #34d399 100%); }
+.pass-tone--6  { --pass-grad: linear-gradient(125deg, #c026d3 0%, #9333ea 50%, #4f46e5 100%); }
+.pass-tone--7  { --pass-grad: linear-gradient(125deg, #16a34a 0%, #10b981 50%, #06b6d4 100%); }
+.pass-tone--8  { --pass-grad: linear-gradient(125deg, #dc2626 0%, #f43f5e 52%, #d946ef 100%); }
+.pass-tone--9  { --pass-grad: linear-gradient(125deg, #3730a3 0%, #2563eb 50%, #38bdf8 100%); }
+.pass-tone--10 { --pass-grad: linear-gradient(125deg, #d97706 0%, #ea580c 52%, #e11d48 100%); }
+.pass-tone--11 { --pass-grad: linear-gradient(125deg, #0891b2 0%, #0284c7 50%, #6366f1 100%); }
+.pass-tone--12 { --pass-grad: linear-gradient(125deg, #7e22ce 0%, #db2777 50%, #fb7185 100%); }
+.pass-tone--13 { --pass-grad: linear-gradient(125deg, #047857 0%, #0f766e 50%, #22c55e 100%); }
+.pass-tone--14 { --pass-grad: linear-gradient(125deg, #1d4ed8 0%, #3b82f6 50%, #8b5cf6 100%); }
+.pass-tone--15 { --pass-grad: linear-gradient(125deg, #f43f5e 0%, #f97316 52%, #eab308 100%); }
+.pass-tone--16 { --pass-grad: linear-gradient(125deg, #4338ca 0%, #7c3aed 50%, #06b6d4 100%); }
+.pass-tone--17 { --pass-grad: linear-gradient(125deg, #0f766e 0%, #0891b2 50%, #2563eb 100%); }
+.pass-tone--18 { --pass-grad: linear-gradient(125deg, #be123c 0%, #db2777 50%, #7c3aed 100%); }
+.pass-tone--19 { --pass-grad: linear-gradient(125deg, #0369a1 0%, #059669 52%, #14b8a6 100%); }
 
-.dark .pass-tone--0 { --pass-grad: linear-gradient(125deg, #1d4ed8 0%, #4338ca 50%, #0891b2 100%); }
-.dark .pass-tone--1 { --pass-grad: linear-gradient(125deg, #047857 0%, #059669 48%, #0891b2 100%); }
-.dark .pass-tone--2 { --pass-grad: linear-gradient(125deg, #4f46e5 0%, #7e22ce 52%, #be185d 100%); }
-.dark .pass-tone--3 { --pass-grad: linear-gradient(125deg, #c2410c 0%, #d97706 50%, #be123c 100%); }
-.dark .pass-tone--4 { --pass-grad: linear-gradient(125deg, #be185d 0%, #e11d48 50%, #ea580c 100%); }
-.dark .pass-tone--5 { --pass-grad: linear-gradient(125deg, #0369a1 0%, #0f766e 50%, #059669 100%); }
+.dark .pass-tone--0  { --pass-grad: linear-gradient(125deg, #1d4ed8 0%, #4338ca 50%, #0891b2 100%); }
+.dark .pass-tone--1  { --pass-grad: linear-gradient(125deg, #c2410c 0%, #d97706 50%, #be123c 100%); }
+.dark .pass-tone--2  { --pass-grad: linear-gradient(125deg, #047857 0%, #059669 48%, #0284c7 100%); }
+.dark .pass-tone--3  { --pass-grad: linear-gradient(125deg, #4f46e5 0%, #7e22ce 52%, #be185d 100%); }
+.dark .pass-tone--4  { --pass-grad: linear-gradient(125deg, #be123c 0%, #e11d48 50%, #ea580c 100%); }
+.dark .pass-tone--5  { --pass-grad: linear-gradient(125deg, #0369a1 0%, #0f766e 50%, #059669 100%); }
+.dark .pass-tone--6  { --pass-grad: linear-gradient(125deg, #a21caf 0%, #7e22ce 50%, #3730a3 100%); }
+.dark .pass-tone--7  { --pass-grad: linear-gradient(125deg, #15803d 0%, #059669 50%, #0891b2 100%); }
+.dark .pass-tone--8  { --pass-grad: linear-gradient(125deg, #b91c1c 0%, #be123c 52%, #a21caf 100%); }
+.dark .pass-tone--9  { --pass-grad: linear-gradient(125deg, #312e81 0%, #1d4ed8 50%, #0284c7 100%); }
+.dark .pass-tone--10 { --pass-grad: linear-gradient(125deg, #b45309 0%, #c2410c 52%, #be123c 100%); }
+.dark .pass-tone--11 { --pass-grad: linear-gradient(125deg, #0e7490 0%, #0369a1 50%, #4f46e5 100%); }
+.dark .pass-tone--12 { --pass-grad: linear-gradient(125deg, #6b21a8 0%, #be185d 50%, #e11d48 100%); }
+.dark .pass-tone--13 { --pass-grad: linear-gradient(125deg, #065f46 0%, #115e59 50%, #15803d 100%); }
+.dark .pass-tone--14 { --pass-grad: linear-gradient(125deg, #1e40af 0%, #2563eb 50%, #6d28d9 100%); }
+.dark .pass-tone--15 { --pass-grad: linear-gradient(125deg, #be123c 0%, #c2410c 52%, #ca8a04 100%); }
+.dark .pass-tone--16 { --pass-grad: linear-gradient(125deg, #3730a3 0%, #6d28d9 50%, #0891b2 100%); }
+.dark .pass-tone--17 { --pass-grad: linear-gradient(125deg, #115e59 0%, #0e7490 50%, #1d4ed8 100%); }
+.dark .pass-tone--18 { --pass-grad: linear-gradient(125deg, #9f1239 0%, #be185d 50%, #6d28d9 100%); }
+.dark .pass-tone--19 { --pass-grad: linear-gradient(125deg, #075985 0%, #047857 52%, #0f766e 100%); }
 
-/* Error card uses deep crimson-coral gradient for clear visual warning */
+/* Subtle rose border hint for error accounts while keeping their cycling banner */
 .account-pass--error {
-  --pass-grad: linear-gradient(125deg, #be123c 0%, #e11d48 52%, #f97316 100%);
+  border-color: rgb(244 63 94 / 0.32);
 }
 
 .dark .account-pass--error {
-  --pass-grad: linear-gradient(125deg, #9f1239 0%, #be123c 55%, #c2410c 100%);
+  border-color: rgb(244 63 94 / 0.36);
 }
 
 /* Card Top Banner */
@@ -1957,15 +1985,41 @@ summary,
 }
 
 .account-pass-action-sub {
-  flex: 0.9;
+  flex: 1.05;
   background: var(--tg-bg-elevated);
   color: var(--tg-text);
   border: 1px solid var(--tg-border-strong);
   box-shadow: var(--tg-shadow-xs);
 }
 
-.account-pass-action-sub:hover {
+.account-pass-action-sub:hover:not(:disabled) {
   background: var(--tg-bg-muted);
+}
+
+.account-pass-action-tb.is-on {
+  border-color: rgb(16 185 129 / 0.28);
+  background: rgb(16 185 129 / 0.08);
+  color: #0e7c5a;
+}
+
+.dark .account-pass-action-tb.is-on {
+  background: rgb(16 185 129 / 0.14);
+  color: #6ee7b7;
+}
+
+.account-pass-action-tb.is-on:hover:not(:disabled) {
+  border-color: rgb(244 63 94 / 0.34);
+  background: rgb(244 63 94 / 0.09);
+  color: #be123c;
+}
+
+.dark .account-pass-action-tb.is-on:hover:not(:disabled) {
+  color: #fda4af;
+}
+
+.account-pass-action-tb:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .account-pass-icon-btn {

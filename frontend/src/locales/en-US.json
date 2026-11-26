@@ -233,8 +233,6 @@
     },
     "teleboxStart": "Start TeleBox",
     "teleboxStop": "Stop TeleBox",
-    "teleboxStartShort": "Start",
-    "teleboxStopShort": "Stop",
     "teleboxStarted": "TeleBox start requested",
     "teleboxStopped": "TeleBox stopped",
     "teleboxOperationFailed": "TeleBox operation failed",

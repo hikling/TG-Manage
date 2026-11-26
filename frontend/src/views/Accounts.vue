@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   Edit2,
   Trash2,
@@ -9,7 +8,6 @@ import {
   Phone,
   MonitorSmartphone,
   MessageCircle,
-  MessagesSquare,
   CheckCircle2,
   Search,
   RefreshCw,
@@ -23,7 +21,7 @@ import {
   HardDriveDownload,
   ChevronDown,
 } from 'lucide-vue-next'
-import { accountAvatarToneClass } from '../lib/avatar-palette'
+import { accountAvatarToneClass, passBannerToneClass } from '../lib/avatar-palette'
 import {
   deleteAccount,
   fetchAccountAvatar,
@@ -53,7 +51,6 @@ import {
   mapAccountInfoToUiItem,
 } from '../lib/account-list-map'
 
-const router = useRouter()
 const { t, locale } = useI18n()
 const toast = useToast()
 const { confirm } = useConfirm()
@@ -135,8 +132,13 @@ const clearListFilters = () => {
   statusFilter.value = 'all'
 }
 
-function passToneClass(name: string): string {
-  return accountAvatarToneClass(name).replace('avatar-tone--', 'pass-tone--')
+const accountToneIndexMap = computed(() =>
+  new Map(accounts.value.map((acc, index) => [acc.name, index])),
+)
+
+function passToneClass(name: string, fallbackIndex: number): string {
+  const index = accountToneIndexMap.value.get(name) ?? fallbackIndex
+  return passBannerToneClass(index)
 }
 
 async function loadTeleBoxStates() {
@@ -716,12 +718,12 @@ const openAddModal = (method: 'code' | 'qr') => {
       <!-- Showcase Card Deck (卡牌式设计) -->
       <div v-else class="account-deck">
         <article
-          v-for="acc in filteredAccounts"
+          v-for="(acc, accIndex) in filteredAccounts"
           :key="acc.id"
           class="account-pass"
           :data-account-avatar-name="acc.name"
           :class="[
-            passToneClass(acc.name),
+            passToneClass(acc.name, accIndex),
             `account-pass--${acc.status}`,
             { 'account-tile--menu-open': openActionsName === acc.name },
           ]"
@@ -748,7 +750,6 @@ const openAddModal = (method: 'code' | 'qr') => {
                   <MoreHorizontal class="w-4 h-4" />
                 </button>
                 <div v-if="openActionsName === acc.name" class="account-action-menu" :aria-label="t('accounts.actions', { name: acc.name })">
-                  <button type="button" @click="runCardAction(() => router.push({ name: 'chats', query: { account: acc.name } }))"><MessagesSquare class="w-4 h-4" />{{ t('nav.chats') }}</button>
                   <button v-if="teleboxStates[acc.name]?.enabled" type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, false))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStop') }}</button>
                   <button v-else type="button" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => setTeleBoxEnabled(acc.name, true))"><Power class="w-4 h-4" />{{ t('accounts.teleboxStart') }}</button>
                   <button v-if="teleboxStates[acc.name]?.authorized || teleboxStates[acc.name]?.enabled" type="button" class="account-action-danger" :disabled="teleboxBusy === acc.name" @click="runCardAction(() => handleTeleBoxLogout(acc.name))"><LogOut class="w-4 h-4" />{{ t('accounts.teleboxLogout') }}</button>
@@ -788,32 +789,18 @@ const openAddModal = (method: 'code' | 'qr') => {
             </div>
 
             <div class="account-pass-spec-item account-pass-telebox" :title="teleboxMessage(acc.name)">
-              <div class="account-pass-tb-row">
-                <span class="account-pass-tb-label">TeleBox</span>
-                <span
-                  class="account-tb-status"
-                  :class="{
-                    'is-running': teleboxStates[acc.name]?.status === 'running',
-                    'is-error': teleboxStates[acc.name]?.status === 'failed',
-                    'is-starting': teleboxStates[acc.name]?.status === 'starting' || teleboxStates[acc.name]?.status === 'password_required',
-                  }"
-                >
-                  <span class="account-tb-dot" aria-hidden="true" />
-                  {{ teleboxLabel(acc.name) }}
-                </span>
-              </div>
-              <button
-                type="button"
-                class="account-tb-btn"
-                :class="{ 'is-on': teleboxStates[acc.name]?.enabled }"
-                :disabled="teleboxBusy === acc.name"
-                :title="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
-                :aria-label="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
-                @click="setTeleBoxEnabled(acc.name, !teleboxStates[acc.name]?.enabled)"
+              <span class="account-pass-tb-label">TeleBox</span>
+              <span
+                class="account-tb-status"
+                :class="{
+                  'is-running': teleboxStates[acc.name]?.status === 'running',
+                  'is-error': teleboxStates[acc.name]?.status === 'failed',
+                  'is-starting': teleboxStates[acc.name]?.status === 'starting' || teleboxStates[acc.name]?.status === 'password_required',
+                }"
               >
-                <Power class="w-3.5 h-3.5" />
-                <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStopShort') : t('accounts.teleboxStartShort') }}</span>
-              </button>
+                <span class="account-tb-dot" aria-hidden="true" />
+                {{ teleboxLabel(acc.name) }}
+              </span>
             </div>
           </div>
 
@@ -832,9 +819,17 @@ const openAddModal = (method: 'code' | 'qr') => {
               <ShieldCheck :size="15" aria-hidden="true" />
               <span>{{ checkingAccount === acc.name ? t('accounts.checking') : t('accounts.checkStatus') }}</span>
             </button>
-            <button type="button" class="account-pass-action-sub" @click="router.push({ name: 'chats', query: { account: acc.name } })">
-              <MessagesSquare :size="15" aria-hidden="true" />
-              <span>{{ t('nav.chats') }}</span>
+            <button
+              type="button"
+              class="account-pass-action-sub account-pass-action-tb"
+              :class="{ 'is-on': teleboxStates[acc.name]?.enabled }"
+              :disabled="teleboxBusy === acc.name"
+              :title="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
+              :aria-label="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
+              @click="setTeleBoxEnabled(acc.name, !teleboxStates[acc.name]?.enabled)"
+            >
+              <Power :size="15" aria-hidden="true" />
+              <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart') }}</span>
             </button>
             <button
               type="button"
