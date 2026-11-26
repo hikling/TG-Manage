@@ -1675,32 +1675,29 @@ summary,
   color: var(--tg-text-muted);
 }
 
-/* Simplified Flat Telemetry Rows (no nested heavy box) */
+/* Simplified IP Location Section with generous vertical breathing room */
 .account-pass-specs {
-  margin: 0 18px 14px;
+  margin: 4px 18px 16px;
   border-top: 1px solid var(--tg-border);
+  border-bottom: 1px solid var(--tg-border);
 }
 
 .account-pass-spec-item {
-  padding: 10px 0;
-}
-
-.account-pass-spec-item + .account-pass-spec-item {
-  border-top: 1px dashed var(--tg-border);
+  padding: 18px 0;
 }
 
 .account-ip-signal {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .account-ip-primary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -2014,6 +2011,17 @@ summary,
 }
 
 .dark .account-pass-action-tb.is-on:hover:not(:disabled) {
+  color: #fda4af;
+}
+
+.account-pass-action-tb.is-error {
+  border-color: rgb(244 63 94 / 0.34);
+  background: rgb(244 63 94 / 0.08);
+  color: #be123c;
+}
+
+.dark .account-pass-action-tb.is-error {
+  background: rgb(244 63 94 / 0.14);
   color: #fda4af;
 }
 

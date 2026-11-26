@@ -782,25 +782,10 @@ const openAddModal = (method: 'code' | 'qr') => {
             </div>
           </div>
 
-          <!-- Simplified Flat Telemetry Rows -->
+          <!-- Simplified IP Location Spec -->
           <div class="account-pass-specs">
             <div class="account-pass-spec-item">
               <AccountIpLocation :account="acc.raw" />
-            </div>
-
-            <div class="account-pass-spec-item account-pass-telebox" :title="teleboxMessage(acc.name)">
-              <span class="account-pass-tb-label">TeleBox</span>
-              <span
-                class="account-tb-status"
-                :class="{
-                  'is-running': teleboxStates[acc.name]?.status === 'running',
-                  'is-error': teleboxStates[acc.name]?.status === 'failed',
-                  'is-starting': teleboxStates[acc.name]?.status === 'starting' || teleboxStates[acc.name]?.status === 'password_required',
-                }"
-              >
-                <span class="account-tb-dot" aria-hidden="true" />
-                {{ teleboxLabel(acc.name) }}
-              </span>
             </div>
           </div>
 
@@ -822,9 +807,12 @@ const openAddModal = (method: 'code' | 'qr') => {
             <button
               type="button"
               class="account-pass-action-sub account-pass-action-tb"
-              :class="{ 'is-on': teleboxStates[acc.name]?.enabled }"
+              :class="{
+                'is-on': teleboxStates[acc.name]?.enabled && teleboxStates[acc.name]?.status !== 'failed',
+                'is-error': teleboxStates[acc.name]?.status === 'failed',
+              }"
               :disabled="teleboxBusy === acc.name"
-              :title="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
+              :title="[teleboxLabel(acc.name), teleboxMessage(acc.name)].filter(Boolean).join(' · ')"
               :aria-label="teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart')"
               @click="setTeleBoxEnabled(acc.name, !teleboxStates[acc.name]?.enabled)"
             >
