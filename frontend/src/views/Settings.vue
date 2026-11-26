@@ -48,7 +48,7 @@ const {
 </script>
 
 <template>
-  <div class="max-w-7xl pb-10">
+  <div class="settings-page pb-10">
     <div
       v-if="isDirty && !pageLoading"
       class="sticky top-[4.25rem] z-20 mb-4 flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-xs rounded-xl border border-amber-300/60 dark:border-amber-700/50 bg-amber-50/95 dark:bg-amber-950/90 backdrop-blur-md text-amber-900 dark:text-amber-200 shadow-[var(--tg-shadow-md)]"
@@ -87,7 +87,7 @@ const {
 
     <div v-else class="space-y-6">
       <div class="settings-accordions">
-        <details class="settings-accordion">
+        <details class="settings-accordion settings-accordion--general">
           <summary><span class="ui-section-icon" aria-hidden="true"><Settings2 class="w-4 h-4" /></span>{{ t('settings.general') }} <span>{{ t('settings.generalSummary') }}</span></summary>
           <GeneralSettings
             v-model="settings"
@@ -96,7 +96,7 @@ const {
             @save="saveSettings"
           />
         </details>
-        <details class="settings-accordion">
+        <details class="settings-accordion settings-accordion--bot">
           <summary><span class="ui-section-icon" aria-hidden="true"><Bot class="w-4 h-4" /></span>{{ t('settings.botNotify') }} <span>{{ t('settings.botNotifySummary') }}</span></summary>
           <BotNotifySettings
             v-model="settings"
@@ -110,7 +110,7 @@ const {
             @toggle-reveal="toggleReveal"
           />
         </details>
-        <details class="settings-accordion">
+        <details class="settings-accordion settings-accordion--subs">
           <summary><span class="ui-section-icon" aria-hidden="true"><Globe class="w-4 h-4" /></span>{{ t('settings.subscriptions.title') }} <span>{{ t('settings.subscriptions.summary') }}</span></summary>
           <ProxySubscriptionsSettings
             v-model="subscriptionDraft"
