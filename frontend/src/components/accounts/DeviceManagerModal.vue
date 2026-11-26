@@ -122,36 +122,36 @@ watch(() => props.isOpen, (open) => {
         <p class="ui-empty-desc">{{ t('accounts.noDevices') }}</p>
       </div>
 
-      <div v-else class="space-y-2">
+      <div v-else class="space-y-2.5">
         <div
           v-for="device in devices"
           :key="device.hash"
-          class="ui-card p-4"
+          class="ui-card !rounded-xl p-4"
         >
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex items-start gap-3">
-              <div class="mt-0.5 w-9 h-9 shrink-0 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex items-center justify-center text-gray-500">
+              <div class="mt-0.5 w-9 h-9 rounded-xl shrink-0 border border-[var(--tg-border)] bg-[var(--tg-bg-elevated-2)] flex items-center justify-center text-[var(--tg-text-muted)]">
                 <ShieldCheck v-if="device.current" class="w-4 h-4 text-emerald-500" />
                 <Smartphone v-else class="w-4 h-4" />
               </div>
               <div class="min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                  <div class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  <div class="text-sm font-semibold text-[var(--tg-text)] truncate">
                     {{ deviceTitle(device) }}
                   </div>
                   <span v-if="device.current" class="ui-badge ui-badge-success !text-[10px]">
                     <span class="ui-badge-dot" />
                     {{ t('accounts.currentDevice') }}
                   </span>
-                  <span v-if="device.official_app" class="ui-badge !text-[10px] bg-sky-50 text-sky-700 border-sky-100 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/50">
+                  <span v-if="device.official_app" class="ui-badge !text-[10px] bg-[var(--tg-accent-soft)] text-[var(--tg-accent-text)] border-[var(--tg-accent-border)]">
                     {{ t('accounts.officialApp') }}
                   </span>
                 </div>
-                <div class="text-xs text-gray-500 mt-1 truncate">{{ deviceSubtitle(device) }}</div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-[11px] text-gray-500">
-                  <div><span class="text-gray-400">{{ t('accounts.lastActive') }}：</span>{{ formatDate(device.date_active) }}</div>
-                  <div><span class="text-gray-400">{{ t('accounts.createdAt') }}：</span>{{ formatDate(device.date_created) }}</div>
-                  <div class="truncate" :title="locationText(device)"><span class="text-gray-400">{{ t('accounts.location') }}：</span>{{ locationText(device) }}</div>
+                <div class="text-xs text-[var(--tg-text-muted)] mt-1 truncate">{{ deviceSubtitle(device) }}</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-[11px] text-[var(--tg-text-muted)]">
+                  <div><span class="opacity-70">{{ t('accounts.lastActive') }}：</span>{{ formatDate(device.date_active) }}</div>
+                  <div><span class="opacity-70">{{ t('accounts.createdAt') }}：</span>{{ formatDate(device.date_created) }}</div>
+                  <div class="truncate" :title="locationText(device)"><span class="opacity-70">{{ t('accounts.location') }}：</span>{{ locationText(device) }}</div>
                 </div>
               </div>
             </div>
@@ -160,7 +160,7 @@ watch(() => props.isOpen, (open) => {
               v-if="!device.current"
               @click="terminateDevice(device)"
               :disabled="terminatingHash === device.hash || loading"
-              class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-50"
+              class="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 disabled:opacity-50 transition-colors"
             >
               <RefreshCw v-if="terminatingHash === device.hash" class="w-3.5 h-3.5 animate-spin" />
               <Trash2 v-else class="w-3.5 h-3.5" />

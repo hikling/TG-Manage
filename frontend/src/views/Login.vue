@@ -197,7 +197,7 @@ const openGithub = () => {
         <div
           v-if="errorMsg"
           role="alert"
-          class="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 p-2.5 border border-rose-200 dark:border-rose-800/40"
+          class="ui-alert-error"
         >
           {{ errorMsg }}
         </div>
@@ -212,35 +212,37 @@ const openGithub = () => {
         </button>
       </form>
 
-      <div class="flex items-center justify-center gap-2 mt-7 pt-5 border-t border-gray-200 dark:border-gray-800/60">
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="t('common.github')"
-          :aria-label="t('common.github')"
-          @click="openGithub"
-        >
-          <Github class="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="locale === 'zh' ? t('language.switchToEn') : t('language.switchToZh')"
-          :aria-label="t('common.changeLanguage')"
-          @click="toggleLanguage"
-        >
-          <Globe class="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          class="ui-icon-btn"
-          :title="isDark ? t('common.lightMode') : t('common.darkMode')"
-          :aria-label="isDark ? t('common.lightMode') : t('common.darkMode')"
-          @click="toggleTheme($event)"
-        >
-          <Moon v-if="!isDark" class="w-4 h-4" />
-          <Sun v-else class="w-4 h-4" />
-        </button>
+      <div class="flex items-center justify-center mt-7 pt-5 border-t border-[var(--tg-border)]">
+        <div class="header-utility-dock">
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="t('common.github')"
+            :aria-label="t('common.github')"
+            @click="openGithub"
+          >
+            <Github class="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="locale === 'zh' ? t('language.switchToEn') : t('language.switchToZh')"
+            :aria-label="t('common.changeLanguage')"
+            @click="toggleLanguage"
+          >
+            <Globe class="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            class="ui-icon-btn"
+            :title="isDark ? t('common.lightMode') : t('common.darkMode')"
+            :aria-label="isDark ? t('common.lightMode') : t('common.darkMode')"
+            @click="toggleTheme($event)"
+          >
+            <Moon v-if="!isDark" class="w-4 h-4" />
+            <Sun v-else class="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
     </div>

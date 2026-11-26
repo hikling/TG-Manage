@@ -16,15 +16,15 @@ const { t } = useI18n()
     zIndexClass="z-[150]"
     @close="cancel"
   >
-    <div class="flex gap-3">
+    <div class="flex gap-3.5 items-start">
       <div
         v-if="state.danger"
-        class="shrink-0 w-9 h-9 flex items-center justify-center border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
+        class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border border-rose-200/80 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-500/12 text-rose-600 dark:text-rose-400"
         aria-hidden="true"
       >
         <AlertTriangle class="w-4 h-4" />
       </div>
-      <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
+      <p class="text-sm text-[var(--tg-text-muted)] leading-relaxed whitespace-pre-wrap break-words pt-0.5">
         {{ state.message }}
       </p>
     </div>

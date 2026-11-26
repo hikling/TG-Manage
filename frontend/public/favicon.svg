@@ -1,7 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
   <title id="title">TG Manage</title>
-  <defs><linearGradient id="surface" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#24465f"/><stop offset="1" stop-color="#172636"/></linearGradient></defs>
-  <rect width="256" height="256" rx="58" fill="url(#surface)"/>
-  <path d="M65 65h126c17 0 30 13 30 30v61c0 17-13 30-30 30h-52l-30 25v-25H65c-17 0-30-13-30-30V95c0-17 13-30 30-30Z" fill="none" stroke="#f3f8fb" stroke-width="13" stroke-linejoin="round"/>
-  <path d="M66 128h36l17-28 19 54 17-27h35" fill="none" stroke="#7cc9ee" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#27272a"/>
+      <stop offset="100%" stop-color="#18181b"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <path d="M68 70h120c15 0 27 12 27 27v54c0 15-12 27-27 27h-48l-28 24v-24H68c-15 0-27-12-27-27V97c0-15 12-27 27-27Z" fill="none" stroke="#f4f4f5" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M69 124h33l16-26 18 48 16-22h35" fill="none" stroke="#60a5fa" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

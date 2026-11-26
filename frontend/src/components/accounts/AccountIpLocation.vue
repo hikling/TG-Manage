@@ -13,6 +13,13 @@ const source = computed(() => {
     ? t(`accounts.ipLocation.sources.${mode}`)
     : t('accounts.ipLocation.sources.unknown')
 })
+const sourceTone = computed(() => {
+  const mode = props.account.route_mode
+  if (mode === 'primary') return 'is-primary'
+  if (mode === 'fallback') return 'is-fallback'
+  if (mode === 'direct') return 'is-direct'
+  return 'is-muted'
+})
 const location = computed(() => {
   if (props.account.exit_lookup_status === 'failed') return t('accounts.ipLocation.failedLocation')
   if (!props.account.exit_ip || !props.account.exit_checked_at) {
@@ -37,17 +44,18 @@ const details = computed(() => {
 
 <template>
   <div class="account-ip-signal" :title="details">
-    <div class="account-ip-heading">
-      <span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span>
-      <span class="account-ip-route">{{ source }}</span>
+    <div class="account-ip-primary">
+      <span class="account-tile-status" :class="{
+        'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
+        'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
+      }">
+        <span class="account-status-dot" aria-hidden="true" />{{ location }}
+      </span>
+      <span class="account-ip-address">{{ address }}</span>
     </div>
-    <span class="account-tile-status" :class="{
-      'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
-      'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
-    }">
-      <span class="account-status-dot" aria-hidden="true" />{{ location }}
-    </span>
-    <span class="account-ip-address">{{ address }}</span>
-    <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
+    <div class="account-ip-tags">
+      <span class="account-ip-heading"><span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span><span class="account-ip-route" :class="sourceTone">{{ source }}</span></span>
+      <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
+    </div>
   </div>
 </template>

@@ -208,30 +208,30 @@ onUnmounted(() => {
 
 <template>
   <Modal :isOpen="isOpen" @close="$emit('close')" :title="t('profile.title')">
-    <div class="flex gap-1 mb-6 border-b border-gray-200 dark:border-gray-800/60 overflow-x-auto" role="tablist">
+    <div class="grid grid-cols-3 gap-1 mb-5 p-1 rounded-xl bg-[var(--tg-bg-muted)] border border-[var(--tg-border)]" role="tablist">
       <button 
         @click="activeTab = 'username'; error = ''; successMessage = ''"
         type="button"
         role="tab"
         :aria-selected="activeTab === 'username'"
-        class="text-sm font-medium transition-colors whitespace-nowrap px-2.5 pb-2.5 border-b-2 -mb-px"
-        :class="activeTab === 'username' ? 'border-sky-500 text-gray-900 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'"
+        class="text-xs sm:text-sm font-semibold transition-all whitespace-nowrap px-2.5 py-2 rounded-lg"
+        :class="activeTab === 'username' ? 'bg-[var(--tg-bg-elevated)] text-[var(--tg-text)] shadow-[var(--tg-shadow-xs)]' : 'text-[var(--tg-text-muted)] hover:text-[var(--tg-text)]'"
       >{{ t('profile.changeUsername') }}</button>
       <button 
         @click="activeTab = 'password'; error = ''; successMessage = ''"
         type="button"
         role="tab"
         :aria-selected="activeTab === 'password'"
-        class="text-sm font-medium transition-colors whitespace-nowrap px-2.5 pb-2.5 border-b-2 -mb-px"
-        :class="activeTab === 'password' ? 'border-sky-500 text-gray-900 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'"
+        class="text-xs sm:text-sm font-semibold transition-all whitespace-nowrap px-2.5 py-2 rounded-lg"
+        :class="activeTab === 'password' ? 'bg-[var(--tg-bg-elevated)] text-[var(--tg-text)] shadow-[var(--tg-shadow-xs)]' : 'text-[var(--tg-text-muted)] hover:text-[var(--tg-text)]'"
       >{{ t('profile.changePassword') }}</button>
       <button 
         @click="activeTab = 'totp'; error = ''; successMessage = ''"
         type="button"
         role="tab"
         :aria-selected="activeTab === 'totp'"
-        class="text-sm font-medium transition-colors whitespace-nowrap px-2.5 pb-2.5 border-b-2 -mb-px"
-        :class="activeTab === 'totp' ? 'border-sky-500 text-gray-900 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-300'"
+        class="text-xs sm:text-sm font-semibold transition-all whitespace-nowrap px-2.5 py-2 rounded-lg"
+        :class="activeTab === 'totp' ? 'bg-[var(--tg-bg-elevated)] text-[var(--tg-text)] shadow-[var(--tg-shadow-xs)]' : 'text-[var(--tg-text-muted)] hover:text-[var(--tg-text)]'"
       >{{ t('profile.totp') }}</button>
     </div>
 
@@ -239,7 +239,7 @@ onUnmounted(() => {
     <div v-if="error" class="ui-alert-error mb-4">
       {{ error }}
     </div>
-    <div v-if="successMessage" class="mb-4 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-2 border border-emerald-200 dark:border-emerald-800/40">
+    <div v-if="successMessage" class="mb-4 rounded-xl text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/12 p-3 border border-emerald-200/80 dark:border-emerald-800/40">
       {{ successMessage }}
     </div>
 
@@ -284,29 +284,29 @@ onUnmounted(() => {
     <!-- TOTP Tab -->
     <div v-else class="space-y-4">
       <div v-if="totpEnabled" class="space-y-4">
-        <div class="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-800/50">
+        <div class="flex items-center gap-2.5 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/12 border border-emerald-200/80 dark:border-emerald-800/50">
           <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
-          <p class="text-sm text-emerald-700 dark:text-emerald-400 font-medium">{{ t('profile.totpEnabled') }}</p>
+          <p class="text-sm text-emerald-700 dark:text-emerald-300 font-semibold">{{ t('profile.totpEnabled') }}</p>
         </div>
-        <p class="text-xs text-gray-500">{{ t('profile.totpDisableHint') }}</p>
+        <p class="text-xs text-[var(--tg-text-muted)]">{{ t('profile.totpDisableHint') }}</p>
         <label class="ui-label" for="profile-totp-code">{{ t('profile.totpCode') }}</label>
         <input id="profile-totp-code" v-model="totpCode" type="text" inputmode="numeric" autocomplete="one-time-code" :placeholder="t('profile.totpCodePlaceholder')" maxlength="6" class="ui-input text-center font-mono tracking-widest">
         <button 
           @click="handleDisableTOTP"
           :disabled="loading || !totpCode"
-          class="w-full px-4 py-2 text-sm text-rose-600 dark:text-rose-500 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-800/50 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-colors disabled:opacity-50"
+          class="ui-btn-danger w-full !py-2.5"
         >
           {{ loading ? t('common.processing') : t('profile.disableTotp') }}
         </button>
       </div>
 
       <div v-else class="space-y-4">
-        <div class="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-800/50">
+        <div class="flex items-center gap-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/12 border border-amber-200/80 dark:border-amber-800/50">
           <div class="w-2 h-2 rounded-full bg-amber-500 shrink-0"></div>
-          <p class="text-sm text-amber-700 dark:text-amber-400 font-medium">{{ t('profile.totpDisabled') }}</p>
+          <p class="text-sm text-amber-700 dark:text-amber-300 font-semibold">{{ t('profile.totpDisabled') }}</p>
         </div>
-        <p class="text-xs text-gray-500">{{ t('profile.totpScanHint') }}</p>
-        <div v-if="qrUrl" class="flex justify-center p-4 bg-white dark:bg-white mx-auto w-max border border-gray-200 dark:border-gray-300">
+        <p class="text-xs text-[var(--tg-text-muted)]">{{ t('profile.totpScanHint') }}</p>
+        <div v-if="qrUrl" class="flex justify-center p-4 bg-white rounded-2xl mx-auto w-max border border-[var(--tg-border)] shadow-sm">
           <img :src="qrUrl" :alt="t('profile.totpQrAlt')" class="w-36 h-36" />
         </div>
         <div v-else-if="qrLoadFailed" class="flex flex-col items-center gap-2 py-4">
@@ -315,12 +315,12 @@ onUnmounted(() => {
             <RefreshCw class="w-3 h-3" /> {{ t('common.retry') }}
           </button>
         </div>
-        <p v-else class="text-xs text-gray-400 text-center py-4">{{ t('profile.loadingQr') }}</p>
-        <div v-if="totpSecret" class="mt-2 p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-center">
-          <p class="text-[10px] text-gray-500 mb-1">{{ t('profile.manualEntry') }}</p>
-          <code class="text-xs font-mono text-gray-900 dark:text-gray-100 select-all break-all">{{ totpSecret }}</code>
+        <p v-else class="text-xs text-[var(--tg-text-muted)] text-center py-4">{{ t('profile.loadingQr') }}</p>
+        <div v-if="totpSecret" class="mt-2 p-3 rounded-xl bg-[var(--tg-bg-elevated-2)] border border-[var(--tg-border)] text-center">
+          <p class="text-[11px] text-[var(--tg-text-muted)] mb-1">{{ t('profile.manualEntry') }}</p>
+          <code class="text-xs font-mono text-[var(--tg-text)] select-all break-all">{{ totpSecret }}</code>
         </div>
-        <p class="text-xs text-gray-500">{{ t('profile.totpVerifyHint') }}</p>
+        <p class="text-xs text-[var(--tg-text-muted)]">{{ t('profile.totpVerifyHint') }}</p>
         <label class="ui-label" for="profile-totp-code-enable">{{ t('profile.totpCode') }}</label>
         <input id="profile-totp-code-enable" v-model="totpCode" type="text" inputmode="numeric" autocomplete="one-time-code" :placeholder="t('profile.totpCodePlaceholder')" maxlength="6" class="ui-input text-center font-mono tracking-widest">
         <button 

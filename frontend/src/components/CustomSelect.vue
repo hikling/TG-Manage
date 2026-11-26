@@ -209,7 +209,7 @@ const hasValue = computed(() => {
             @click="!opt.disabled && select(opt.value)"
           >
             <span class="truncate">{{ opt.label }}</span>
-            <Check v-if="modelValue === opt.value && !opt.disabled" class="w-3.5 h-3.5 shrink-0 text-sky-500" />
+            <Check v-if="modelValue === opt.value && !opt.disabled" class="w-3.5 h-3.5 shrink-0 text-[var(--tg-accent)]" />
           </button>
           <div v-if="!options.length" class="px-3 py-2.5 text-sm text-gray-400">{{ t('common.noOptions') }}</div>
         </div>

@@ -11,7 +11,8 @@ import { listTeleBoxAccounts, type TeleBoxAccount } from '../lib/api/telebox'
 import { isAccountHealthy } from '../lib/account-list-map'
 import type { AccountInfo } from '../lib/api'
 import { formatMemoryRssFromStats } from '../lib/memory-format'
-import { clampCoverPosition } from '../lib/cover-frame'
+import { clampCoverHeight, clampCoverPosition, DEFAULT_COVER_HEIGHT, MIN_COVER_HEIGHT } from '../lib/cover-frame'
+import { storageGet, storageSet } from '../lib/safe-storage'
 import { useAccountsStore } from '../stores/accounts'
 import { useAuthStore } from '../stores/auth'
 import HeroCover from '../components/HeroCover.vue'
@@ -30,6 +31,8 @@ const memoryUpdatedAt = ref('')
 const heroImageUrl = ref('')
 const heroPositionX = ref(50)
 const heroPositionY = ref(50)
+const savedHeroHeight = Number(storageGet('tg-manage-hero-height'))
+const heroHeight = ref(Number.isFinite(savedHeroHeight) && savedHeroHeight >= MIN_COVER_HEIGHT ? clampCoverHeight(savedHeroHeight) : DEFAULT_COVER_HEIGHT)
 
 let heroObjectUrl = ''
 let heroRequest: Promise<void> | undefined
@@ -43,6 +46,7 @@ let memoryTimer: ReturnType<typeof setTimeout> | undefined
 let memoryInFlight = false
 let active = true
 let heroPositionEdited = false
+let heroHeightEdited = false
 const MEMORY_REFRESH_MS = 15_000
 const ACCOUNTS_REFRESH_MS = 30_000
 
@@ -173,6 +177,10 @@ async function fetchHeroImage() {
         heroPositionX.value = settings.position_x
         heroPositionY.value = settings.position_y
       }
+      if (!heroHeightEdited && typeof settings.height === 'number') {
+        heroHeight.value = clampCoverHeight(settings.height)
+        storageSet('tg-manage-hero-height', String(heroHeight.value))
+      }
       showHeroBlob(blob)
     }
   } catch {
@@ -210,12 +218,19 @@ function onHeroPositionChanged(event: Event) {
   heroPositionY.value = clampCoverPosition(detail.y)
 }
 
+function onHeroHeightChanged(event: Event) {
+  heroHeightEdited = true
+  const detail = (event as CustomEvent<{ height: number }>).detail
+  heroHeight.value = clampCoverHeight(detail.height)
+}
+
 
 onMounted(() => {
   active = true
   document.addEventListener('visibilitychange', onVisibilityChange)
   window.addEventListener('tg-manage:hero-changed', onHeroChanged)
   window.addEventListener('tg-manage:hero-position-changed', onHeroPositionChanged)
+  window.addEventListener('tg-manage:hero-height-changed', onHeroHeightChanged)
   void loadDashboardData()
   void loadHeroImage()
   if (!document.hidden) void refreshMemory()
@@ -229,6 +244,7 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('tg-manage:hero-changed', onHeroChanged)
   window.removeEventListener('tg-manage:hero-position-changed', onHeroPositionChanged)
+  window.removeEventListener('tg-manage:hero-height-changed', onHeroHeightChanged)
   if (memoryTimer) clearTimeout(memoryTimer)
   if (heroObjectUrl) URL.revokeObjectURL(heroObjectUrl)
 })
@@ -236,8 +252,14 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard panel-stack" :aria-busy="loading">
-    <section class="dashboard-hero" aria-hidden="true">
+    <section class="dashboard-hero" :style="{ '--tg-hero-height': `${heroHeight}px` }" aria-hidden="true">
       <HeroCover v-if="heroImageUrl" :src="heroImageUrl" :position-x="heroPositionX" :position-y="heroPositionY" />
+      <div v-else class="dashboard-hero-default">
+        <span class="dashboard-hero-arc dashboard-hero-arc--outer" />
+        <span class="dashboard-hero-arc dashboard-hero-arc--mid" />
+        <span class="dashboard-hero-arc dashboard-hero-arc--inner" />
+        <span class="dashboard-hero-line" />
+      </div>
     </section>
 
     <p v-if="error" class="panel-error" role="alert">{{ error }}</p>
@@ -245,29 +267,29 @@ onUnmounted(() => {
 
     <section :aria-label="t('dashboard.overview')" class="dashboard-metrics">
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--accounts">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Users :size="18" :stroke-width="1.75" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ store.accounts.length }}</span><span class="dashboard-metric-label">{{ t('dashboard.loggedAccounts') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.viewAccounts') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--telebox">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Activity :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><Activity :size="18" :stroke-width="1.75" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ runningCount }}</span><span class="dashboard-metric-label">{{ t('dashboard.runningTelebox') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.manageAccounts') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <RouterLink to="/accounts" class="dashboard-metric dashboard-metric--tasks">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><CheckCircle2 :size="21" aria-hidden="true" /></span><ArrowUpRight :size="18" aria-hidden="true" /></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><CheckCircle2 :size="18" :stroke-width="1.75" aria-hidden="true" /></span><span class="dashboard-metric-arrow"><ArrowUpRight :size="16" aria-hidden="true" /></span></span>
         <span class="dashboard-metric-value">{{ healthyCount }}</span><span class="dashboard-metric-label">{{ t('dashboard.healthyAccounts') }}</span><span class="dashboard-metric-foot">{{ t('dashboard.viewStatus') }} <ArrowRight :size="14" aria-hidden="true" /></span>
       </RouterLink>
       <div class="dashboard-metric dashboard-metric--memory" :aria-label="t('dashboard.memoryAriaLabel')">
-        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><HardDrive :size="21" aria-hidden="true" /></span><span class="dashboard-live-badge">{{ t('dashboard.memoryLive') }}</span></span>
+        <span class="dashboard-metric-top"><span class="dashboard-metric-icon"><HardDrive :size="18" :stroke-width="1.75" aria-hidden="true" /></span><span class="dashboard-live-badge"><span class="dashboard-live-dot" aria-hidden="true" />{{ t('dashboard.memoryLive') }}</span></span>
         <span class="dashboard-metric-value dashboard-memory-value">{{ memoryRss || t('dashboard.memoryUnavailableValue') }}</span>
         <span class="dashboard-metric-label">{{ t('dashboard.memoryLabel') }}</span><span class="dashboard-metric-foot">{{ t(`dashboard.${memoryStatusKey}`) }}<span v-if="memoryUpdatedAt">  /  {{ memoryUpdatedAt }}</span></span>
       </div>
     </section>
 
     <section class="dashboard-activity panel-card" aria-labelledby="dashboard-attention-title">
-      <div class="dashboard-section-heading"><h3 id="dashboard-attention-title">{{ t('dashboard.attentionTitle') }}</h3><RouterLink to="/accounts" class="panel-button">{{ t('dashboard.viewAllAccounts') }} <ArrowRight :size="16" aria-hidden="true" /></RouterLink></div>
+      <div class="dashboard-section-heading"><h3 id="dashboard-attention-title">{{ t('dashboard.attentionTitle') }}</h3><RouterLink to="/accounts" class="panel-button">{{ t('dashboard.viewAllAccounts') }} <ArrowRight :size="15" aria-hidden="true" /></RouterLink></div>
       <div v-if="loading && !store.accounts.length" class="dashboard-activity-loading" role="status">{{ t('dashboard.attentionLoading') }}</div>
-      <div v-else-if="!attention.length" class="dashboard-activity-empty"><CheckCircle2 :size="26" aria-hidden="true" /><strong>{{ t('dashboard.attentionEmpty') }}</strong><span>{{ t('dashboard.attentionEmptyHint') }}</span></div>
-      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="19" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>
+      <div v-else-if="!attention.length" class="dashboard-activity-empty"><CheckCircle2 :size="24" :stroke-width="1.6" aria-hidden="true" /><strong>{{ t('dashboard.attentionEmpty') }}</strong><span>{{ t('dashboard.attentionEmptyHint') }}</span></div>
+      <ol v-else class="dashboard-activity-list"><li v-for="item in attention" :key="item.name" class="dashboard-activity-item"><span class="dashboard-activity-icon is-error"><Activity :size="17" aria-hidden="true" /></span><span class="dashboard-activity-name">{{ item.name }}</span><span class="dashboard-activity-state is-error">{{ attentionReason(item) }}</span></li></ol>
     </section>
   </div>
 </template>

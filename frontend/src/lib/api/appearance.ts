@@ -8,6 +8,7 @@ export interface HeroSettings {
   present: boolean
   position_x: number
   position_y: number
+  height?: number
 }
 
 export function getHeroImage(): Promise<Blob> {

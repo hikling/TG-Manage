@@ -113,3 +113,12 @@ def test_hero_position_round_trip_and_reset(monkeypatch):
     assert appearance.get_hero_position() == appearance.DEFAULT_HERO_POSITION
     state.update({"hero_position_x": float("nan"), "hero_position_y": 200})
     assert appearance.get_hero_position() == (50.0, 100.0)
+
+    appearance.save_hero_height(420)
+    assert appearance.get_hero_height() == 420
+    appearance.save_hero_height(999)
+    assert appearance.get_hero_height() == appearance.MAX_HERO_HEIGHT
+    appearance.save_hero_height(50)
+    assert appearance.get_hero_height() == appearance.MIN_HERO_HEIGHT
+    state["hero_height"] = float("nan")
+    assert appearance.get_hero_height() == appearance.DEFAULT_HERO_HEIGHT

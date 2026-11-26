@@ -162,7 +162,7 @@ onUnmounted(() => {
       >
         <!-- Backdrop -->
         <div
-          class="absolute inset-0 bg-gray-900/45 dark:bg-black/65 backdrop-blur-[3px]"
+          class="absolute inset-0 bg-black/35 dark:bg-black/60 backdrop-blur-[2px]"
           aria-hidden="true"
           @click="emit('close')"
         />
@@ -175,14 +175,14 @@ onUnmounted(() => {
           tabindex="-1"
           :aria-label="title"
           :class="[
-            'relative w-full ui-card shadow-[var(--tg-shadow-md)] overflow-hidden flex flex-col max-h-[90vh]',
+            'relative w-full ui-card !rounded-2xl shadow-[var(--tg-shadow-lg)] overflow-hidden flex flex-col max-h-[90vh]',
             maxWidthClass,
           ]"
         >
           <!-- Header -->
-          <div class="flex items-center justify-between px-5 h-13 min-h-[3.25rem] border-b border-gray-200 dark:border-gray-800/60 bg-gray-50/80 dark:bg-white/[0.02] shrink-0">
+          <div class="flex items-center justify-between px-5 h-14 min-h-[3.5rem] border-b border-[var(--tg-border)] bg-[var(--tg-bg-elevated-2)] shrink-0">
             <div class="flex items-center gap-3 min-w-0">
-              <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{{ title }}</h3>
+              <h3 class="text-[15px] font-semibold tracking-tight text-[var(--tg-text)] truncate">{{ title }}</h3>
               <slot name="header-extra" />
             </div>
             <button
@@ -203,7 +203,7 @@ onUnmounted(() => {
           <!-- Footer -->
           <div
             v-if="$slots.footer"
-            class="px-5 py-3.5 border-t border-gray-200 dark:border-gray-800/60 bg-gray-50/80 dark:bg-white/[0.02] flex justify-end gap-3 shrink-0"
+            class="px-5 py-3.5 border-t border-[var(--tg-border)] bg-[var(--tg-bg-elevated-2)] flex justify-end gap-2.5 shrink-0"
           >
             <slot name="footer" />
           </div>

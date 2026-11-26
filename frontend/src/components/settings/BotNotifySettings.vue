@@ -65,13 +65,13 @@ const isPrivateTarget = (value: string) => {
 </script>
 
 <template>
-  <section class="ui-card p-6">
-    <div class="mb-6 border-b border-gray-200 dark:border-gray-800/60 pb-3 flex items-center justify-between gap-3">
+  <section class="ui-card p-5 sm:p-6">
+    <div class="mb-5 border-b border-[var(--tg-border)] pb-3.5 flex items-center justify-between gap-3">
       <div class="flex items-start gap-3 min-w-0">
-        <span class="ui-section-icon" aria-hidden="true"><Bot class="w-3.5 h-3.5" /></span>
+        <span class="ui-section-icon" aria-hidden="true"><Bot class="w-4 h-4" /></span>
         <div class="min-w-0">
-          <h2 class="text-base font-medium text-gray-900 dark:text-gray-100">{{ t('settings.botNotify') }}</h2>
-          <p class="text-[10px] text-gray-500 mt-1">{{ t('settings.botDesc') }}</p>
+          <h2 class="text-sm font-bold text-[var(--tg-text)]">{{ t('settings.botNotify') }}</h2>
+          <p class="text-xs text-[var(--tg-text-muted)] mt-0.5">{{ t('settings.botDesc') }}</p>
         </div>
       </div>
       <button
@@ -87,61 +87,63 @@ const isPrivateTarget = (value: string) => {
       </button>
     </div>
 
-    <div class="space-y-5">
-      <div class="space-y-1.5">
-        <label class="ui-label" for="bot-token">{{ t('settings.botToken') }}</label>
-        <div class="relative">
-          <input
-            id="bot-token"
-            :value="modelValue.botToken"
-            @input="onStringInput('botToken', $event)"
-            :type="reveal.botToken ? 'text' : 'password'"
-            :placeholder="botTokenSet ? t('settings.botTokenSavedHint') : '123456:ABC-DEF...'"
-            class="ui-input pr-10"
-          >
-          <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200" :aria-label="reveal.botToken ? t('settings.hideSecret') : t('settings.showSecret')" @click="emit('toggle-reveal', 'botToken')">
-            <EyeOff v-if="reveal.botToken" class="w-4 h-4" /><Eye v-else class="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-      <div class="space-y-1.5">
-        <label class="ui-label" for="bot-chat-id">{{ t('settings.targetChatId') }}</label>
-        <input id="bot-chat-id" :value="modelValue.botChatId" @input="onStringInput('botChatId', $event)" type="text" inputmode="numeric" aria-describedby="bot-chat-id-help" :placeholder="modelValue.botCodeEnabled ? t('settings.privateTargetPlaceholder') : '-1001234567890'" class="ui-input">
-        <p id="bot-chat-id-help" class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.privateTargetHint') }}</p>
-      </div>
-      <div class="space-y-1.5">
-        <label class="ui-label" for="bot-thread-id">{{ t('settings.threadId') }}</label>
-        <input id="bot-thread-id" :value="modelValue.botThreadId" @input="onStringInput('botThreadId', $event)" type="text" :placeholder="t('settings.threadIdPlaceholder')" class="ui-input">
-      </div>
-      <div class="space-y-1.5">
-        <label class="ui-label" for="bot-web-url">{{ t('settings.botWebUrl') }}</label>
-        <input id="bot-web-url" :value="modelValue.botWebUrl" @input="onStringInput('botWebUrl', $event)" type="url" inputmode="url" placeholder="https://example.com" class="ui-input">
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.botWebUrlHint') }}</p>
-        <p v-if="modelValue.botWebUrl && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
-      </div>
-      <div class="flex flex-wrap gap-x-6 gap-y-3 pt-2">
-        <label class="flex items-center gap-2 cursor-pointer group">
-          <input :checked="modelValue.botLoginNotify" @change="onCheckbox('botLoginNotify', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 bg-gray-100 border-gray-300 rounded focus:ring-0 dark:bg-gray-800 dark:border-gray-600">
-          <span class="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">{{ t('settings.loginFailNotify') }}</span>
-        </label>
-      </div>
-      <div class="p-3 bg-gray-50 dark:bg-white/[0.02] border border-gray-200 dark:border-gray-800/60 space-y-2">
-        <label class="flex items-center gap-2 cursor-pointer">
-          <input :checked="modelValue.botCodeEnabled" @change="onCheckbox('botCodeEnabled', $event)" type="checkbox" class="w-4 h-4 accent-sky-500 rounded">
-          <span class="text-sm text-gray-700 dark:text-gray-200">{{ t('settings.privateCodeBot') }}</span>
-        </label>
-        <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.privateCodeBotHint') }}</p>
-        <p v-if="modelValue.botCodeEnabled && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-red-600 dark:text-red-400" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
-        <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-gray-500 dark:text-gray-400" role="status">{{ t('settings.privateCodeStatus', { status: botStatusLabel() }) }}</p>
-      </div>
-      <div class="pt-2 space-y-3">
-        <button type="button" class="ui-btn-primary w-full py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
-        <div>
-          <div class="space-y-1.5">
-            <button type="button" class="ui-btn-secondary w-full py-2.5" :disabled="botConnectionLoading" @click="emit('test-connection')">{{ botConnectionLoading ? t('settings.testingConnection') : t('settings.testBotConnection') }}</button>
-            <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotConnectionHint') }}</p>
+    <div class="space-y-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-1.5">
+          <label class="ui-label" for="bot-token">{{ t('settings.botToken') }}</label>
+          <div class="relative">
+            <input
+              id="bot-token"
+              :value="modelValue.botToken"
+              @input="onStringInput('botToken', $event)"
+              :type="reveal.botToken ? 'text' : 'password'"
+              :placeholder="botTokenSet ? t('settings.botTokenSavedHint') : '123456:ABC-DEF...'"
+              class="ui-input pr-10"
+            >
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--tg-text-muted)] hover:text-[var(--tg-text)] rounded-md" :aria-label="reveal.botToken ? t('settings.hideSecret') : t('settings.showSecret')" @click="emit('toggle-reveal', 'botToken')">
+              <EyeOff v-if="reveal.botToken" class="w-4 h-4" /><Eye v-else class="w-4 h-4" />
+            </button>
           </div>
         </div>
+        <div class="space-y-1.5">
+          <label class="ui-label" for="bot-chat-id">{{ t('settings.targetChatId') }}</label>
+          <input id="bot-chat-id" :value="modelValue.botChatId" @input="onStringInput('botChatId', $event)" type="text" inputmode="numeric" aria-describedby="bot-chat-id-help" :placeholder="modelValue.botCodeEnabled ? t('settings.privateTargetPlaceholder') : '-1001234567890'" class="ui-input font-mono">
+          <p id="bot-chat-id-help" class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.privateTargetHint') }}</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="space-y-1.5">
+          <label class="ui-label" for="bot-thread-id">{{ t('settings.threadId') }}</label>
+          <input id="bot-thread-id" :value="modelValue.botThreadId" @input="onStringInput('botThreadId', $event)" type="text" :placeholder="t('settings.threadIdPlaceholder')" class="ui-input font-mono">
+        </div>
+        <div class="space-y-1.5">
+          <label class="ui-label" for="bot-web-url">{{ t('settings.botWebUrl') }}</label>
+          <input id="bot-web-url" :value="modelValue.botWebUrl" @input="onStringInput('botWebUrl', $event)" type="url" inputmode="url" placeholder="https://example.com" class="ui-input">
+          <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.botWebUrlHint') }}</p>
+          <p v-if="modelValue.botWebUrl && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-rose-600 dark:text-rose-400 font-medium" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-x-6 gap-y-3 pt-1">
+        <label class="flex items-center gap-2.5 cursor-pointer group">
+          <input :checked="modelValue.botLoginNotify" @change="onCheckbox('botLoginNotify', $event)" type="checkbox" class="ui-checkbox">
+          <span class="text-sm text-[var(--tg-text)] font-medium">{{ t('settings.loginFailNotify') }}</span>
+        </label>
+      </div>
+      <div class="p-4 rounded-xl bg-[var(--tg-bg-elevated-2)] border border-[var(--tg-border)] space-y-2">
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input :checked="modelValue.botCodeEnabled" @change="onCheckbox('botCodeEnabled', $event)" type="checkbox" class="ui-checkbox">
+          <span class="text-sm font-semibold text-[var(--tg-text)]">{{ t('settings.privateCodeBot') }}</span>
+        </label>
+        <p class="text-xs text-[var(--tg-text-muted)] leading-relaxed">{{ t('settings.privateCodeBotHint') }}</p>
+        <p v-if="modelValue.botCodeEnabled && !isPrivateTarget(modelValue.botChatId)" class="text-xs text-rose-600 dark:text-rose-400 font-medium" role="alert">{{ t('settings.privateTargetInvalid') }}</p>
+        <p v-if="modelValue.botCodeEnabled && codeStatus" class="text-xs text-[var(--tg-accent-text)] font-medium" role="status">{{ t('settings.privateCodeStatus', { status: botStatusLabel() }) }}</p>
+      </div>
+      <div class="pt-1 space-y-2.5">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button type="button" class="ui-btn-primary flex-1 sm:flex-none sm:min-w-[160px] py-2.5" :disabled="botLoading" @click="emit('save')">{{ botLoading ? t('common.saving') : t('settings.saveChanges') }}</button>
+          <button type="button" class="ui-btn-secondary flex-1 sm:flex-none sm:min-w-[160px] py-2.5" :disabled="botConnectionLoading" @click="emit('test-connection')">{{ botConnectionLoading ? t('settings.testingConnection') : t('settings.testBotConnection') }}</button>
+        </div>
+        <p class="text-xs text-[var(--tg-text-muted)]">{{ t('settings.testBotConnectionHint') }}</p>
       </div>
     </div>
   </section>

@@ -46,6 +46,7 @@ class GlobalSettingsRequest(BaseModel):
     appearance_accent_color: Optional[str] = None
     hero_position_x: Optional[float] = None
     hero_position_y: Optional[float] = None
+    hero_height: Optional[int] = None
 
 
 class GlobalSettingsResponse(BaseModel):
@@ -68,6 +69,7 @@ class GlobalSettingsResponse(BaseModel):
     appearance_accent_color: str = "#3d6fa8"
     hero_position_x: float = 50.0
     hero_position_y: float = 50.0
+    hero_height: int = 360
 
 
 class SubscriptionSourceStatus(BaseModel):

@@ -66,19 +66,19 @@ const routeMode = computed(() => {
 
 <template>
   <div class="ui-card p-5 sm:p-6 space-y-5">
-    <p class="text-sm text-gray-600 dark:text-gray-300">{{ t('settings.subscriptions.description') }}</p>
+    <p class="text-sm text-[var(--tg-text-muted)] leading-relaxed">{{ t('settings.subscriptions.description') }}</p>
     <div v-if="error" role="alert" class="ui-alert-error flex flex-wrap items-center justify-between gap-2">
       <span>{{ error }}</span><button type="button" class="ui-btn-secondary" @click="emit('retry')">{{ t('common.retry') }}</button>
     </div>
     <template v-if="status">
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div v-for="kind in (['primary', 'fallback'] as const)" :key="kind" class="min-w-0 rounded-xl border border-gray-200 p-4 dark:border-gray-700 sm:p-5">
+        <div v-for="kind in (['primary', 'fallback'] as const)" :key="kind" class="min-w-0 rounded-2xl border border-[var(--tg-border)] bg-[var(--tg-bg-elevated-2)] p-4 sm:p-5">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="font-semibold text-sm">{{ t(`settings.subscriptions.${kind}`) }}</h3>
-            <span class="rounded-full border border-gray-200 px-2.5 py-0.5 text-xs text-gray-600 dark:border-gray-700 dark:text-gray-300">{{ sourceStatus(status[kind]) }}</span>
+            <h3 class="font-bold text-sm text-[var(--tg-text)]">{{ t(`settings.subscriptions.${kind}`) }}</h3>
+            <span class="rounded-full border border-[var(--tg-border)] bg-[var(--tg-bg-elevated)] px-2.5 py-0.5 text-xs font-semibold text-[var(--tg-text-muted)]">{{ sourceStatus(status[kind]) }}</span>
           </div>
-          <p v-if="sourceLabel(status[kind])" class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ sourceLabel(status[kind]) }}</p>
-          <label class="ui-label mt-5 block" :for="`subscription-${kind}`">{{ t('settings.subscriptions.url') }}</label>
+          <p v-if="sourceLabel(status[kind])" class="mt-1 text-xs text-[var(--tg-text-muted)]">{{ sourceLabel(status[kind]) }}</p>
+          <label class="ui-label mt-4 block" :for="`subscription-${kind}`">{{ t('settings.subscriptions.url') }}</label>
           <div class="relative mt-1.5">
             <input
               :id="`subscription-${kind}`"
@@ -87,45 +87,45 @@ const routeMode = computed(() => {
               :placeholder="status[kind].configured ? t('settings.subscriptions.replacePlaceholder') : 'https://…'"
               autocomplete="off"
               spellcheck="false"
-              class="ui-input !pr-12"
+              class="ui-input !pr-11"
               :disabled="loading || (kind === 'primary' ? modelValue.clearPrimary : modelValue.clearFallback)"
               @input="update(kind === 'primary' ? { primaryUrl: ($event.target as HTMLInputElement).value } : { fallbackUrl: ($event.target as HTMLInputElement).value })"
             >
-            <button type="button" class="absolute right-0 top-0 h-full w-11 flex items-center justify-center text-gray-500 hover:text-gray-900 dark:hover:text-gray-100" :aria-label="visible[kind] ? t('settings.hideSecret') : t('settings.showSecret')" :aria-pressed="visible[kind]" @click="visible[kind] = !visible[kind]"><EyeOff v-if="visible[kind]" class="w-4 h-4" /><Eye v-else class="w-4 h-4" /></button>
+            <button type="button" class="absolute right-0 top-0 h-full w-10 flex items-center justify-center text-[var(--tg-text-muted)] hover:text-[var(--tg-text)]" :aria-label="visible[kind] ? t('settings.hideSecret') : t('settings.showSecret')" :aria-pressed="visible[kind]" @click="visible[kind] = !visible[kind]"><EyeOff v-if="visible[kind]" class="w-4 h-4" /><Eye v-else class="w-4 h-4" /></button>
           </div>
-          <label class="mt-3 flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
-            <input type="checkbox" :checked="kind === 'primary' ? modelValue.clearPrimary : modelValue.clearFallback" :disabled="loading" @change="update(kind === 'primary' ? { clearPrimary: ($event.target as HTMLInputElement).checked, primaryUrl: '' } : { clearFallback: ($event.target as HTMLInputElement).checked, fallbackUrl: '' })">
+          <label class="mt-3 flex items-center gap-2 text-xs text-[var(--tg-text-muted)] cursor-pointer">
+            <input type="checkbox" class="ui-checkbox" :checked="kind === 'primary' ? modelValue.clearPrimary : modelValue.clearFallback" :disabled="loading" @change="update(kind === 'primary' ? { clearPrimary: ($event.target as HTMLInputElement).checked, primaryUrl: '' } : { clearFallback: ($event.target as HTMLInputElement).checked, fallbackUrl: '' })">
             {{ t('settings.subscriptions.disable') }}
           </label>
-          <dl class="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-gray-200 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-800/40">
+          <dl class="mt-4 grid grid-cols-3 overflow-hidden rounded-xl border border-[var(--tg-border)] bg-[var(--tg-bg-elevated)]">
             <div class="min-w-0 px-3 py-3 sm:px-4">
-              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.imported') }}</dt>
-              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-gray-800 dark:text-gray-100">{{ displayCount(status[kind].imported_count) }}</dd>
+              <dt class="min-h-8 text-[11px] leading-4 text-[var(--tg-text-muted)]">{{ t('settings.subscriptions.imported') }}</dt>
+              <dd class="mt-1 text-xl font-bold leading-6 tabular-nums text-[var(--tg-text)]">{{ displayCount(status[kind].imported_count) }}</dd>
             </div>
-            <div class="min-w-0 border-l border-gray-200 px-3 py-3 dark:border-gray-700 sm:px-4">
-              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.usable') }}</dt>
-              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-sky-700 dark:text-sky-300">{{ displayCount(status[kind].usable_count) }}</dd>
+            <div class="min-w-0 border-l border-[var(--tg-border)] px-3 py-3 sm:px-4">
+              <dt class="min-h-8 text-[11px] leading-4 text-[var(--tg-text-muted)]">{{ t('settings.subscriptions.usable') }}</dt>
+              <dd class="mt-1 text-xl font-bold leading-6 tabular-nums text-[var(--tg-accent-text)]">{{ displayCount(status[kind].usable_count) }}</dd>
             </div>
-            <div class="min-w-0 border-l border-gray-200 px-3 py-3 dark:border-gray-700 sm:px-4">
-              <dt class="min-h-8 text-[11px] leading-4 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.unsupported') }}</dt>
-              <dd class="mt-1 text-xl font-semibold leading-6 tabular-nums text-gray-800 dark:text-gray-100">{{ displayCount(status[kind].unsupported_count) }}</dd>
+            <div class="min-w-0 border-l border-[var(--tg-border)] px-3 py-3 sm:px-4">
+              <dt class="min-h-8 text-[11px] leading-4 text-[var(--tg-text-muted)]">{{ t('settings.subscriptions.unsupported') }}</dt>
+              <dd class="mt-1 text-xl font-bold leading-6 tabular-nums text-[var(--tg-text)]">{{ displayCount(status[kind].unsupported_count) }}</dd>
             </div>
           </dl>
-          <p class="mt-3 text-xs text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.lastRefreshed') }}: {{ refreshedAt(status[kind]) }}</p>
+          <p class="mt-3 text-xs text-[var(--tg-text-muted)]">{{ t('settings.subscriptions.lastRefreshed') }}: <span class="font-mono">{{ refreshedAt(status[kind]) }}</span></p>
         </div>
       </div>
-      <p class="text-xs leading-5 text-gray-500 dark:text-gray-400">{{ t('settings.subscriptions.unavailableHint') }}</p>
+      <p class="text-xs leading-5 text-[var(--tg-text-muted)]">{{ t('settings.subscriptions.unavailableHint') }}</p>
       <div class="flex flex-wrap items-end gap-4">
         <div class="space-y-1.5">
           <label class="ui-label" for="subscription-latency">{{ t('settings.subscriptions.threshold') }}</label>
-          <input id="subscription-latency" type="number" min="100" max="10000" step="50" class="ui-input w-36" :value="modelValue.latencyThresholdMs" :disabled="loading" @input="update({ latencyThresholdMs: ($event.target as HTMLInputElement).value === '' ? '' : Number(($event.target as HTMLInputElement).value) })">
+          <input id="subscription-latency" type="number" min="100" max="10000" step="50" class="ui-input w-36 font-mono" :value="modelValue.latencyThresholdMs" :disabled="loading" @input="update({ latencyThresholdMs: ($event.target as HTMLInputElement).value === '' ? '' : Number(($event.target as HTMLInputElement).value) })">
         </div>
-        <p class="text-xs text-gray-500 dark:text-gray-400 pb-2">{{ t('settings.subscriptions.thresholdHint') }}</p>
+        <p class="text-xs text-[var(--tg-text-muted)] pb-2">{{ t('settings.subscriptions.thresholdHint') }}</p>
       </div>
-      <p class="text-sm" role="status">{{ t('settings.subscriptions.currentRoute') }}: <strong>{{ routeMode }}</strong></p>
+      <p class="text-sm text-[var(--tg-text)]" role="status">{{ t('settings.subscriptions.currentRoute') }}: <strong class="font-semibold text-[var(--tg-accent-text)]">{{ routeMode }}</strong></p>
       <p v-if="status.route_mode === 'direct'" class="text-sm text-amber-700 dark:text-amber-300">{{ t('settings.subscriptions.directWarning') }}</p>
       <p v-if="status.route_mode === 'setup_required'" class="text-sm text-amber-700 dark:text-amber-300">{{ t('settings.subscriptions.setupWarning') }}</p>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2.5">
         <button type="button" class="ui-btn-primary" :disabled="loading || refreshing || !dirty" @click="emit('save')">{{ loading ? t('common.saving') : t('settings.subscriptions.save') }}</button>
         <button type="button" class="ui-btn-secondary" :disabled="loading || refreshing || dirty" @click="emit('refresh')">{{ refreshing ? t('settings.subscriptions.refreshing') : t('settings.subscriptions.refresh') }}</button>
       </div>
