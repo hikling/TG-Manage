@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Globe } from 'lucide-vue-next'
 import type { AccountInfo } from '../../lib/api/accounts'
 import { useI18n } from '../../composables/useI18n'
 import { formatDateTime } from '../../lib/datetime'
@@ -45,13 +44,7 @@ const details = computed(() => {
 
 <template>
   <div class="account-ip-signal" :title="details">
-    <div class="account-ip-top">
-      <div class="account-ip-heading">
-        <Globe class="w-3.5 h-3.5 shrink-0 opacity-75" aria-hidden="true" /><span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span><span class="account-ip-route" :class="sourceTone">{{ source }}</span>
-      </div>
-      <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
-    </div>
-    <div class="account-ip-bottom">
+    <div class="account-ip-primary">
       <span class="account-tile-status" :class="{
         'account-tile-status--active': account.route_status === 'healthy' && !!account.exit_ip && !!account.exit_country && account.exit_lookup_status !== 'failed',
         'account-tile-status--error': account.route_status === 'error' || account.route_status === 'unavailable' || account.exit_lookup_status === 'failed',
@@ -59,6 +52,10 @@ const details = computed(() => {
         <span class="account-status-dot" aria-hidden="true" />{{ location }}
       </span>
       <span class="account-ip-address">{{ address }}</span>
+    </div>
+    <div class="account-ip-tags">
+      <span class="account-ip-heading"><span class="account-signal-label">{{ t('accounts.ipLocation.label') }}</span><span class="account-ip-route" :class="sourceTone">{{ source }}</span></span>
+      <span v-if="account.shared_node" class="account-ip-shared">{{ t('accounts.ipLocation.shared') }}</span>
     </div>
   </div>
 </template>

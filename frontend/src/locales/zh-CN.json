@@ -233,6 +233,8 @@
     },
     "teleboxStart": "启动 TeleBox",
     "teleboxStop": "停止 TeleBox",
+    "teleboxStartShort": "启动",
+    "teleboxStopShort": "停止",
     "teleboxStarted": "TeleBox 已请求启动",
     "teleboxStopped": "TeleBox 已停止",
     "teleboxOperationFailed": "TeleBox 操作失败",

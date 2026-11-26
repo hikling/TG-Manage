@@ -22,7 +22,6 @@ import {
   ShieldCheck,
   HardDriveDownload,
   ChevronDown,
-  Cpu,
 } from 'lucide-vue-next'
 import { accountAvatarToneClass } from '../lib/avatar-palette'
 import {
@@ -729,6 +728,7 @@ const openAddModal = (method: 'code' | 'qr') => {
         >
           <!-- Card Top Cover Header -->
           <div class="account-pass-banner">
+            <div class="account-pass-banner-bg" aria-hidden="true" />
             <div class="account-pass-banner-actions">
               <span class="account-pass-status" :class="`is-${acc.status}`" :title="accountMessage(acc)">
                 <span class="account-pass-status-dot" aria-hidden="true" />
@@ -761,34 +761,35 @@ const openAddModal = (method: 'code' | 'qr') => {
             </div>
           </div>
 
-          <!-- Overlapping Portrait Avatar + Identity -->
+          <!-- Large Straddling Avatar + Name Above Line / Remark Below Line -->
           <div class="account-pass-identity">
             <div class="account-pass-avatar-ring" aria-hidden="true">
               <div class="account-pass-avatar" :class="acc.avatarUrl ? '' : accountAvatarToneClass(acc.name)">
-                <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="60" height="60" loading="lazy" decoding="async" />
+                <img v-if="acc.avatarUrl" :src="acc.avatarUrl" alt="" class="w-full h-full object-cover" width="76" height="76" loading="lazy" decoding="async" />
                 <span v-else>{{ acc.name.substring(0, 2).toUpperCase() }}</span>
               </div>
               <span class="account-pass-online-dot" :class="`is-${acc.status}`" />
             </div>
 
-            <div class="account-pass-titles">
-              <h2 :title="acc.name">{{ acc.name }}</h2>
-              <p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
+            <div class="account-pass-meta">
+              <div class="account-pass-name-slot">
+                <h2 :title="acc.name">{{ acc.name }}</h2>
+              </div>
+              <div class="account-pass-remark-slot">
+                <p :title="acc.remark || t('accounts.noRemark')">{{ acc.remark || t('accounts.noRemark') }}</p>
+              </div>
             </div>
           </div>
 
-          <!-- Clean Recessed Spec Sheet -->
+          <!-- Simplified Flat Telemetry Rows -->
           <div class="account-pass-specs">
             <div class="account-pass-spec-item">
               <AccountIpLocation :account="acc.raw" />
             </div>
 
             <div class="account-pass-spec-item account-pass-telebox" :title="teleboxMessage(acc.name)">
-              <div class="account-pass-tb-info">
-                <span class="account-pass-tb-label">
-                  <Cpu class="w-3.5 h-3.5 shrink-0 opacity-65" aria-hidden="true" />
-                  TeleBox
-                </span>
+              <div class="account-pass-tb-row">
+                <span class="account-pass-tb-label">TeleBox</span>
                 <span
                   class="account-tb-status"
                   :class="{
@@ -811,7 +812,7 @@ const openAddModal = (method: 'code' | 'qr') => {
                 @click="setTeleBoxEnabled(acc.name, !teleboxStates[acc.name]?.enabled)"
               >
                 <Power class="w-3.5 h-3.5" />
-                <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStop') : t('accounts.teleboxStart') }}</span>
+                <span>{{ teleboxStates[acc.name]?.enabled ? t('accounts.teleboxStopShort') : t('accounts.teleboxStartShort') }}</span>
               </button>
             </div>
           </div>
